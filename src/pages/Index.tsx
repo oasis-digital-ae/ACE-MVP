@@ -1,8 +1,8 @@
 import React from 'react';
-import AppLayout from '@/components/AppLayout';
-import { AuthPage } from '@/components/AuthPage';
-import { AppProvider } from '@/contexts/AppContext';
-import { useAuth } from '@/contexts/AuthContext';
+import AppLayout from '@/features/layout/components/AppLayout';
+import { AuthPage } from '@/features/auth/components/AuthPage';
+import { AppProvider } from '@/features/trading/contexts/AppContext';
+import { useAuth } from '@/features/auth/contexts/AuthContext';
 
 const Index: React.FC = () => {
   const { user, loading } = useAuth();

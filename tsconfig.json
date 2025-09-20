@@ -7,7 +7,12 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@/features/*": ["./src/features/*"],
+      "@/shared/*": ["./src/shared/*"],
+      "@/app/*": ["./src/app/*"],
+      "@/config/*": ["./src/config/*"],
+      "@/pages/*": ["./src/pages/*"]
     },
     "noImplicitAny": false,
     "noUnusedParameters": false,
