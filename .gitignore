@@ -60,3 +60,5 @@ jspm_packages/
 # Config files with secrets
 src/config/db_password
 src/config/env.local
+# Local Netlify folder
+.netlify

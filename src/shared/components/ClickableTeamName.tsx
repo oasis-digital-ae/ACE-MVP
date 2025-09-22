@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Button } from '@/shared/components/ui/button';
 import TeamDetailsModal from '@/features/trading/components/TeamDetailsModal';
-import { teamsService } from '@/shared/lib/database';
 
 interface ClickableTeamNameProps {
   teamName: string;
@@ -9,6 +8,7 @@ interface ClickableTeamNameProps {
   className?: string;
   variant?: 'link' | 'button' | 'default';
   children?: React.ReactNode;
+  userId?: string; // Optional user ID for P/L calculations
 }
 
 const ClickableTeamName: React.FC<ClickableTeamNameProps> = ({ 
@@ -16,40 +16,18 @@ const ClickableTeamName: React.FC<ClickableTeamNameProps> = ({
   teamId, 
   className = '',
   variant = 'link',
-  children 
+  children,
+  userId
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [databaseTeamId, setDatabaseTeamId] = useState<number | null>(null);
 
-  const handleClick = async () => {
+  const handleClick = () => {
     console.log('ClickableTeamName clicked:', { teamName, teamId });
     
     if (teamId) {
-      try {
-        // Get the database team ID from the external ID
-        const teams = await teamsService.getAll();
-        console.log('Available teams:', teams.map(t => ({ id: t.id, external_id: t.external_id, name: t.name })));
-        
-        const team = teams.find(t => t.external_id === teamId);
-        console.log('Found team:', team);
-        
-        if (team) {
-          console.log('Setting database team ID:', team.id);
-          setDatabaseTeamId(team.id);
-          setIsModalOpen(true);
-        } else {
-          console.warn('Could not find database team for external ID:', teamId);
-          console.warn('Available external IDs:', teams.map(t => t.external_id));
-          // Fallback: use external ID directly
-          setDatabaseTeamId(teamId);
-          setIsModalOpen(true);
-        }
-      } catch (error) {
-        console.error('Error finding team:', error);
-        // Fallback: use external ID directly
-        setDatabaseTeamId(teamId);
-        setIsModalOpen(true);
-      }
+      setDatabaseTeamId(teamId);
+      setIsModalOpen(true);
     } else {
       console.warn('No teamId provided for team:', teamName);
     }
@@ -105,6 +83,7 @@ const ClickableTeamName: React.FC<ClickableTeamNameProps> = ({
           }}
           teamId={databaseTeamId}
           teamName={teamName}
+          userId={userId}
         />
       )}
     </>

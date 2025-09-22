@@ -23,8 +23,8 @@ const StandingsPage: React.FC = () => {
     setError(null);
     
     try {
-      const standingsData = await footballApiService.getPremierLeagueStandings(selectedSeason);
-      setStandings(standingsData);
+      const premierLeagueData = await footballApiService.getPremierLeagueData(selectedSeason);
+      setStandings(premierLeagueData.standings);
     } catch (err) {
       console.error('Error loading standings:', err);
       setError(err instanceof Error ? err.message : 'Failed to load standings');

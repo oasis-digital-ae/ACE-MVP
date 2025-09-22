@@ -10,13 +10,12 @@ import ClickableTeamName from '@/shared/components/ClickableTeamName';
 import TeamLogo from '@/shared/components/TeamLogo';
 import { fixturesService } from '@/shared/lib/database';
 import type { DatabaseFixture } from '@/shared/lib/database';
-import { ApiTest } from './ApiTest';
 import { FixtureSync } from './FixtureSync';
 import { TeamSync } from './TeamSync';
 import { useToast } from '@/shared/hooks/use-toast';
 
 export const ClubValuesPage: React.FC = () => {
-  const { clubs, matches, purchaseClub } = useAppContext();
+  const { clubs, matches, purchaseClub, user } = useAppContext();
   const { toast } = useToast();
   const [selectedClub, setSelectedClub] = useState<string | null>(null);
   const [fixtures, setFixtures] = useState<DatabaseFixture[]>([]);
@@ -27,10 +26,10 @@ export const ClubValuesPage: React.FC = () => {
     pricePerShare: number;
   } | null>(null);
 
-  // Load fixtures on component mount
+  // Load fixtures on component mount and when clubs change
   useEffect(() => {
     loadFixtures();
-  }, []);
+  }, [clubs]); // Refresh fixtures when clubs data changes (e.g., after simulation)
 
   const loadFixtures = async () => {
     try {
@@ -41,11 +40,29 @@ export const ClubValuesPage: React.FC = () => {
     }
   };
 
-  // Function to count games played for a club using actual fixture data
+  // Expose refresh function for external components to call
+  const refreshFixtures = async () => {
+    await loadFixtures();
+  };
+
+  // Make refreshFixtures available globally for simulation components
+  useEffect(() => {
+    (window as any).refreshClubValuesFixtures = refreshFixtures;
+    return () => {
+      delete (window as any).refreshClubValuesFixtures;
+    };
+  }, []);
+
+  // Function to count games played for a club using fixture data
+  // Only counts fixtures that have been simulated (not synced from API)
   const getGamesPlayed = (clubId: string): number => {
     return fixtures.filter(fixture => 
-      (fixture.home_team_id === clubId || fixture.away_team_id === clubId) &&
-      fixture.status === 'applied' && fixture.result !== 'pending'
+      (fixture.home_team_id === parseInt(clubId) || fixture.away_team_id === parseInt(clubId)) &&
+      fixture.status === 'applied' && 
+      fixture.result !== 'pending' &&
+      // Only count fixtures that have snapshot data (indicating they were simulated)
+      fixture.snapshot_home_cap !== null &&
+      fixture.snapshot_away_cap !== null
     ).length;
   };
   // Function to get the latest ending value for a club from matches
@@ -130,9 +147,6 @@ export const ClubValuesPage: React.FC = () => {
                     const percentChange = club.percentChange;
                     const marketCap = Number(club.marketCap) || 100; // Use actual market cap from database, fallback to 100
                     
-                    // Debug logging
-                    console.log(`Club ${club.name}: launchPrice=${launchPrice}, currentValue=${currentValue}, marketCap=${marketCap}, percentChange=${percentChange}`);
-                    
                     return {
                       ...club,
                       launchPrice,
@@ -155,8 +169,9 @@ export const ClubValuesPage: React.FC = () => {
                           />
                           <ClickableTeamName
                             teamName={club.name}
-                            teamId={club.externalId ? parseInt(club.externalId) : undefined}
+                            teamId={parseInt(club.id)}
                             className="hover:text-blue-400"
+                            userId={user?.id}
                           />
                         </div>
                       </td>
@@ -196,10 +211,6 @@ export const ClubValuesPage: React.FC = () => {
         </CardContent>
       </Card>
       
-      {/* API Test Component - Temporary for debugging */}
-      <div className="mt-6">
-        <ApiTest />
-      </div>
       
       {/* Team Sync Component */}
       <div className="mt-6">

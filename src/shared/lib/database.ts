@@ -5,6 +5,88 @@ import type { DatabasePositionWithTeam, DatabaseOrderWithTeam } from '@/shared/t
 
 // Database service layer to replace localStorage usage
 
+// Team details cache service
+export const teamDetailsService = {
+  // Store detailed team information in localStorage (temporary solution)
+  async storeTeamDetails(teams: any[]): Promise<void> {
+    try {
+      const teamDetailsMap = teams.reduce((acc, team) => {
+        acc[team.id] = {
+          id: team.id,
+          name: team.name,
+          shortName: team.shortName,
+          tla: team.tla,
+          crest: team.crest,
+          website: team.website,
+          founded: team.founded,
+          clubColors: team.clubColors,
+          venue: team.venue,
+          squad: team.squad || [],
+          staff: team.staff || [],
+          lastUpdated: team.lastUpdated
+        };
+        return acc;
+      }, {} as Record<number, any>);
+      
+      localStorage.setItem('teamDetailsCache', JSON.stringify(teamDetailsMap));
+      localStorage.setItem('teamDetailsCacheTimestamp', Date.now().toString());
+      
+      logger.info(`Stored detailed information for ${teams.length} teams`);
+    } catch (error) {
+      logger.error('Error storing team details:', error);
+    }
+  },
+
+  // Get detailed team information from cache
+  async getTeamDetails(externalTeamId: number): Promise<any | null> {
+    try {
+      const cached = localStorage.getItem('teamDetailsCache');
+      const timestamp = localStorage.getItem('teamDetailsCacheTimestamp');
+      
+      if (!cached || !timestamp) {
+        return null;
+      }
+      
+      // Check if cache is still valid (24 hours)
+      const cacheAge = Date.now() - parseInt(timestamp);
+      if (cacheAge > 24 * 60 * 60 * 1000) {
+        localStorage.removeItem('teamDetailsCache');
+        localStorage.removeItem('teamDetailsCacheTimestamp');
+        return null;
+      }
+      
+      const teamDetailsMap = JSON.parse(cached);
+      return teamDetailsMap[externalTeamId] || null;
+    } catch (error) {
+      logger.error('Error retrieving team details:', error);
+      return null;
+    }
+  },
+
+  // Check if team details cache exists and is valid
+  async hasValidCache(): Promise<boolean> {
+    try {
+      const cached = localStorage.getItem('teamDetailsCache');
+      const timestamp = localStorage.getItem('teamDetailsCacheTimestamp');
+      
+      if (!cached || !timestamp) {
+        return false;
+      }
+      
+      const cacheAge = Date.now() - parseInt(timestamp);
+      return cacheAge < 24 * 60 * 60 * 1000; // 24 hours
+    } catch (error) {
+      return false;
+    }
+  },
+
+  // Clear team details cache
+  async clearCache(): Promise<void> {
+    localStorage.removeItem('teamDetailsCache');
+    localStorage.removeItem('teamDetailsCacheTimestamp');
+  }
+};
+
 export interface DatabaseTeam {
   id: number;
   name: string;
@@ -326,6 +408,31 @@ export const teamsService = {
     console.log(`Force reset ${teams.length} teams to exactly $100 market cap`);
   },
 
+  async resetMarketCapsOnly(): Promise<void> {
+    // Reset only market caps to $100, preserving fixtures and user investments
+    const { data: teams, error: fetchError } = await supabase.from('teams').select('id');
+    if (fetchError) throw fetchError;
+    if (!teams || teams.length === 0) { 
+      console.log('No teams found to reset'); 
+      return; 
+    }
+
+    // Reset ONLY market caps to $100, keep everything else intact
+    for (const team of teams) {
+      const { error } = await supabase
+        .from('teams')
+        .update({ 
+          market_cap: 100,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', team.id);
+      
+      if (error) throw error;
+    }
+
+    console.log(`Reset market caps for ${teams.length} teams to $100 (fixtures preserved)`);
+  },
+
   async processMatchResult(fixtureId: number): Promise<void> {
     const { data: fixture, error: fixtureError } = await supabase
       .from('fixtures')
@@ -573,9 +680,10 @@ export const teamsService = {
     logger.info('Syncing teams from Football API...');
     
     try {
-      // Get Premier League standings to get all team data
+      // Get Premier League data to get all team data
       const { footballApiService } = await import('./football-api');
-      const standings = await footballApiService.getPremierLeagueStandings(2024);
+      const premierLeagueData = await footballApiService.getPremierLeagueData(2024);
+      const standings = premierLeagueData.standings;
       
       logger.info(`Found ${standings.length} teams in Premier League standings`);
       
@@ -669,7 +777,7 @@ export const transfersLedgerService = {
     return data || [];
   },
 
-  async getByTeam(teamId: string): Promise<DatabaseTransferLedger[]> {
+  async getByTeam(teamId: number): Promise<DatabaseTransferLedger[]> {
     const { data, error } = await supabase
       .from('transfers_ledger')
       .select('*')
@@ -680,7 +788,7 @@ export const transfersLedgerService = {
     return data || [];
   },
 
-  async getByFixture(fixtureId: string): Promise<DatabaseTransferLedger[]> {
+  async getByFixture(fixtureId: number): Promise<DatabaseTransferLedger[]> {
     const { data, error } = await supabase
       .from('transfers_ledger')
       .select('*')
@@ -901,10 +1009,10 @@ export const fixturesService = {
 // Orders operations
 export const ordersService = {
   async createOrder(order: Omit<DatabaseOrder, 'id' | 'executed_at' | 'created_at' | 'updated_at'>): Promise<DatabaseOrder> {
-    // Buy window enforcement disabled for testing - commented out for easy re-enabling
-    logger.debug('Creating order without buy window enforcement (testing mode)');
+    // Buy window enforcement disabled for MVP - can be re-enabled later
+    logger.debug('Creating order without buy window enforcement (MVP mode)');
     
-    // TODO: Re-enable buy window enforcement when fixtures are properly synced
+    // Note: Buy window enforcement can be re-enabled when fixtures are properly synced
     /*
     // Check buy window for this team
     const now = new Date();
@@ -1074,7 +1182,7 @@ export const positionsService = {
     if (error) throw error;
   },
 
-  async isTeamTradeable(teamId: string): Promise<{ tradeable: boolean; reason?: string; nextFixture?: { kickoff_at: string; buy_close_at: string } }> {
+  async isTeamTradeable(teamId: number): Promise<{ tradeable: boolean; reason?: string; nextFixture?: { kickoff_at: string; buy_close_at: string } }> {
     const now = new Date();
     
     // Check if there are any upcoming fixtures for this team

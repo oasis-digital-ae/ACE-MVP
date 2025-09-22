@@ -5,9 +5,7 @@ import ClubValuesPage from '../../trading/components/ClubValuesPage';
 import PortfolioPage from '../../trading/components/PortfolioPage';
 import MatchResultsPage from '../../trading/components/MatchResultsPage';
 import StandingsPage from '../../trading/components/StandingsPage';
-import LiveTradingPage from '../../trading/components/LiveTradingPage';
 import LaunchPage from '../../trading/components/LaunchPage';
-import SeasonManager from '../../trading/components/SeasonManager';
 import SeasonSimulation from '../../trading/components/SeasonSimulation';
 
 const AppLayout: React.FC = () => {
@@ -24,12 +22,8 @@ const AppLayout: React.FC = () => {
         return <MatchResultsPage />;
       case 'standings':
         return <StandingsPage />;
-        case 'live-trading':
-          return <LiveTradingPage />;
-        case 'launch':
+      case 'launch':
         return <LaunchPage />;
-      case 'season-management':
-        return <SeasonManager onSeasonChange={() => window.location.reload()} />;
       case 'season-simulation':
         return <SeasonSimulation />;
       default:

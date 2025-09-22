@@ -9,34 +9,23 @@ interface EnvironmentConfig {
 }
 
 function getEnvironmentConfig(): EnvironmentConfig {
-  // Debug: Log ALL environment variables to help troubleshoot
-  console.log('All environment variables:', import.meta.env);
+  // Cast import.meta.env to any to avoid TypeScript errors
+  const env = (import.meta as any).env;
   
   // Support multiple environment variable naming conventions
-  const supabaseUrl = import.meta.env.NEXT_PUBLIC_SUPABASE_URL || 
-                     import.meta.env.VITE_SUPABASE_URL || 
-                     import.meta.env.SUPABASE_URL ||
-                     'https://zuwpcgfgrwvqsbmyfbwj.supabase.co'; // Fallback URL
-  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 
-                         import.meta.env.SUPABASE_ANON_KEY;
-  const appEnv = (import.meta.env.VITE_APP_ENV || 'development') as 'development' | 'production' | 'test';
-  const debugMode = import.meta.env.VITE_DEBUG_MODE === 'true';
-
-  // Debug logging to help troubleshoot
-  console.log('Environment variables check:', {
-    NEXT_PUBLIC_SUPABASE_URL: import.meta.env.NEXT_PUBLIC_SUPABASE_URL,
-    VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL,
-    SUPABASE_URL: import.meta.env.SUPABASE_URL,
-    VITE_SUPABASE_ANON_KEY: import.meta.env.VITE_SUPABASE_ANON_KEY ? 'Present' : 'Missing',
-    SUPABASE_ANON_KEY: import.meta.env.SUPABASE_ANON_KEY ? 'Present' : 'Missing',
-    supabaseUrl: supabaseUrl,
-    supabaseAnonKey: supabaseAnonKey ? 'Present' : 'Missing'
-  });
+  const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL || 
+                     env.VITE_SUPABASE_URL || 
+                     env.SUPABASE_URL;
+  
+  const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY || 
+                         env.SUPABASE_ANON_KEY;
+  const appEnv = (env.VITE_APP_ENV || 'development') as 'development' | 'production' | 'test';
+  const debugMode = env.VITE_DEBUG_MODE === 'true';
 
   // Validate required environment variables
   if (!supabaseUrl) {
     // Try to extract URL from the anon key if available
-    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    const anonKey = env.VITE_SUPABASE_ANON_KEY;
     if (anonKey && anonKey.startsWith('eyJ')) {
       try {
         // Decode JWT to get the project reference
@@ -44,7 +33,6 @@ function getEnvironmentConfig(): EnvironmentConfig {
         const projectRef = payload.ref;
         if (projectRef) {
           const extractedUrl = `https://${projectRef}.supabase.co`;
-          console.log('Extracted Supabase URL from JWT:', extractedUrl);
           return {
             supabaseUrl: extractedUrl,
             supabaseAnonKey: anonKey,
@@ -57,7 +45,7 @@ function getEnvironmentConfig(): EnvironmentConfig {
       }
     }
     
-    throw new Error('Supabase URL is required. Please set NEXT_PUBLIC_SUPABASE_URL, VITE_SUPABASE_URL, or SUPABASE_URL in your .env file.');
+    throw new Error('Supabase URL is required. Please set NEXT_PUBLIC_SUPABASE_URL, VITE_SUPABASE_URL, or SUPABASE_URL in your environment variables.');
   }
 
   if (!supabaseAnonKey) {

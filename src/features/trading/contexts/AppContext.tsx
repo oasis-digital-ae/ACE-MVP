@@ -31,6 +31,7 @@ interface AppContextType {
   refreshStandings: () => Promise<void>;
   refreshTopScorers: () => Promise<void>;
   refreshLiveMatches: () => Promise<void>;
+  user: any; // Add user to context
 }
 
 const defaultAppContext: AppContextType = {
@@ -52,7 +53,8 @@ const defaultAppContext: AppContextType = {
   refreshData: async () => {},
   refreshStandings: async () => {},
   refreshTopScorers: async () => {},
-  refreshLiveMatches: async () => {}
+  refreshLiveMatches: async () => {},
+  user: null
 };
 
 const AppContext = createContext<AppContextType>(defaultAppContext);
@@ -382,8 +384,8 @@ const AppProviderInner: React.FC<{ children: React.ReactNode }> = ({ children })
 
   const refreshStandings = withErrorHandling(async () => {
     try {
-      const standingsData = await footballApiService.getPremierLeagueStandings();
-      setStandings(standingsData);
+      const premierLeagueData = await footballApiService.getPremierLeagueData();
+      setStandings(premierLeagueData.standings);
     } catch (error) {
       logger.error('Error refreshing standings:', error);
       throw new ExternalApiError('Failed to refresh standings', 'Football API');
@@ -432,7 +434,8 @@ const AppProviderInner: React.FC<{ children: React.ReactNode }> = ({ children })
         refreshData,
         refreshStandings,
         refreshTopScorers,
-        refreshLiveMatches
+        refreshLiveMatches,
+        user
       }}
     >
       {children}

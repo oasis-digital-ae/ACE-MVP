@@ -6,7 +6,8 @@ import path from "path";
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
-    port: 8080,
+    port: 5173,
+    strictPort: true,
   },
   plugins: [
     react()
@@ -24,5 +25,16 @@ export default defineConfig(({ mode }) => ({
   build: {
     outDir: "dist",
     assetsDir: "assets",
+    sourcemap: false,
+    minify: "terser",
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          supabase: ['@supabase/supabase-js'],
+          ui: ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu']
+        }
+      }
+    }
   },
 }));

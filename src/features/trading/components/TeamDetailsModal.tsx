@@ -5,9 +5,10 @@ import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
 import { footballApiService } from '@/shared/lib/football-api';
-import { fixturesService, teamsService } from '@/shared/lib/database';
+import { fixturesService, teamsService, positionsService } from '@/shared/lib/database';
 import type { TeamDetails, FootballMatch, Standing } from '@/shared/lib/football-api';
 import type { DatabaseFixture, DatabaseTeam } from '@/shared/lib/database';
+import type { DatabasePositionWithTeam } from '@/shared/types/database.types';
 import { formatCurrency } from '@/shared/lib/formatters';
 import { Loader2, ExternalLink, MapPin, Calendar, Users, Trophy, Target, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
@@ -16,9 +17,10 @@ interface TeamDetailsModalProps {
   onClose: () => void;
   teamId: number;
   teamName: string;
+  userId?: string; // Optional user ID for P/L calculations
 }
 
-const TeamDetailsModal: React.FC<TeamDetailsModalProps> = ({ isOpen, onClose, teamId, teamName }) => {
+const TeamDetailsModal: React.FC<TeamDetailsModalProps> = ({ isOpen, onClose, teamId, teamName, userId }) => {
   const [teamDetails, setTeamDetails] = useState<TeamDetails | null>(null);
   const [teamMatches, setTeamMatches] = useState<FootballMatch[]>([]);
   const [standings, setStandings] = useState<Standing[]>([]);
@@ -26,6 +28,7 @@ const TeamDetailsModal: React.FC<TeamDetailsModalProps> = ({ isOpen, onClose, te
   const [error, setError] = useState<string | null>(null);
   const [matchHistory, setMatchHistory] = useState<any[]>([]);
   const [teams, setTeams] = useState<DatabaseTeam[]>([]);
+  const [userPosition, setUserPosition] = useState<DatabasePositionWithTeam | null>(null);
 
   useEffect(() => {
     if (isOpen && teamId) {
@@ -51,23 +54,102 @@ const TeamDetailsModal: React.FC<TeamDetailsModalProps> = ({ isOpen, onClose, te
       const externalTeamId = team.external_id;
       console.log('Using external team ID:', externalTeamId, 'for team:', teamName);
       
-      // Load team details, matches, and standings from API in parallel
-      const [details, matches, standingsData, fixturesData] = await Promise.all([
-        footballApiService.getTeamDetails(externalTeamId),
-        footballApiService.getTeamMatches(externalTeamId),
-        footballApiService.getPremierLeagueStandings(),
+      // OPTIMIZED: Single API call gets all Premier League data
+      // This reduces API calls from 3 to 1 per team click!
+      const [premierLeagueData, fixturesData] = await Promise.allSettled([
+        footballApiService.getPremierLeagueData(),
         fixturesService.getAll()
       ]);
 
-      console.log('Successfully loaded team data:', { details, matches: matches.length, standings: standingsData.length });
-      
-      setTeamDetails(details);
-      setTeamMatches(matches);
-      setStandings(standingsData);
-      setTeams(allTeams);
+      // Extract successful results
+      const premierLeague = premierLeagueData.status === 'fulfilled' ? premierLeagueData.value : null;
+      const fixtures = fixturesData.status === 'fulfilled' ? fixturesData.value : [];
+
+      // Find specific team data from the Premier League data
+      const basicTeamInfo = premierLeague?.teams.find(t => t.id === externalTeamId) || null;
+      const teamMatches = premierLeague?.matches.filter(m => 
+        m.homeTeam.id === externalTeamId || m.awayTeam.id === externalTeamId
+      ) || [];
+      const standings = premierLeague?.standings || [];
+
+      // Get detailed team information from cached all-teams data
+      let teamDetails = basicTeamInfo;
+      if (basicTeamInfo) {
+        try {
+          // Fetch detailed team info for this specific team (cached for 15 minutes)
+          const detailedTeamInfo = await footballApiService.getTeamDetailsCached(externalTeamId);
+          
+          teamDetails = detailedTeamInfo || basicTeamInfo;
+        } catch (detailError) {
+          console.warn('Failed to fetch detailed team info, using basic info:', detailError);
+          teamDetails = basicTeamInfo;
+        }
+      }
+
+      // Log any API failures and try fallback
+      if (premierLeagueData.status === 'rejected') {
+        console.warn(`Failed to fetch Premier League data:`, premierLeagueData.reason);
+        console.log('Attempting fallback with individual API calls...');
+        
+        try {
+          // Fallback: Use individual API calls
+          const [standingsData, teamDetailsData, teamMatchesData] = await Promise.allSettled([
+            footballApiService.getPremierLeagueData().then(data => data.standings),
+            footballApiService.getTeamDetails(externalTeamId),
+            footballApiService.getTeamMatches(externalTeamId)
+          ]);
+          
+          const standings = standingsData.status === 'fulfilled' ? standingsData.value : [];
+          const basicTeamDetails = teamDetailsData.status === 'fulfilled' ? teamDetailsData.value : null;
+          const teamMatches = teamMatchesData.status === 'fulfilled' ? teamMatchesData.value : [];
+          
+          // Try to get detailed team information even in fallback
+          let teamDetails = basicTeamDetails;
+          if (basicTeamDetails) {
+            try {
+              const detailedTeamInfo = await footballApiService.getTeamDetailsCached(externalTeamId);
+              teamDetails = detailedTeamInfo || basicTeamDetails;
+            } catch (detailError) {
+              console.warn('Failed to fetch detailed team info in fallback:', detailError);
+              teamDetails = basicTeamDetails;
+            }
+          }
+          
+          setTeamDetails(teamDetails);
+          setTeamMatches(teamMatches);
+          setStandings(standings);
+          setTeams(allTeams);
+          
+          console.log('Fallback successful:', { 
+            details: teamDetails ? 'loaded' : 'failed', 
+            matches: teamMatches.length, 
+            standings: standings.length 
+          });
+        } catch (fallbackError) {
+          console.error('Fallback also failed:', fallbackError);
+          setError(`Failed to load team data: ${premierLeagueData.reason.message || 'API error'}`);
+        }
+      } else {
+        setTeamDetails(teamDetails);
+        setTeamMatches(teamMatches);
+        setStandings(standings);
+        setTeams(allTeams);
+        
+        console.log('Successfully loaded team data:', { 
+          details: teamDetails ? 'loaded' : 'failed', 
+          matches: teamMatches.length, 
+          standings: standings.length 
+        });
+      }
+
+      // Load user position if userId is provided
+      let currentUserPosition = null;
+      if (userId) {
+        currentUserPosition = await loadUserPositionAndReturn(userId, teamId);
+      }
 
       // Process match history for this team
-      await loadMatchHistory(fixturesData, allTeams);
+      await loadMatchHistory(fixtures, allTeams, currentUserPosition);
     } catch (err) {
       console.error('Error loading team data:', err);
       console.error('TeamId that failed:', teamId);
@@ -78,7 +160,37 @@ const TeamDetailsModal: React.FC<TeamDetailsModalProps> = ({ isOpen, onClose, te
     }
   };
 
-  const loadMatchHistory = async (fixturesData: DatabaseFixture[], teamsData: DatabaseTeam[]) => {
+  const loadUserPositionAndReturn = async (userId: string, teamId: number) => {
+    try {
+      console.log(`Loading user position for userId: ${userId}, teamId: ${teamId}`);
+      const positions = await positionsService.getUserPositions(userId);
+      console.log(`All user positions:`, positions);
+      const position = positions.find(p => p.team_id === teamId);
+      console.log(`Found position for team ${teamId}:`, position);
+      setUserPosition(position || null);
+      return position || null;
+    } catch (error) {
+      console.error('Error loading user position:', error);
+      setUserPosition(null);
+      return null;
+    }
+  };
+
+  const loadUserPosition = async (userId: string, teamId: number) => {
+    try {
+      console.log(`Loading user position for userId: ${userId}, teamId: ${teamId}`);
+      const positions = await positionsService.getUserPositions(userId);
+      console.log(`All user positions:`, positions);
+      const position = positions.find(p => p.team_id === teamId);
+      console.log(`Found position for team ${teamId}:`, position);
+      setUserPosition(position || null);
+    } catch (error) {
+      console.error('Error loading user position:', error);
+      setUserPosition(null);
+    }
+  };
+
+  const loadMatchHistory = async (fixturesData: DatabaseFixture[], teamsData: DatabaseTeam[], currentUserPosition?: any) => {
     try {
       // Find the team in our database by database ID
       const team = teamsData.find(t => t.id === teamId);
@@ -96,7 +208,7 @@ const TeamDetailsModal: React.FC<TeamDetailsModalProps> = ({ isOpen, onClose, te
         fixture.snapshot_away_cap !== null
       );
 
-      // Process each fixture to calculate price impacts
+      // Process each fixture to calculate price impacts and P/L
       const matchesWithImpacts = clubFixtures.map(fixture => {
         const isHome = fixture.home_team_id === team.id;
         const opponent = isHome ? 
@@ -148,6 +260,36 @@ const TeamDetailsModal: React.FC<TeamDetailsModalProps> = ({ isOpen, onClose, te
 
         priceImpactPercent = preMatchCap > 0 ? (priceImpact / preMatchCap) * 100 : 0;
 
+        // Calculate pre-match and post-match share prices
+        const preMatchSharesOutstanding = team.shares_outstanding;
+        const postMatchSharesOutstanding = team.shares_outstanding; // Assuming shares outstanding doesn't change from match results
+        
+        const preMatchSharePrice = preMatchSharesOutstanding > 0 ? preMatchCap / preMatchSharesOutstanding : 0;
+        const postMatchSharePrice = postMatchSharesOutstanding > 0 ? postMatchCap / postMatchSharesOutstanding : 0;
+
+        // Calculate P/L for user if they own shares
+        let userPL = 0;
+        let userPLPercent = 0;
+        const userPos = currentUserPosition || userPosition;
+        if (userPos && userPos.quantity > 0) {
+          // Calculate P/L based on share price change
+          const sharePriceChange = postMatchSharePrice - preMatchSharePrice;
+          userPL = sharePriceChange * userPos.quantity;
+          userPLPercent = preMatchSharePrice > 0 ? (sharePriceChange / preMatchSharePrice) * 100 : 0;
+          
+          // Debug logging
+          console.log(`P/L Debug for ${team.name}:`, {
+            userPosition: userPos,
+            preMatchSharePrice,
+            postMatchSharePrice,
+            sharePriceChange,
+            userPL,
+            userPLPercent
+          });
+        } else {
+          console.log(`No user position for ${team.name}:`, { userPosition: userPos, teamId });
+        }
+
         const score = `${fixture.home_score || 0}-${fixture.away_score || 0}`;
 
         return {
@@ -159,7 +301,11 @@ const TeamDetailsModal: React.FC<TeamDetailsModalProps> = ({ isOpen, onClose, te
           preMatchCap,
           postMatchCap,
           priceImpact,
-          priceImpactPercent
+          priceImpactPercent,
+          userPL,
+          userPLPercent,
+          preMatchSharePrice,
+          postMatchSharePrice
         };
       });
 
@@ -271,9 +417,27 @@ const TeamDetailsModal: React.FC<TeamDetailsModalProps> = ({ isOpen, onClose, te
             <div className="text-sm text-gray-400 mb-4">
               <p>Team ID: {teamId}</p>
               <p>Team Name: {teamName}</p>
+              <p className="mt-2 text-yellow-500">
+                Note: This team may not be available in the current Premier League season API data.
+              </p>
             </div>
             <Button onClick={loadTeamData} variant="outline">
               Try Again
+            </Button>
+          </div>
+        )}
+
+        {!error && !loading && !teamDetails && (
+          <div className="text-center py-8">
+            <div className="text-gray-400 mb-4">
+              <h3 className="text-lg font-semibold mb-2">{teamName}</h3>
+              <p className="text-sm">Team details not available from API</p>
+              <p className="text-xs mt-2 text-yellow-500">
+                This team may not be in the current Premier League season
+              </p>
+            </div>
+            <Button onClick={loadTeamData} variant="outline">
+              Retry
             </Button>
           </div>
         )}
@@ -333,10 +497,16 @@ const TeamDetailsModal: React.FC<TeamDetailsModalProps> = ({ isOpen, onClose, te
                               <div className="space-y-1">
                                 <div className="text-gray-400">Pre-Match Market Cap</div>
                                 <div className="font-medium">{formatCurrency(match.preMatchCap)}</div>
+                                <div className="text-xs text-gray-500">
+                                  Share Price: {formatCurrency(match.preMatchSharePrice)}
+                                </div>
                               </div>
                               <div className="space-y-1">
                                 <div className="text-gray-400">Post-Match Market Cap</div>
                                 <div className="font-medium">{formatCurrency(match.postMatchCap)}</div>
+                                <div className="text-xs text-gray-500">
+                                  Share Price: {formatCurrency(match.postMatchSharePrice)}
+                                </div>
                               </div>
                               <div className="space-y-1">
                                 <div className="text-gray-400">Price Impact</div>
@@ -350,6 +520,17 @@ const TeamDetailsModal: React.FC<TeamDetailsModalProps> = ({ isOpen, onClose, te
                                     ({match.priceImpactPercent > 0 ? '+' : ''}{match.priceImpactPercent.toFixed(1)}%)
                                   </span>
                                 </div>
+                                {userPosition && userPosition.quantity > 0 && (
+                                  <div className={`text-xs font-medium flex items-center gap-1 ${
+                                    match.userPL > 0 ? 'text-green-400' : 
+                                    match.userPL < 0 ? 'text-red-400' : 'text-gray-400'
+                                  }`}>
+                                    Your P/L: {match.userPL > 0 ? '+' : ''}{formatCurrency(match.userPL)}
+                                    <span className="text-xs">
+                                      ({match.userPLPercent > 0 ? '+' : ''}{match.userPLPercent.toFixed(1)}%)
+                                    </span>
+                                  </div>
+                                )}
                               </div>
                             </div>
 

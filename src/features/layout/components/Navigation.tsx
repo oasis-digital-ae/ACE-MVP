@@ -15,9 +15,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
     { id: 'portfolio', label: 'Portfolio' },
     { id: 'match-results', label: 'Match Results' },
     { id: 'standings', label: 'League Table' },
-    { id: 'live-trading', label: 'Live Market Updates' },
     { id: 'launch', label: 'Launch' },
-    { id: 'season-management', label: 'Season Management' },
     { id: 'season-simulation', label: 'Season Simulation' }
   ];
 

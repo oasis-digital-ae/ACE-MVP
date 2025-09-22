@@ -3,6 +3,7 @@ import { Button } from '@/shared/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { Badge } from '@/shared/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
 import { teamsService, fixturesService, positionsService } from '@/shared/lib/database';
 import { matchProcessingService } from '@/shared/lib/match-processing';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
@@ -12,8 +13,8 @@ const SeasonSimulation: React.FC = () => {
     const { user } = useAuth();
     const [isLoading, setIsLoading] = useState(false);
     const [simulationResults, setSimulationResults] = useState<string>('');
-    const [currentStep, setCurrentStep] = useState(0);
     const [availableGames, setAvailableGames] = useState<any[]>([]);
+    const [playedGames, setPlayedGames] = useState<any[]>([]);
     const [selectedGameId, setSelectedGameId] = useState<string>('');
     const [nextGame, setNextGame] = useState<any>(null);
     const [teams, setTeams] = useState<any[]>([]);
@@ -33,20 +34,22 @@ const SeasonSimulation: React.FC = () => {
             setTeams(teamsData);
             
             if (fixtures) {
-                console.log('All fixtures:', fixtures);
-                console.log('Fixture statuses:', fixtures.map(f => ({ id: f.id, status: f.status, result: f.result })));
                 
-                // Get games that can be simulated (scheduled or have results but no market cap snapshots)
-                // For now, let's show ALL fixtures for testing
-                const simulatableGames = fixtures.filter(f => 
-                    f.status === 'scheduled' || 
-                    f.status === 'applied' ||
-                    f.status === 'closed' ||
-                    f.status === 'postponed' ||
-                    !f.status // Handle null/undefined status
+                
+                // Separate played games (have snapshot data) from available games
+                const playedGamesList = fixtures.filter(f => 
+                    f.status === 'applied' && 
+                    f.result !== 'pending' &&
+                    f.snapshot_home_cap !== null &&
+                    f.snapshot_away_cap !== null
                 );
                 
-                console.log('Simulatable games:', simulatableGames);
+                // Get games that can be simulated (all games except played ones)
+                const simulatableGames = fixtures.filter(f => 
+                    !playedGamesList.some(pg => pg.id === f.id) // Exclude already played games
+                );
+                
+                setPlayedGames(playedGamesList);
                 setAvailableGames(simulatableGames);
                 
                 // Find the next game (earliest kickoff time)
@@ -144,7 +147,7 @@ const SeasonSimulation: React.FC = () => {
                     const updatedAwayTeam = updatedTeams.find(t => t.id === awayTeam.id);
                     
                     let marketCapUpdate = '';
-                    if (updatedHomeTeam && updatedAwayTeam) {
+            if (updatedHomeTeam && updatedAwayTeam) {
                         const homePrice = updatedHomeTeam.shares_outstanding > 0 ? updatedHomeTeam.market_cap / updatedHomeTeam.shares_outstanding : 20;
                         const awayPrice = updatedAwayTeam.shares_outstanding > 0 ? updatedAwayTeam.market_cap / updatedAwayTeam.shares_outstanding : 20;
                         
@@ -154,6 +157,14 @@ const SeasonSimulation: React.FC = () => {
                     }
                     
                     setSimulationResults(`✅ ${homeTeam.name} vs ${awayTeam.name}: ${homeScore}-${awayScore} (${result})${marketCapUpdate}\n\n🎉 Match processed! Market caps updated based on result.`);
+                    
+                    // Refresh fixtures in ClubValuesPage to update games played count
+                    if ((window as any).refreshClubValuesFixtures) {
+                        await (window as any).refreshClubValuesFixtures();
+                    }
+                    
+                    // Refresh available games to move the played game to the played tab
+            await loadAvailableGames();
                 } catch (processError) {
                     setSimulationResults(`✅ ${homeTeam.name} vs ${awayTeam.name}: ${homeScore}-${awayScore} (${result})\n\n❌ Error processing match result: ${processError}`);
                 }
@@ -174,283 +185,64 @@ const SeasonSimulation: React.FC = () => {
         }
     };
 
-    const simulateSeason = async () => {
-        if (!user) {
-            setSimulationResults('❌ You must be logged in to run simulation');
-            return;
-        }
 
-        setIsLoading(true);
-        setSimulationResults('');
-        setCurrentStep(0);
 
-        try {
-            let results = '🏆 Premier League Season Simulation\n';
-            results += '=====================================\n\n';
 
-            // Step 1: Show initial state
-            setCurrentStep(1);
-            results += '📊 STEP 1: Initial Market State\n';
-            results += '-------------------------------\n';
-
-            const teams = await teamsService.getAll();
-            if (!teams || teams.length === 0) {
-                throw new Error('No teams found in database');
-            }
-            results += `✅ Found ${teams.length} teams\n`;
-
-            const userPositions = await positionsService.getUserPositions(user.id);
-            results += `✅ User positions loaded (${userPositions.length} holdings)\n\n`;
-
-            results += `Current Market State:\n`;
-            teams.slice(0, 5).forEach(team => {
-                const price = team.shares_outstanding > 0 ? team.market_cap / team.shares_outstanding : 20;
-                results += `• ${team.name}: Market Cap $${team.market_cap.toFixed(2)}, Price $${price.toFixed(2)}\n`;
-            });
-            results += '\n';
-
-            if (userPositions.length > 0) {
-                results += `Your Holdings:\n`;
-                userPositions.forEach(pos => {
-                    const team = teams.find(t => t.id === pos.team_id);
-                    if (team) {
-                        const nav = team.shares_outstanding > 0 ? team.market_cap / team.shares_outstanding : 20;
-                        const avgCost = pos.quantity > 0 ? pos.total_invested / pos.quantity : 0;
-                        const profitLoss = (nav - avgCost) * pos.quantity;
-                        results += `• ${team.name}: ${pos.quantity} shares @ avg $${avgCost.toFixed(2)} = $${(pos.quantity * nav).toFixed(2)} (${profitLoss >= 0 ? '+' : ''}$${profitLoss.toFixed(2)})\n`;
-                    }
-                });
-                results += '\n';
-            }
-
-            // Step 2: Process current fixtures
-            setCurrentStep(2);
-            results += '⚽ STEP 2: Processing Current Fixtures\n';
-            results += '-------------------------------------\n';
-
-            const fixtures = await fixturesService.getAll();
-            if (!fixtures) {
-                throw new Error('Failed to fetch fixtures from database');
-            }
-            results += `✅ Found ${fixtures.length} total fixtures\n`;
-            
-            // Find fixtures that have results but need market cap processing
-            const fixturesToProcess = fixtures.filter(f => 
-                f.status === 'applied' && 
-                f.result !== 'pending' && 
-                f.result !== null &&
-                (f.snapshot_home_cap === null || f.snapshot_away_cap === null)
-            );
-            
-            results += `✅ Found ${fixturesToProcess.length} fixtures ready for processing\n\n`;
-
-            if (fixturesToProcess.length === 0) {
-                results += 'ℹ️ No fixtures need processing right now.\n';
-                results += 'All fixtures either:\n';
-                results += '• Haven\'t been played yet (status = scheduled)\n';
-                results += '• Already been processed (have market cap snapshots)\n';
-                results += '• Have pending results\n\n';
-                
-                // Show some scheduled fixtures for reference
-                const scheduledFixtures = fixtures.filter(f => f.status === 'scheduled').slice(0, 5);
-                if (scheduledFixtures.length > 0) {
-                    results += '📅 Upcoming fixtures:\n';
-                    scheduledFixtures.forEach(f => {
-                        const homeTeam = teams.find(t => t.id === f.home_team_id);
-                        const awayTeam = teams.find(t => t.id === f.away_team_id);
-                        if (homeTeam && awayTeam) {
-                            results += `• ${homeTeam.name} vs ${awayTeam.name}\n`;
-                        }
-                    });
-                }
-                
-                setSimulationResults(results);
-                setIsLoading(false);
-                return;
-            }
-
-            // Process fixtures
-            let processedCount = 0;
-            for (const fixture of fixturesToProcess.slice(0, 20)) { // Process max 20 at a time
-                try {
-                    // Get team names for display
-                    const homeTeam = teams.find(t => t.id === fixture.home_team_id);
-                    const awayTeam = teams.find(t => t.id === fixture.away_team_id);
-                    const teamNames = homeTeam && awayTeam ? `${homeTeam.name} vs ${awayTeam.name}` : `Fixture ${fixture.id}`;
-                    
-                    // Capture snapshot if missing
-                    if (!fixture.snapshot_home_cap || !fixture.snapshot_away_cap) {
-                        await teamsService.captureMarketCapSnapshot(fixture.id);
-                    }
-                    
-                    // Process the match result
-                    await teamsService.processMatchResult(fixture.id);
-                    
-                    processedCount++;
-                    const score = `${fixture.home_score || 0}-${fixture.away_score || 0}`;
-                    results += `✅ ${teamNames}: ${score} (${fixture.result})\n`;
-                    
-                    // Update progress
-                    setSimulationResults(results);
-                    
-                } catch (error) {
-                    results += `❌ Error processing fixture ${fixture.id}: ${error}\n`;
-                }
-            }
-
-            results += `\n🎉 Processed ${processedCount} fixtures!\n\n`;
-
-            // Step 3: Show final state
-            setCurrentStep(3);
-            results += '📊 STEP 3: Final Market State\n';
-            results += '-----------------------------\n';
-
-            // Reload teams to show updated market caps
-            const updatedTeams = await teamsService.getAll();
-            results += `Updated Market Caps:\n`;
-            updatedTeams.slice(0, 5).forEach(team => {
-                const price = team.shares_outstanding > 0 ? team.market_cap / team.shares_outstanding : 20;
-                results += `• ${team.name}: Market Cap $${team.market_cap.toFixed(2)}, Price $${price.toFixed(2)}\n`;
-            });
-
-            if (userPositions.length > 0) {
-                results += `\nYour Updated Holdings:\n`;
-                const updatedPositions = await positionsService.getUserPositions(user.id);
-                updatedPositions.forEach(pos => {
-                    const team = updatedTeams.find(t => t.id === pos.team_id);
-                    if (team) {
-                        const nav = team.shares_outstanding > 0 ? team.market_cap / team.shares_outstanding : 20;
-                        const avgCost = pos.quantity > 0 ? pos.total_invested / pos.quantity : 0;
-                        const profitLoss = (nav - avgCost) * pos.quantity;
-                        results += `• ${team.name}: ${pos.quantity} shares @ avg $${avgCost.toFixed(2)} = $${(pos.quantity * nav).toFixed(2)} (${profitLoss >= 0 ? '+' : ''}$${profitLoss.toFixed(2)})\n`;
-                    }
-                });
-            }
-
-            results += `\n🏆 Simulation Complete! Market caps updated based on match results.\n`;
-
-            setSimulationResults(results);
-        } catch (error) {
-            console.error('Simulation error:', error);
-            setSimulationResults(`❌ Simulation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const simulateMatchResults = async () => {
-        if (!user) {
-            setSimulationResults('❌ You must be logged in to simulate match results');
-            return;
-        }
-
-        setIsLoading(true);
-        setSimulationResults('');
-
-        try {
-            let results = '🎮 Simulating Match Results\n';
-            results += '===========================\n\n';
-
-            // Get scheduled fixtures
-            const fixtures = await fixturesService.getAll();
-            const scheduledFixtures = fixtures.filter(f => f.status === 'scheduled').slice(0, 5);
-            
-            if (scheduledFixtures.length === 0) {
-                results += 'ℹ️ No scheduled fixtures found to simulate.\n';
-                results += 'All fixtures may have already been played or processed.\n';
-                setSimulationResults(results);
-                setIsLoading(false);
-                return;
-            }
-
-            results += `Found ${scheduledFixtures.length} scheduled fixtures to simulate:\n\n`;
-
-            // Get teams for reference
-            const teams = await teamsService.getAll();
-            const teamsMap = new Map(teams.map(team => [team.id, team]));
-
-            // Simulate results for each fixture
-            for (const fixture of scheduledFixtures) {
-                const homeTeam = teamsMap.get(fixture.home_team_id);
-                const awayTeam = teamsMap.get(fixture.away_team_id);
-                
-                if (!homeTeam || !awayTeam) {
-                    results += `❌ Skipping fixture ${fixture.id} - team data missing\n`;
-                    continue;
-                }
-
-                // Simulate a realistic result based on market caps
-                const homeMarketCap = homeTeam.market_cap;
-                const awayMarketCap = awayTeam.market_cap;
-                
-                // Higher market cap = higher chance to win
-                const homeWinProb = homeMarketCap / (homeMarketCap + awayMarketCap);
-                const random = Math.random();
-                
-                let result: 'home_win' | 'away_win' | 'draw';
-                let homeScore: number;
-                let awayScore: number;
-                
-                if (random < homeWinProb * 0.7) { // 70% of win probability goes to actual win
-                    result = 'home_win';
-                    homeScore = Math.floor(Math.random() * 3) + 1;
-                    awayScore = Math.floor(Math.random() * 2);
-                } else if (random < homeWinProb * 0.7 + (1 - homeWinProb) * 0.7) {
-                    result = 'away_win';
-                    awayScore = Math.floor(Math.random() * 3) + 1;
-                    homeScore = Math.floor(Math.random() * 2);
-                } else {
-                    result = 'draw';
-                    homeScore = Math.floor(Math.random() * 2) + 1;
-                    awayScore = homeScore;
-                }
-
-                // Update the fixture with simulated result
-                const { error } = await supabase
-                    .from('fixtures')
-                    .update({
-                        status: 'applied',
-                        result: result,
-                        home_score: homeScore,
-                        away_score: awayScore,
-                        snapshot_home_cap: homeTeam.market_cap,
-                        snapshot_away_cap: awayTeam.market_cap
-                    })
-                    .eq('id', fixture.id);
-
-                if (error) {
-                    results += `❌ Error updating fixture ${fixture.id}: ${error.message}\n`;
-                } else {
-                    results += `✅ ${homeTeam.name} vs ${awayTeam.name}: ${homeScore}-${awayScore} (${result})\n`;
-                }
-            }
-
-            results += `\n🎉 Simulated ${scheduledFixtures.length} match results!\n`;
-            results += `Now run "Run Season Simulation" to process these results and update market caps.\n`;
-
-            setSimulationResults(results);
-        } catch (error) {
-            console.error('Simulation error:', error);
-            setSimulationResults(`❌ Simulation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const resetSimulation = () => {
-        setSimulationResults('');
-        setCurrentStep(0);
-    };
-
-    const forceResetSimulation = async () => {
+    const resetMarketCapsOnly = async () => {
         if (!user) return;
-        
+
         setIsLoading(true);
         try {
-            await teamsService.forceResetAll();
-            setSimulationResults('🔄 Force reset completed! All teams reset to $100 market cap.\n');
+            // Reset market caps
+            await teamsService.resetMarketCapsOnly();
+            
+            // Reset shares outstanding to 5 for all teams (individual updates for better error handling)
+            const teams = await teamsService.getAll();
+            let sharesUpdateSuccess = 0;
+            let sharesUpdateErrors = 0;
+            
+            for (const team of teams) {
+                const { error } = await supabase
+                    .from('teams')
+                    .update({
+                        shares_outstanding: 5,
+                        total_shares: 5,
+                        available_shares: 5
+                    })
+                    .eq('id', team.id);
+                
+                if (error) {
+                    sharesUpdateErrors++;
+                } else {
+                    sharesUpdateSuccess++;
+                }
+            }
+            
+            
+            // Reset all fixtures to scheduled status and clear snapshot data
+            const { error: fixturesError, data: fixturesData } = await supabase
+                .from('fixtures')
+                .update({
+                    status: 'scheduled',
+                    result: 'pending',
+                    home_score: null,
+                    away_score: null,
+                    snapshot_home_cap: null,
+                    snapshot_away_cap: null
+                })
+                .neq('id', 0); // Update all fixtures
+            
+            
+            if (fixturesError || sharesUpdateErrors > 0) {
+                setSimulationResults(`💰 Market caps reset to $100! 📊 Shares reset: ${sharesUpdateSuccess}/${teams.length} successful! ⚠️ ${sharesUpdateErrors} teams failed to update shares.\n`);
+            } else {
+                setSimulationResults('💰 Market caps reset to $100! 📊 Shares outstanding reset to 5! ⚽ All games reset to scheduled status.\n');
+            }
+            
+            // Refresh available games to show updated data
+            await loadAvailableGames();
         } catch (error) {
-            setSimulationResults(`❌ Reset failed: ${error}`);
+            setSimulationResults(`❌ Market cap reset failed: ${error}`);
         } finally {
             setIsLoading(false);
         }
@@ -463,107 +255,134 @@ const SeasonSimulation: React.FC = () => {
                 <CardHeader>
                     <CardTitle>⚽ Per-Game Simulation</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="flex gap-4">
-                        <Select value={selectedGameId} onValueChange={setSelectedGameId}>
-                            <SelectTrigger className="flex-1">
-                                <SelectValue placeholder="Select a game to simulate" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {availableGames.map((game) => {
-                                    const homeTeam = teams.find(t => t.id === game.home_team_id);
-                                    const awayTeam = teams.find(t => t.id === game.away_team_id);
-                                    return (
+                <CardContent>
+                    <Tabs defaultValue="available" className="w-full">
+                        <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="available">Available Games ({availableGames.length})</TabsTrigger>
+                            <TabsTrigger value="played">Games Played ({playedGames.length})</TabsTrigger>
+                        </TabsList>
+                        
+                        <TabsContent value="available" className="space-y-4">
+                            <div className="flex gap-4">
+                            <Select value={selectedGameId} onValueChange={setSelectedGameId}>
+                                    <SelectTrigger className="flex-1">
+                                        <SelectValue placeholder="Select a game to simulate" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                        {availableGames.map((game) => {
+                                            const homeTeam = teams.find(t => t.id === game.home_team_id);
+                                            const awayTeam = teams.find(t => t.id === game.away_team_id);
+                                            return (
                                         <SelectItem key={game.id} value={game.id}>
-                                            {homeTeam?.name || 'Home'} vs {awayTeam?.name || 'Away'}
+                                                    {homeTeam?.name || 'Home'} vs {awayTeam?.name || 'Away'}
                                         </SelectItem>
-                                    );
-                                })}
-                            </SelectContent>
-                        </Select>
-                        <Button
-                            onClick={() => simulateSingleGame(selectedGameId)}
-                            disabled={isLoading || !selectedGameId}
-                        >
-                            {isLoading ? 'Simulating...' : 'Simulate Selected Game'}
-                        </Button>
+                                            );
+                                        })}
+                                </SelectContent>
+                            </Select>
+                                <Button
+                                    onClick={() => simulateSingleGame(selectedGameId)}
+                                    disabled={isLoading || !selectedGameId}
+                                >
+                                    {isLoading ? 'Simulating...' : 'Simulate Selected Game'}
+                                </Button>
                         <Button
                             onClick={simulateNextGame}
                             disabled={isLoading || !nextGame}
-                            variant="outline"
+                                    variant="outline"
                         >
                             {isLoading ? 'Simulating...' : 'Simulate Next Game'}
                         </Button>
-                    </div>
-                    
-                    {/* Debug Info */}
-                    <div className="text-sm text-gray-400 space-y-2">
-                        <p>Available games: {availableGames.length}</p>
-                        <p>Teams loaded: {teams.length}</p>
-                        {availableGames.length === 0 && (
-                            <p className="text-yellow-400">No games available for simulation. Check console for details.</p>
-                        )}
+                            </div>
+                            
+                            {/* Debug Info */}
+                            <div className="text-sm text-gray-400 space-y-2">
+                                <p>Available games: {availableGames.length}</p>
+                                <p>Teams loaded: {teams.length}</p>
+                                {availableGames.length === 0 && (
+                                    <p className="text-yellow-400">No games available for simulation. All games may have been played.</p>
+                                )}
                         <Button
-                            onClick={loadAvailableGames}
-                            disabled={isLoading}
-                            variant="secondary"
-                            size="sm"
-                        >
-                            🔄 Refresh Games
+                                    onClick={loadAvailableGames}
+                                    disabled={isLoading}
+                                    variant="secondary"
+                                    size="sm"
+                                >
+                                    🔄 Refresh Games
                         </Button>
                     </div>
+                        </TabsContent>
+                        
+                        <TabsContent value="played" className="space-y-4">
+                            <div className="max-h-96 overflow-y-auto">
+                                {playedGames.length === 0 ? (
+                                    <p className="text-gray-400 text-center py-8">No games have been played yet.</p>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {playedGames.map((game) => {
+                                            const homeTeam = teams.find(t => t.id === game.home_team_id);
+                                            const awayTeam = teams.find(t => t.id === game.away_team_id);
+                                            const result = game.result === 'home_win' ? 'Home Win' : 
+                                                         game.result === 'away_win' ? 'Away Win' : 'Draw';
+                                            const resultColor = game.result === 'home_win' ? 'text-green-400' : 
+                                                              game.result === 'away_win' ? 'text-blue-400' : 'text-yellow-400';
+                                            
+                                            return (
+                                                <div key={game.id} className="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
+                                                    <div className="flex items-center gap-3">
+                                                        <Badge variant="outline" className="text-xs">
+                                                            {new Date(game.kickoff_at).toLocaleDateString()}
+                                                        </Badge>
+                                                        <span className="font-medium">
+                                                            {homeTeam?.name || 'Home'} vs {awayTeam?.name || 'Away'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-sm">
+                                                            {game.home_score || 0} - {game.away_score || 0}
+                                                        </span>
+                                                        <Badge className={`${resultColor} bg-transparent`}>
+                                                            {result}
+                                                        </Badge>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        </TabsContent>
+                    </Tabs>
                 </CardContent>
             </Card>
 
-            {/* Full Season Simulation Card */}
+            {/* Reset Market Caps Card */}
             <Card>
                 <CardHeader>
-                    <CardTitle>🏆 Full Season Simulation</CardTitle>
+                    <CardTitle>🔄 Reset Marketplace</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="flex gap-4 flex-wrap">
                         <Button
-                            onClick={simulateMatchResults}
+                            onClick={resetMarketCapsOnly}
                             disabled={isLoading}
-                            className="bg-green-600 hover:bg-green-700"
+                            variant="secondary"
+                            className="bg-blue-600 hover:bg-blue-700"
                         >
-                            {isLoading ? 'Simulating...' : '🎮 Simulate New Results'}
-                        </Button>
-                        <Button
-                            onClick={simulateSeason}
-                            disabled={isLoading}
-                            className="flex-1"
-                        >
-                            {isLoading ? 'Running Simulation...' : '🏆 Run Season Simulation'}
-                        </Button>
-                        <Button
-                            onClick={resetSimulation}
-                            disabled={isLoading}
-                            variant="outline"
-                        >
-                            Reset Simulation
-                        </Button>
-                        <Button
-                            onClick={forceResetSimulation}
-                            disabled={isLoading}
-                            variant="destructive"
-                        >
-                            Force Reset (Ignore Investments)
+                            {isLoading ? 'Resetting...' : 'Reset Market Caps Only'}
                         </Button>
                     </div>
 
-                    {currentStep > 0 && (
-                        <div className="flex items-center gap-2">
-                            <Badge variant="outline">
-                                {currentStep === 1 ? 'Loading...' : 
-                                 currentStep === 2 ? 'Processing...' : 
-                                 currentStep === 3 ? 'Complete!' : 'Ready'}
-                            </Badge>
-                            <span className="text-sm text-gray-400">
-                                Step {currentStep} of 3
-                            </span>
+                    <div className="text-sm text-gray-400">
+                        <p>This will reset:</p>
+                        <ul className="list-disc list-inside ml-4 space-y-1">
+                            <li>All team market caps to $100</li>
+                            <li>All shares outstanding to 5</li>
+                            <li>All games to scheduled status</li>
+                            <li>Clear all match scores and snapshots</li>
+                        </ul>
+                        <p className="mt-2 text-yellow-400">⚠️ User investments will be preserved</p>
                         </div>
-                    )}
                 </CardContent>
             </Card>
 
