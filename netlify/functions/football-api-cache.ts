@@ -41,6 +41,8 @@ export const handler = async (event: any, context: any) => {
     const season = event.queryStringParameters?.season || '2024';
     
     console.log(`Function called with path: ${path}, season: ${season}`);
+    console.log(`API Key present: ${!!API_KEY}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 
            // Generate cache key based on endpoint
            let cacheKey = '';
@@ -110,7 +112,18 @@ export const handler = async (event: any, context: any) => {
 
            // Validate API key
            if (!API_KEY) {
-             throw new Error('Football API key not configured');
+             console.error('Football API key not configured');
+             return {
+               statusCode: 500,
+               headers: {
+                 ...corsHeaders,
+                 'Content-Type': 'application/json',
+               },
+               body: JSON.stringify({ 
+                 error: 'Football API key not configured',
+                 details: 'VITE_FOOTBALL_API_KEY environment variable is missing'
+               }),
+             };
            }
 
     const response = await fetch(apiUrl, {
@@ -120,7 +133,19 @@ export const handler = async (event: any, context: any) => {
     });
 
     if (!response.ok) {
-      throw new Error(`Football API error: ${response.status} ${response.statusText}`);
+      const errorText = await response.text();
+      console.error(`Football API error: ${response.status} ${response.statusText}`, errorText);
+      return {
+        statusCode: response.status,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          error: `Football API error: ${response.status}`,
+          details: errorText
+        }),
+      };
     }
 
     const data = await response.json();

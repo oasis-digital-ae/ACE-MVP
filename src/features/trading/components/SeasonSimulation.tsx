@@ -98,26 +98,34 @@ const SeasonSimulation: React.FC = () => {
             const homeMarketCap = homeTeam.market_cap;
             const awayMarketCap = awayTeam.market_cap;
             
-            // Higher market cap = higher chance to win
+            
+            // Higher market cap = slightly higher chance to score more goals
             const homeWinProb = homeMarketCap / (homeMarketCap + awayMarketCap);
-            const random = Math.random();
             
+            // Generate base scores (0-3 goals each)
+            let homeScore = Math.floor(Math.random() * 4);
+            let awayScore = Math.floor(Math.random() * 4);
+            
+            // Adjust scores slightly based on market cap difference (but keep it realistic)
+            const marketCapDiff = Math.abs(homeMarketCap - awayMarketCap);
+            const maxAdjustment = Math.min(1, Math.floor(marketCapDiff / 20)); // Max 1 goal adjustment
+            
+            if (homeWinProb > 0.6 && Math.random() < 0.3) {
+                // Home team slightly favored, small chance to score 1 more
+                homeScore = Math.min(3, homeScore + maxAdjustment);
+            } else if (homeWinProb < 0.4 && Math.random() < 0.3) {
+                // Away team slightly favored, small chance to score 1 more
+                awayScore = Math.min(3, awayScore + maxAdjustment);
+            }
+            
+            // Determine result based on actual scores
             let result: 'home_win' | 'away_win' | 'draw';
-            let homeScore: number;
-            let awayScore: number;
-            
-            if (random < homeWinProb * 0.7) {
+            if (homeScore > awayScore) {
                 result = 'home_win';
-                homeScore = Math.floor(Math.random() * 3) + 1;
-                awayScore = Math.floor(Math.random() * 2);
-            } else if (random < homeWinProb * 0.7 + (1 - homeWinProb) * 0.7) {
+            } else if (awayScore > homeScore) {
                 result = 'away_win';
-                awayScore = Math.floor(Math.random() * 3) + 1;
-                homeScore = Math.floor(Math.random() * 2);
             } else {
                 result = 'draw';
-                homeScore = Math.floor(Math.random() * 2) + 1;
-                awayScore = homeScore;
             }
 
             // Update the fixture with simulated result
