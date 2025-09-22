@@ -54,15 +54,44 @@ const TeamDetailsModal: React.FC<TeamDetailsModalProps> = ({ isOpen, onClose, te
       const externalTeamId = team.external_id;
       console.log('Using external team ID:', externalTeamId, 'for team:', teamName);
       
-      // OPTIMIZED: Single API call gets all Premier League data
+      // OPTIMIZED: Single API call gets all Premier League data with fallback
       // This reduces API calls from 3 to 1 per team click!
-      const [premierLeagueData, fixturesData] = await Promise.allSettled([
-        footballApiService.getPremierLeagueData(),
+      let premierLeague = null;
+      try {
+        const premierLeagueData = await footballApiService.getPremierLeagueData();
+        premierLeague = premierLeagueData;
+      } catch (error) {
+        console.warn('Netlify function failed, attempting fallback with direct API calls:', error);
+        
+        // Fallback: Use direct API calls
+        try {
+          const [standingsData, matchesData] = await Promise.allSettled([
+            footballApiService.getPremierLeagueStandings(),
+            footballApiService.getPremierLeagueMatches()
+          ]);
+          
+          const standings = standingsData.status === 'fulfilled' ? standingsData.value : [];
+          const matches = matchesData.status === 'fulfilled' ? matchesData.value : [];
+          
+          // Reconstruct the data structure
+          premierLeague = {
+            standings,
+            matches,
+            teams: standings.map(s => s.team)
+          };
+          
+          console.log('Fallback successful:', { standings: standings.length, matches: matches.length });
+        } catch (fallbackError) {
+          console.error('Fallback also failed:', fallbackError);
+          premierLeague = null;
+        }
+      }
+
+      const [fixturesData] = await Promise.allSettled([
         fixturesService.getAll()
       ]);
 
       // Extract successful results
-      const premierLeague = premierLeagueData.status === 'fulfilled' ? premierLeagueData.value : null;
       const fixtures = fixturesData.status === 'fulfilled' ? fixturesData.value : [];
 
       // Find specific team data from the Premier League data

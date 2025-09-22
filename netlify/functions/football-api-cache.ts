@@ -43,6 +43,12 @@ export const handler = async (event: any, context: any) => {
     console.log(`Function called with path: ${path}, season: ${season}`);
     console.log(`API Key present: ${!!API_KEY}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`Full event object:`, JSON.stringify({
+      path: event.path,
+      httpMethod: event.httpMethod,
+      queryStringParameters: event.queryStringParameters,
+      headers: event.headers
+    }, null, 2));
 
            // Generate cache key based on endpoint
            let cacheKey = '';
@@ -105,7 +111,34 @@ export const handler = async (event: any, context: any) => {
 
            // Validate API URL before making request
            if (!apiUrl) {
-             throw new Error(`Unsupported endpoint: ${path}`);
+             console.error(`Unsupported endpoint: ${path}`);
+             return {
+               statusCode: 400,
+               headers: {
+                 ...corsHeaders,
+                 'Content-Type': 'application/json',
+               },
+               body: JSON.stringify({ 
+                 error: `Unsupported endpoint: ${path}`,
+                 details: 'The requested endpoint is not supported by this function'
+               }),
+             };
+           }
+
+           // Validate cache key
+           if (!cacheKey) {
+             console.error(`No cache key generated for path: ${path}`);
+             return {
+               statusCode: 400,
+               headers: {
+                 ...corsHeaders,
+                 'Content-Type': 'application/json',
+               },
+               body: JSON.stringify({ 
+                 error: `No cache key generated for path: ${path}`,
+                 details: 'The requested path does not match any supported patterns'
+               }),
+             };
            }
 
            console.log(`Fetching from API: ${apiUrl}`);
