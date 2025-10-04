@@ -89,25 +89,27 @@ export const PurchaseConfirmationModal: React.FC<PurchaseConfirmationModalProps>
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-gray-800 border-gray-700 text-white max-w-md">
+      <DialogContent className="bg-gray-800/95 backdrop-blur-md border border-trading-primary/30 text-white max-w-md rounded-lg">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold text-center">
+          <DialogTitle className="text-xl font-bold text-center gradient-text">
             Purchase Shares
           </DialogTitle>
         </DialogHeader>
         
         <div className="py-6 space-y-4">
           {/* Team Logo and Name */}
-          <div className="text-center space-y-3">
+          <div className="text-center space-y-4">
             <div className="flex justify-center">
-              <TeamLogo 
-                teamName={clubName} 
-                externalId={externalId}
-                size="lg"
-                className="mx-auto"
-              />
+              <div className="team-logo-container">
+                <TeamLogo 
+                  teamName={clubName} 
+                  externalId={externalId}
+                  size="lg"
+                  className="mx-auto"
+                />
+              </div>
             </div>
-            <h3 className="text-lg font-semibold text-blue-400">
+            <h3 className="text-lg font-semibold text-trading-primary">
               {clubName}
             </h3>
           </div>
@@ -141,21 +143,21 @@ export const PurchaseConfirmationModal: React.FC<PurchaseConfirmationModalProps>
               )}
             </div>
             
-            <div className="space-y-3 bg-gray-700 p-4 rounded-lg">
-              <div className="flex justify-between">
-                <span className="text-gray-300">Price per share:</span>
-                <span className="font-semibold">{formatCurrency(pricePerShare)}</span>
+            <div className="space-y-4 bg-gradient-card p-6 rounded-lg border border-trading-primary/20">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-300 font-medium">Price per share:</span>
+                <span className="font-semibold text-white">{formatCurrency(pricePerShare)}</span>
               </div>
               
-              <div className="flex justify-between">
-                <span className="text-gray-300">Number of shares:</span>
-                <span className="font-semibold">{shares.toLocaleString()}</span>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-300 font-medium">Number of shares:</span>
+                <span className="font-semibold text-white">{shares.toLocaleString()}</span>
               </div>
               
-              <div className="border-t border-gray-600 pt-3">
-                <div className="flex justify-between text-lg">
-                  <span className="font-semibold">Total purchase value:</span>
-                  <span className="font-bold text-green-400">{formatCurrency(totalValue)}</span>
+              <div className="border-t border-trading-primary/30 pt-4">
+                <div className="flex justify-between items-center text-lg">
+                  <span className="font-semibold text-gray-300">Total purchase value:</span>
+                  <span className="font-bold text-trading-primary text-xl">{formatCurrency(totalValue)}</span>
                 </div>
               </div>
             </div>
@@ -166,14 +168,14 @@ export const PurchaseConfirmationModal: React.FC<PurchaseConfirmationModalProps>
           <Button
             onClick={onClose}
             variant="outline"
-            className="flex-1 bg-red-500 text-white border-red-500 hover:bg-red-600 hover:text-white hover:border-red-600"
+            className="flex-1 bg-gradient-danger hover:bg-gradient-danger/80 text-white border-danger hover:border-danger/80 font-semibold"
           >
             Cancel
           </Button>
           <Button
             onClick={handleConfirm}
             disabled={!isValid || shares <= 0}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600"
+            className="flex-1 bg-gradient-success hover:bg-gradient-success/80 disabled:bg-gray-600 text-white font-semibold transition-all duration-200 disabled:hover:scale-100"
           >
             Confirm Purchase
           </Button>

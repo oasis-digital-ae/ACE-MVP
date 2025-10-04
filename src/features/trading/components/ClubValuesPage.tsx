@@ -144,26 +144,103 @@ export const ClubValuesPage: React.FC = () => {
   }, [confirmationData, purchaseClub, toast]);
 
   return (
-    <div className="p-6">
-      <Card className="bg-gray-800 border-gray-700">
+    <div className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
+      {/* Header Section */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-white gradient-text">Live Market</h1>
+          <p className="text-gray-400 mt-1 text-sm sm:text-base">Trade Premier League club shares in real-time</p>
+        </div>
+        <div className="flex items-center space-x-2 text-sm text-gray-400">
+          <div className="w-2 h-2 bg-trading-primary rounded-full animate-pulse"></div>
+          <span>Live Updates</span>
+        </div>
+      </div>
+
+      {/* Market Overview Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+        <Card className="trading-card">
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex-1 min-w-0">
+                <p className="text-gray-400 text-xs sm:text-sm font-medium truncate">Total Market Cap</p>
+                <p className="text-lg sm:text-xl font-bold text-white truncate">
+                  {formatCurrency(clubs.reduce((sum, club) => sum + Number(club.marketCap), 0))}
+                </p>
+              </div>
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-primary rounded-full flex items-center justify-center flex-shrink-0 ml-2">
+                <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="trading-card">
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex-1 min-w-0">
+                <p className="text-gray-400 text-xs sm:text-sm font-medium truncate">Active Clubs</p>
+                <p className="text-lg sm:text-xl font-bold text-white">{clubs.length}</p>
+              </div>
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-slate rounded-full flex items-center justify-center flex-shrink-0 ml-2">
+                <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="trading-card">
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex-1 min-w-0">
+                <p className="text-gray-400 text-xs sm:text-sm font-medium truncate">Top Performer</p>
+                <p className="text-sm sm:text-lg font-bold text-white truncate">
+                  {clubs.length > 0 ? clubs.sort((a, b) => b.percentChange - a.percentChange)[0]?.name : 'N/A'}
+                </p>
+                <p className="text-xs sm:text-sm text-trading-success font-semibold">
+                  {clubs.length > 0 ? `+${clubs.sort((a, b) => b.percentChange - a.percentChange)[0]?.percentChange.toFixed(2)}%` : ''}
+                </p>
+              </div>
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-success rounded-full flex items-center justify-center flex-shrink-0 ml-2">
+                <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                </svg>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Main Marketplace Table */}
+      <Card className="trading-card">
         <CardHeader>
-          <CardTitle className="text-white text-2xl">Marketplace</CardTitle>
+          <CardTitle className="text-white text-xl flex items-center space-x-2">
+            <svg className="w-5 h-5 text-trading-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+            </svg>
+            <span>Club Rankings</span>
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-white text-sm">
+          {/* Desktop Table */}
+          <div className="hidden lg:block overflow-x-auto">
+            <table className="w-full text-white">
               <thead>
-                <tr className="border-b border-gray-700">
-                  <th className="text-left p-2">#</th>
-                  <th className="text-left p-2">Club</th>
-                  <th className="text-center p-2">Games Played</th>
-                  <th className="text-right p-2">Launch</th>
-                  <th className="text-right p-2">Current</th>
-                  <th className="text-right p-2">P/L</th>
-                  <th className="text-right p-2">Change</th>
-                  <th className="text-right p-2">Market Cap</th>
-                  <th className="text-center p-2">Shares Outstanding</th>
-                  <th className="text-center p-2">Buy</th>
+                <tr className="border-b border-gray-700/50">
+                  <th className="text-left p-4 font-semibold text-gray-300">#</th>
+                  <th className="text-left p-4 font-semibold text-gray-300">Club</th>
+                  <th className="text-center p-4 font-semibold text-gray-300">Games</th>
+                  <th className="text-right p-4 font-semibold text-gray-300">Launch</th>
+                  <th className="text-right p-4 font-semibold text-gray-300">Current</th>
+                  <th className="text-right p-4 font-semibold text-gray-300">P/L</th>
+                  <th className="text-right p-4 font-semibold text-gray-300">Change</th>
+                  <th className="text-right p-4 font-semibold text-gray-300">Market Cap</th>
+                  <th className="text-center p-4 font-semibold text-gray-300">Shares</th>
+                  <th className="text-center p-4 font-semibold text-gray-300">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -188,20 +265,22 @@ export const ClubValuesPage: React.FC = () => {
                   .sort((a, b) => b.percentChange - a.percentChange), [clubs]) // Sort by percentage gain descending
                   .map((club, index) => (
                     <React.Fragment key={club.id}>
-                      <tr className="border-b border-gray-700 hover:bg-gray-700">
-                        <td className="p-2 text-gray-400">{index + 1}</td>
-                        <td className="p-2 font-medium">
-                          <div className="flex items-center gap-2">
-                            <TeamLogo 
-                              teamName={club.name} 
-                              externalId={club.externalId ? parseInt(club.externalId) : undefined}
-                              size="sm" 
-                            />
+                      <tr className="border-b border-gray-700/30 hover:bg-gray-700/30 transition-colors duration-200 group">
+                        <td className="p-4 text-gray-400 font-semibold">{index + 1}</td>
+                        <td className="p-4 font-medium">
+                          <div className="flex items-center gap-3">
+                            <div className="team-logo-container">
+                              <TeamLogo 
+                                teamName={club.name} 
+                                externalId={club.externalId ? parseInt(club.externalId) : undefined}
+                                size="md" 
+                              />
+                            </div>
                             <button
                               onClick={() => handleTeamClick(club.id)}
-                              className="hover:text-blue-400 transition-colors duration-200 cursor-pointer text-left flex items-center gap-2"
+                              className="hover:text-trading-primary transition-colors duration-200 cursor-pointer text-left flex items-center gap-2 group-hover:text-trading-primary"
                             >
-                              {club.name}
+                              <span className="font-semibold">{club.name}</span>
                               <ChevronDown 
                                 className={`h-4 w-4 transition-transform duration-280 ease-out ${
                                   selectedClub === club.id ? 'rotate-180' : ''
@@ -211,33 +290,31 @@ export const ClubValuesPage: React.FC = () => {
                           </div>
                         </td>
                         <td 
-                          className="p-2 text-center text-blue-400 font-medium cursor-pointer hover:text-blue-300"
+                          className="p-4 text-center text-trading-primary font-semibold cursor-pointer hover:text-trading-primary-light transition-colors duration-200"
                           onClick={() => handleTeamClick(club.id)}
                         >
                           {getGamesPlayed(club.id)}
                         </td>
-                        <td className="p-2 text-right">{formatCurrency(club.launchPrice)}</td>
-                        <td className="p-2 text-right">{formatCurrency(club.currentValue)}</td>
-                        <td className={`p-2 text-right ${club.profitLoss === 0 ? 'text-gray-400' : club.profitLoss > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {formatCurrency(club.profitLoss)}
+                        <td className="p-4 text-right font-mono">{formatCurrency(club.launchPrice)}</td>
+                        <td className="p-4 text-right font-mono font-semibold">{formatCurrency(club.currentValue)}</td>
+                        <td className={`p-4 text-right font-semibold ${club.profitLoss === 0 ? 'text-gray-400' : club.profitLoss > 0 ? 'price-positive' : 'price-negative'}`}>
+                          {club.profitLoss > 0 ? '+' : ''}{formatCurrency(club.profitLoss)}
                         </td>
-                        <td className={`p-2 text-right ${club.percentChange === 0 ? 'text-gray-400' : club.percentChange > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {formatPercent(club.percentChange)}
+                        <td className={`p-4 text-right font-semibold ${club.percentChange === 0 ? 'text-gray-400' : club.percentChange > 0 ? 'price-positive' : 'price-negative'}`}>
+                          {club.percentChange > 0 ? '+' : ''}{formatPercent(club.percentChange)}
                         </td>
-                         <td className="p-2 text-right">{formatCurrency(club.marketCap)}</td>
-                        <td className="p-2 text-center text-blue-400 font-medium">
+                        <td className="p-4 text-right font-mono">{formatCurrency(club.marketCap)}</td>
+                        <td className="p-4 text-center text-trading-primary font-semibold">
                           {club.sharesOutstanding.toLocaleString()}
                         </td>
-                        <td className="p-2 text-center">
-                          <div className="flex gap-2 justify-center">
-                            <Button
-                              onClick={() => handlePurchaseClick(club.id)}
-                              size="sm"
-                              className="bg-blue-600 hover:bg-blue-700 text-xs px-3 py-1"
-                            >
-                              Buy
-                            </Button>
-                          </div>
+                        <td className="p-4 text-center">
+                          <Button
+                            onClick={() => handlePurchaseClick(club.id)}
+                            size="sm"
+                            className="bg-gradient-success hover:bg-gradient-success/80 text-white font-semibold px-4 py-2 rounded-lg transition-all duration-200 hover:scale-105"
+                          >
+                            Buy
+                          </Button>
                         </td>
                       </tr>
                       
@@ -259,6 +336,125 @@ export const ClubValuesPage: React.FC = () => {
 
               </tbody>
             </table>
+          </div>
+
+          {/* Mobile Card Layout */}
+          <div className="lg:hidden space-y-3">
+            {useMemo(() => clubs
+              .map(club => {
+                const launchPrice = Number(club.launchValue) || 20;
+                const currentValue = Number(club.currentValue) || 20;
+                const profitLoss = currentValue - launchPrice;
+                const percentChange = club.percentChange;
+                const marketCap = Number(club.marketCap) || 100;
+                
+                return {
+                  ...club,
+                  launchPrice,
+                  currentValue,
+                  profitLoss,
+                  percentChange,
+                  marketCap
+                };
+              })
+              .sort((a, b) => b.percentChange - a.percentChange), [clubs])
+              .map((club, index) => (
+                <div key={club.id} className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/30">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="team-logo-container">
+                        <TeamLogo 
+                          teamName={club.name} 
+                          externalId={club.externalId ? parseInt(club.externalId) : undefined}
+                          size="sm" 
+                        />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-400 text-sm font-medium">#{index + 1}</span>
+                          <button
+                            onClick={() => handleTeamClick(club.id)}
+                            className="hover:text-trading-primary transition-colors duration-200 cursor-pointer text-left flex items-center gap-1"
+                          >
+                            <span className="font-semibold text-white text-sm">{club.name}</span>
+                            <ChevronDown 
+                              className={`h-3 w-3 transition-transform duration-280 ease-out ${
+                                selectedClub === club.id ? 'rotate-180' : ''
+                              }`}
+                            />
+                          </button>
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          {getGamesPlayed(club.id)} games played
+                        </div>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={() => handlePurchaseClick(club.id)}
+                      size="sm"
+                      className="bg-gradient-success hover:bg-gradient-success/80 text-white font-semibold px-3 py-1 text-xs rounded-md"
+                    >
+                      Buy
+                    </Button>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="space-y-1">
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Launch:</span>
+                        <span className="text-white font-mono">{formatCurrency(club.launchPrice)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Current:</span>
+                        <span className="text-white font-mono font-semibold">{formatCurrency(club.currentValue)}</span>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">P/L:</span>
+                        <span className={`font-semibold ${club.profitLoss === 0 ? 'text-gray-400' : club.profitLoss > 0 ? 'price-positive' : 'price-negative'}`}>
+                          {club.profitLoss > 0 ? '+' : ''}{formatCurrency(club.profitLoss)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Change:</span>
+                        <span className={`font-semibold ${club.percentChange === 0 ? 'text-gray-400' : club.percentChange > 0 ? 'price-positive' : 'price-negative'}`}>
+                          {club.percentChange > 0 ? '+' : ''}{formatPercent(club.percentChange)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-3 pt-3 border-t border-gray-700/30">
+                    <div className="flex justify-between text-xs">
+                      <div>
+                        <span className="text-gray-400">Market Cap:</span>
+                        <span className="text-white font-mono ml-1">{formatCurrency(club.marketCap)}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-400">Shares:</span>
+                        <span className="text-trading-primary font-semibold ml-1">{club.sharesOutstanding.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Slide-down panel for team details */}
+                  <div className="slide-down-panel" data-open={selectedClub === club.id}>
+                    <div className="slide-down-panel-inner">
+                      <div className="slide-down-panel-content">
+                        <TeamDetailsSlideDown
+                          isOpen={selectedClub === club.id}
+                          teamId={parseInt(club.id)}
+                          teamName={club.name}
+                          userId={user?.id}
+                          fixtures={fixtures}
+                          teams={memoizedTeams}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
           </div>
         </CardContent>
       </Card>

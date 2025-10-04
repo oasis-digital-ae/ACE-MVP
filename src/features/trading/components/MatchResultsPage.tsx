@@ -88,46 +88,85 @@ const MatchResultsPage: React.FC = () => {
   }
 
   return (
-    <div className="p-6">
-      <Card className="bg-gray-800 border-gray-700 mb-6">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-white text-2xl">Match Results</CardTitle>
-          <div className="flex gap-2">
+    <div className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
+      {/* Header Section */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-white gradient-text">Match Results</h1>
+          <p className="text-gray-400 mt-1 text-sm sm:text-base">Track fixtures, results, and market impacts</p>
+        </div>
+        <div className="flex items-center space-x-2 text-sm text-gray-400">
+          <div className="w-2 h-2 bg-trading-primary rounded-full animate-pulse"></div>
+          <span>Live Updates</span>
+        </div>
+      </div>
+
+      {/* Filter Controls */}
+      <Card className="trading-card">
+        <CardContent className="p-4">
+          <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
             <Button 
               onClick={() => setFilter('all')} 
               variant={filter === 'all' ? 'default' : 'outline'}
-              className="text-sm"
+              className={`text-sm font-semibold ${
+                filter === 'all' 
+                  ? 'bg-gradient-success hover:bg-gradient-success/80 text-white' 
+                  : 'text-gray-300 hover:text-white hover:bg-white/10'
+              }`}
             >
               All ({fixtures.length})
             </Button>
             <Button 
               onClick={() => setFilter('finished')} 
               variant={filter === 'finished' ? 'default' : 'outline'}
-              className="text-sm"
+              className={`text-sm font-semibold ${
+                filter === 'finished' 
+                  ? 'bg-gradient-success hover:bg-gradient-success/80 text-white' 
+                  : 'text-gray-300 hover:text-white hover:bg-white/10'
+              }`}
             >
               Finished ({fixtures.filter(f => f.status === 'applied').length})
             </Button>
             <Button 
               onClick={() => setFilter('upcoming')} 
               variant={filter === 'upcoming' ? 'default' : 'outline'}
-              className="text-sm"
+              className={`text-sm font-semibold ${
+                filter === 'upcoming' 
+                  ? 'bg-gradient-success hover:bg-gradient-success/80 text-white' 
+                  : 'text-gray-300 hover:text-white hover:bg-white/10'
+              }`}
             >
               Upcoming ({fixtures.filter(f => f.status === 'scheduled').length})
             </Button>
-            <Button onClick={loadFixtures} variant="outline" className="text-sm">
+            <Button 
+              onClick={loadFixtures} 
+              variant="outline" 
+              className="text-sm font-semibold text-gray-300 hover:text-white hover:bg-white/10"
+            >
               Refresh
             </Button>
           </div>
-        </CardHeader>
+        </CardContent>
       </Card>
 
       {filteredFixtures.length === 0 ? (
-        <Card className="bg-gray-800 border-gray-700">
-          <CardContent className="p-8 text-center">
-            <p className="text-gray-400">
+        <Card className="trading-card">
+          <CardContent className="p-12 text-center">
+            <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <p className="text-gray-400 text-lg font-medium mb-2">
               {filter === 'all' 
-                ? 'No fixtures found. Sync fixtures from the Football API Test page.'
-                : `No ${filter} fixtures found.`
+                ? 'No fixtures found'
+                : `No ${filter} fixtures found`
+              }
+            </p>
+            <p className="text-gray-500 text-sm">
+              {filter === 'all' 
+                ? 'Sync fixtures from the Football API Test page to see matches.'
+                : 'Try selecting a different filter or sync more fixtures.'
               }
             </p>
           </CardContent>
@@ -137,67 +176,76 @@ const MatchResultsPage: React.FC = () => {
           {filteredFixtures
             .sort((a, b) => new Date(a.kickoff_at).getTime() - new Date(b.kickoff_at).getTime())
             .map((fixture) => (
-            <Card key={fixture.id} className="bg-gray-800 border-gray-700">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between mb-4">
+            <Card key={fixture.id} className="football-card group">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-4">
-                    <div className="text-sm text-gray-400">
+                    <div className="text-sm text-gray-400 font-medium bg-gray-700/50 px-3 py-1 rounded-full">
                       Matchday {fixture.matchday}
                     </div>
                     {getStatusBadge(fixture.status)}
                     {fixture.result !== 'pending' && getResultBadge(fixture.result)}
                   </div>
-                  <div className="text-sm text-gray-400">
+                  <div className="text-sm text-gray-400 font-medium">
                     {formatDate(fixture.kickoff_at)}
                   </div>
                 </div>
                 
                 <div className="flex items-center justify-between">
                   <div className="flex-1 text-center">
-                    <div className="text-lg font-semibold text-white flex items-center justify-center gap-2">
-                      <TeamLogo 
-                        teamName={fixture.home_team?.name || 'Home Team'} 
-                        externalId={fixture.home_team?.external_id ? parseInt(fixture.home_team.external_id) : undefined}
-                        size="sm" 
-                      />
+                    <div className="text-lg font-semibold text-white flex items-center justify-center gap-3">
+                      <div className="team-logo-container">
+                        <TeamLogo 
+                          teamName={fixture.home_team?.name || 'Home Team'} 
+                          externalId={fixture.home_team?.external_id ? parseInt(fixture.home_team.external_id) : undefined}
+                          size="md" 
+                        />
+                      </div>
                       <ClickableTeamName
                         teamName={fixture.home_team?.name || 'Home Team'}
                         teamId={fixture.home_team?.external_id ? parseInt(fixture.home_team.external_id) : undefined}
-                        className="hover:text-blue-400"
+                        className="hover:text-trading-primary transition-colors duration-200"
                       />
                     </div>
                   </div>
                   
-                  <div className="flex items-center gap-4 mx-8">
-                    <div className="text-3xl font-bold text-white">
+                  <div className="flex items-center gap-6 mx-8">
+                    <div className="text-4xl font-bold text-white bg-gradient-card px-4 py-2 rounded-lg">
                       {fixture.home_score !== null ? fixture.home_score : '-'}
                     </div>
-                    <div className="text-gray-400">vs</div>
-                    <div className="text-3xl font-bold text-white">
+                    <div className="text-gray-400 font-semibold">vs</div>
+                    <div className="text-4xl font-bold text-white bg-gradient-card px-4 py-2 rounded-lg">
                       {fixture.away_score !== null ? fixture.away_score : '-'}
                     </div>
                   </div>
                   
                   <div className="flex-1 text-center">
-                    <div className="text-lg font-semibold text-white flex items-center justify-center gap-2">
-                      <TeamLogo 
-                        teamName={fixture.away_team?.name || 'Away Team'} 
-                        externalId={fixture.away_team?.external_id ? parseInt(fixture.away_team.external_id) : undefined}
-                        size="sm" 
-                      />
+                    <div className="text-lg font-semibold text-white flex items-center justify-center gap-3">
+                      <div className="team-logo-container">
+                        <TeamLogo 
+                          teamName={fixture.away_team?.name || 'Away Team'} 
+                          externalId={fixture.away_team?.external_id ? parseInt(fixture.away_team.external_id) : undefined}
+                          size="md" 
+                        />
+                      </div>
                       <ClickableTeamName
                         teamName={fixture.away_team?.name || 'Away Team'}
                         teamId={fixture.away_team?.external_id ? parseInt(fixture.away_team.external_id) : undefined}
-                        className="hover:text-blue-400"
+                        className="hover:text-trading-primary transition-colors duration-200"
                       />
                     </div>
                   </div>
                 </div>
 
                 {fixture.status === 'scheduled' && (
-                  <div className="mt-4 pt-4 border-t border-gray-700">
-                    <div className="text-sm text-gray-400 text-center">
-                      Buy window closes: {formatDate(fixture.buy_close_at)}
+                  <div className="mt-6 pt-4 border-t border-trading-primary/30">
+                    <div className="text-center">
+                      <div className="inline-flex items-center gap-2 bg-gradient-warning/20 text-warning px-4 py-2 rounded-full text-sm font-semibold">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Buy window closes: {formatDate(fixture.buy_close_at)}
+                      </div>
                     </div>
                   </div>
                 )}

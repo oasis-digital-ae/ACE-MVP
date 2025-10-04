@@ -17,6 +17,75 @@
     -webkit-backdrop-filter: blur(12px);
   }
 
+  /* Professional trading custom styles */
+  .trading-card {
+    @apply bg-gradient-card border border-gray-700/50 backdrop-blur-sm;
+    background: linear-gradient(145deg, rgba(37, 99, 235, 0.08) 0%, rgba(14, 165, 233, 0.04) 100%);
+  }
+
+  .trading-card:hover {
+    @apply border-trading-primary/30 shadow-lg;
+    box-shadow: 0 10px 25px rgba(37, 99, 235, 0.1);
+    transition: all 0.3s ease;
+  }
+
+  .price-positive {
+    @apply text-trading-success font-semibold;
+  }
+
+  .price-negative {
+    @apply text-trading-danger font-semibold;
+  }
+
+  .price-neutral {
+    @apply text-gray-400 font-semibold;
+  }
+
+  .team-logo-container {
+    @apply relative overflow-hidden rounded-full;
+  }
+
+  .team-logo-container::before {
+    content: '';
+    @apply absolute inset-0 rounded-full opacity-0 transition-opacity duration-300;
+    background: radial-gradient(circle, rgba(37, 99, 235, 0.2) 0%, transparent 70%);
+  }
+
+  .team-logo-container:hover::before {
+    @apply opacity-100;
+  }
+
+  .primary-glow {
+    box-shadow: 0 0 20px rgba(37, 99, 235, 0.3);
+  }
+
+  .primary-glow:hover {
+    box-shadow: 0 0 30px rgba(37, 99, 235, 0.5);
+  }
+
+  .gradient-text {
+    background: linear-gradient(135deg, #2563EB 0%, #0EA5E9 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .gradient-border {
+    position: relative;
+    background: linear-gradient(135deg, #1E3A8A 0%, #2563EB 50%, #3B82F6 100%);
+    padding: 2px;
+    border-radius: 8px;
+  }
+
+  .gradient-border::before {
+    content: '';
+    position: absolute;
+    inset: 2px;
+    background: #1F2937;
+    border-radius: 6px;
+    z-index: -1;
+  }
+
   /* Slide-down panel animations */
   .slide-down-panel {
     display: grid;
@@ -100,7 +169,7 @@
     --popover: 222.2 84% 4.9%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 217.2 91.2% 59.8%;
+    --primary: 217 91% 60%; /* Professional blue */
     --primary-foreground: 222.2 47.4% 11.2%;
 
     --secondary: 217.2 32.6% 17.5%;
@@ -117,16 +186,16 @@
 
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    --ring: 217 91% 60%; /* Professional blue ring */
 
     --sidebar-background: 215 28% 17%;
     --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 217.2 91.2% 59.8%;
+    --sidebar-primary: 217 91% 60%; /* Professional blue */
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 215 25% 27%;
     --sidebar-accent-foreground: 210 40% 98%;
     --sidebar-border: 215 25% 27%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-ring: 217 91% 60%; /* Professional blue */
   }
 }
 
