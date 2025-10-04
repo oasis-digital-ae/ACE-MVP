@@ -396,15 +396,16 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
         <div className="slide-down-panel-content">
           <Card className="w-full">
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg font-semibold">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <CardTitle className="text-base sm:text-lg font-semibold">
                   {teamName} Details
                 </CardTitle>
-                <div className="flex space-x-2">
+                <div className="flex flex-wrap gap-2">
                   <Button
                     variant={activeTab === 'matches' ? 'default' : 'outline'}
                     size="sm"
                     onClick={() => setActiveTab('matches')}
+                    className="text-xs sm:text-sm"
                   >
                     Matches
                   </Button>
@@ -412,6 +413,7 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
                     variant={activeTab === 'orders' ? 'default' : 'outline'}
                     size="sm"
                     onClick={() => setActiveTab('orders')}
+                    className="text-xs sm:text-sm"
                   >
                     Orders
                   </Button>
@@ -419,6 +421,7 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
                     variant={activeTab === 'chart' ? 'default' : 'outline'}
                     size="sm"
                     onClick={() => setActiveTab('chart')}
+                    className="text-xs sm:text-sm"
                   >
                     Chart
                   </Button>
@@ -436,8 +439,8 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
                 <>
                   {activeTab === 'matches' && (
                     <div className="space-y-4">
-                      <h3 className="text-lg font-semibold flex items-center">
-                        <TrendingUp className="w-5 h-5 mr-2" />
+                      <h3 className="text-base sm:text-lg font-semibold flex items-center">
+                        <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
                         Match History & Share Price Impact
                       </h3>
                       
@@ -467,13 +470,13 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
                       ) : (
                         <div className="space-y-3">
                           {matchHistory.map((event, index) => (
-                            <div key={index} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center space-x-3">
-                                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                            <div key={index} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 sm:p-4">
+                              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                                  <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
                                     {new Date(event.date).toLocaleDateString()}
                                   </span>
-                                  <span className="font-medium">
+                                  <span className="font-medium text-sm sm:text-base">
                                     {event.description}
                                   </span>
                                 </div>
@@ -483,7 +486,7 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
                                 </div>
                               </div>
                               
-                              <div className="grid grid-cols-2 gap-4 text-sm">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
                                 <div>
                                   <span className="text-gray-600 dark:text-gray-400">Market Cap Impact:</span>
                                   <div className="font-medium">
@@ -545,7 +548,7 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
                       ) : (
                         <>
                           {/* Summary */}
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
                             <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
                               <h4 className="text-sm font-medium text-blue-900 dark:text-blue-300">Total Cash Added</h4>
                               <p className="text-2xl font-bold text-blue-700 dark:text-blue-200">
@@ -594,7 +597,7 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
                                 </div>
                                 
                                 {/* Market Cap Impact */}
-                                <div className="grid grid-cols-2 md:grid-cols-2 gap-4 text-sm">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
                                   <div>
                                     <p className="font-medium text-gray-700 dark:text-gray-300">Market Cap Before</p>
                                     <p className="text-lg font-semibold">{formatCurrency(order.market_cap_before)}</p>
