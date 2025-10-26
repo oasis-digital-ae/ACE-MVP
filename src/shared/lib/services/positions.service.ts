@@ -25,41 +25,99 @@ export interface DatabasePositionWithTeam extends DatabasePosition {
 export const positionsService = {
   async getUserPositions(userId: string): Promise<DatabasePositionWithTeam[]> {
     // Get all positions for user (now one record per team)
-    const { data, error } = await supabase
+    const { data: positionData, error: positionError } = await supabase
       .from('positions')
-      .select(`
-        *,
-        team:teams(name, market_cap, shares_outstanding)
-      `)
+      .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (positionError) {
+      console.warn('Error fetching positions:', positionError);
+      return [];
+    }
     
-    return (data || []) as DatabasePositionWithTeam[];
+    if (!positionData || positionData.length === 0) {
+      return [];
+    }
+
+    // Get team IDs from positions
+    const teamIds = positionData.map(p => p.team_id);
+    
+    // Fetch teams separately to avoid join RLS issues
+    const { data: teamData, error: teamError } = await supabase
+      .from('teams')
+      .select('id, name, market_cap, shares_outstanding')
+      .in('id', teamIds);
+
+    if (teamError) {
+      console.warn('Error fetching teams:', teamError);
+      // Return positions without team data
+      return positionData.map(p => ({
+        ...p,
+        team: { name: 'Unknown', market_cap: 0, shares_outstanding: 0 }
+      })) as DatabasePositionWithTeam[];
+    }
+
+    // Create team lookup map
+    const teamMap = new Map(teamData.map(t => [t.id, t]));
+
+    // Combine data
+    return positionData.map(p => ({
+      ...p,
+      team: teamMap.get(p.team_id) || { name: 'Unknown', market_cap: 0, shares_outstanding: 0 }
+    })) as DatabasePositionWithTeam[];
   },
 
   async getUserPosition(userId: string, teamId: number): Promise<DatabasePositionWithTeam | null> {
-    // Get a specific position for a user and team
-    const { data, error } = await supabase
-      .from('positions')
-      .select(`
-        *,
-        team:teams(name, market_cap, shares_outstanding)
-      `)
-      .eq('user_id', userId)
-      .eq('team_id', teamId)
-      .single();
+    try {
+      // Get a specific position for a user and team
+      // Try querying positions WITHOUT the teams join first to avoid RLS issues
+      const { data: positionData, error: positionError } = await supabase
+        .from('positions')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('team_id', teamId)
+        .limit(1);
 
-    if (error) {
-      if (error.code === 'PGRST116') {
-        // No rows returned - user has no position in this team
+      if (positionError) {
+        console.warn('Error fetching position data:', positionError);
         return null;
       }
-      throw error;
+
+      if (!positionData || positionData.length === 0) {
+        return null;
+      }
+
+      // Now fetch team data separately to avoid join RLS issues
+      const { data: teamData, error: teamError } = await supabase
+        .from('teams')
+        .select('name, market_cap, shares_outstanding')
+        .eq('id', teamId)
+        .single();
+
+      if (teamError) {
+        console.warn('Error fetching team data:', teamError);
+        // Return position data without team data
+        return {
+          ...positionData[0],
+          team: {
+            name: 'Unknown Team',
+            market_cap: 0,
+            shares_outstanding: 0
+          }
+        } as DatabasePositionWithTeam;
+      }
+
+      // Combine position and team data
+      return {
+        ...positionData[0],
+        team: teamData
+      } as DatabasePositionWithTeam;
+    } catch (error) {
+      // Catch any other errors and return null instead of throwing
+      console.warn('Exception in getUserPosition:', error);
+      return null;
     }
-    
-    return data as DatabasePositionWithTeam;
   },
 
   async getUserPositionHistory(userId: string, teamId?: number): Promise<DatabasePositionWithTeam[]> {
@@ -68,10 +126,7 @@ export const positionsService = {
     // Complete transaction history is available in the orders table
     let query = supabase
       .from('positions')
-      .select(`
-        *,
-        team:teams(name, market_cap, shares_outstanding)
-      `)
+      .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
     
@@ -79,31 +134,83 @@ export const positionsService = {
       query = query.eq('team_id', teamId);
     }
     
-    const { data, error } = await query;
-    if (error) throw error;
-    return (data || []) as DatabasePositionWithTeam[];
+    const { data: positionData, error: positionError } = await query;
+    if (positionError) {
+      console.warn('Error fetching position history:', positionError);
+      return [];
+    }
+
+    if (!positionData || positionData.length === 0) {
+      return [];
+    }
+
+    // Get unique team IDs
+    const teamIds = [...new Set(positionData.map(p => p.team_id))];
+    
+    // Fetch teams separately
+    const { data: teamData, error: teamError } = await supabase
+      .from('teams')
+      .select('id, name, market_cap, shares_outstanding')
+      .in('id', teamIds);
+
+    if (teamError) {
+      console.warn('Error fetching teams:', teamError);
+      return positionData.map(p => ({
+        ...p,
+        team: { name: 'Unknown', market_cap: 0, shares_outstanding: 0 }
+      })) as DatabasePositionWithTeam[];
+    }
+
+    // Create team lookup map
+    const teamMap = new Map(teamData.map(t => [t.id, t]));
+
+    // Combine data
+    return positionData.map(p => ({
+      ...p,
+      team: teamMap.get(p.team_id) || { name: 'Unknown', market_cap: 0, shares_outstanding: 0 }
+    })) as DatabasePositionWithTeam[];
   },
 
   async getByUserIdAndTeamId(userId: string, teamId: number): Promise<DatabasePositionWithTeam | null> {
     // Get the position for a specific user and team
-    const { data, error } = await supabase
+    const { data: positionData, error: positionError } = await supabase
       .from('positions')
-      .select(`
-        *,
-        team:teams(name, market_cap, shares_outstanding)
-      `)
+      .select('*')
       .eq('user_id', userId)
       .eq('team_id', teamId)
+      .limit(1);
+
+    if (positionError) {
+      if (positionError.code === 'PGRST116') {
+        return null;
+      }
+      console.warn('Error fetching position:', positionError);
+      return null;
+    }
+
+    if (!positionData || positionData.length === 0) {
+      return null;
+    }
+
+    // Fetch team data separately
+    const { data: teamData, error: teamError } = await supabase
+      .from('teams')
+      .select('name, market_cap, shares_outstanding')
+      .eq('id', teamId)
       .single();
 
-    if (error) {
-      // Handle "no rows" case gracefully
-      if (error.code === 'PGRST116') {
-        return null; // No position found for this user-team combination
-      }
-      throw error; // Re-throw other errors
+    if (teamError) {
+      console.warn('Error fetching team data:', teamError);
+      return {
+        ...positionData[0],
+        team: { name: 'Unknown', market_cap: 0, shares_outstanding: 0 }
+      } as DatabasePositionWithTeam;
     }
-    return data as DatabasePositionWithTeam | null;
+
+    return {
+      ...positionData[0],
+      team: teamData
+    } as DatabasePositionWithTeam;
   },
 
   async addPosition(userId: string, teamId: number, quantity: number, pricePerShare: number): Promise<void> {

@@ -7,11 +7,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/components/ui
 import { footballApiService } from '@/shared/lib/football-api';
 import { fixturesService, teamsService, positionsService } from '@/shared/lib/database';
 import { cashInjectionTracker, type CashInjectionWithDetails } from '@/shared/lib/cash-injection-tracker';
+import { supabase } from '@/shared/lib/supabase';
 import type { TeamDetails, FootballMatch, Standing } from '@/shared/lib/football-api';
 import type { DatabaseFixture, DatabaseTeam } from '@/shared/lib/database';
 import type { DatabasePositionWithTeam } from '@/shared/types/database.types';
 import { formatCurrency, formatNumber } from '@/shared/lib/formatters';
 import { Loader2, TrendingUp, TrendingDown, Minus, DollarSign, Calendar, Users, ArrowRight } from 'lucide-react';
+import TeamLogo from '@/shared/components/TeamLogo';
 
 interface TeamDetailsModalProps {
   isOpen: boolean;
@@ -143,12 +145,30 @@ const TeamDetailsModal: React.FC<TeamDetailsModalProps> = ({ isOpen, onClose, te
         standings: standings.length 
       });
 
-      // Load user position if userId is provided
+      // Load match history first (this should always work)
+      console.log('🚀 About to load match history...');
+      console.log('Fixture count:', fixtures.length);
+      console.log('Teams count:', allTeams.length);
+      await loadMatchHistory(fixtures, allTeams, null);
+      console.log('✅ Match history loaded!');
+      console.log('Match history state updated, count:', matchHistory.length);
+      
+      // Load user position if userId is provided (optional, don't block on this)
       let currentUserPosition = null;
       if (userId) {
-        currentUserPosition = await loadUserPositionAndReturn(userId, teamId);
+        try {
+          currentUserPosition = await loadUserPositionAndReturn(userId, teamId);
+          // Update match history with position data if available
+          if (currentUserPosition) {
+            await loadMatchHistory(fixtures, allTeams, currentUserPosition);
+          }
+        } catch (positionError) {
+          console.warn('Could not load user position (user may not have any positions yet):', positionError);
+          // Don't fail the entire modal - just continue without position data
+          // Reload match history without position data to ensure it displays
+          await loadMatchHistory(fixtures, allTeams, null);
+        }
       }
-      await loadMatchHistory(fixtures, allTeams, currentUserPosition);
 
       // Load cash injections
       await loadCashInjections();
@@ -163,11 +183,14 @@ const TeamDetailsModal: React.FC<TeamDetailsModalProps> = ({ isOpen, onClose, te
 
   const loadUserPositionAndReturn = async (userId: string, teamId: number) => {
     try {
+      console.log('Attempting to load user position for userId:', userId, 'teamId:', teamId);
       const position = await positionsService.getUserPosition(userId, teamId);
+      console.log('User position result:', position);
       setUserPosition(position);
       return position; // Return the position directly
     } catch (error) {
       console.error('Error loading user position:', error);
+      setUserPosition(null);
       return null;
     }
   };
@@ -192,90 +215,85 @@ const TeamDetailsModal: React.FC<TeamDetailsModalProps> = ({ isOpen, onClose, te
 
   const loadMatchHistory = async (fixturesData: DatabaseFixture[], teamsData: DatabaseTeam[], currentUserPosition?: any) => {
     try {
-      console.log('Loading match history for teamId:', teamId);
-      console.log('Total fixtures:', fixturesData.length);
+      console.log('🎯🎯🎯 LOAD MATCH HISTORY FUNCTION CALLED 🎯🎯🎯');
+      console.log('Loading match history from total_ledger for teamId:', teamId);
       
-      // OPTIMIZED: Create team lookup map for O(1) access instead of O(n) find
+      // Query total_ledger for match history instead of fixtures
+      const { data: ledgerData, error: ledgerError } = await supabase
+        .from('total_ledger')
+        .select('*')
+        .eq('team_id', teamId)
+        .in('ledger_type', ['match_win', 'match_loss', 'match_draw'])
+        .order('event_date', { ascending: false });
+      
+      if (ledgerError) {
+        console.error('❌❌❌ ERROR LOADING FROM TOTAL_LEDGER ❌❌❌');
+        console.error('Error:', ledgerError);
+        setMatchHistory([]);
+        return;
+      }
+      
+      console.log('✅✅✅ SUCCESSFULLY QUERIED TOTAL_LEDGER ✅✅✅');
+      console.log('Total ledger entries found:', ledgerData?.length || 0);
+      
+      // Log first few event_dates from ledger to debug
+      if (ledgerData && ledgerData.length > 0) {
+        console.log('🔍 🔍 🔍 SAMPLE EVENT_DATES FROM DATABASE 🔍 🔍 🔍');
+        console.log(ledgerData.slice(0, 5).map(l => ({
+          id: l.id,
+          event_date: l.event_date,
+          ledger_type: l.ledger_type
+        })));
+        console.log('🔍 🔍 🔍 END OF SAMPLE EVENT_DATES 🔍 🔍 🔍');
+      }
+      
+      // OPTIMIZED: Create team lookup map for O(1) access
       const teamMap = new Map(teamsData.map(team => [team.id, team]));
       
-      const teamFixtures = fixturesData.filter(f => 
-        f.home_team_id === teamId || f.away_team_id === teamId
-      );
-      
-      console.log('Team fixtures:', teamFixtures.length);
-      console.log('Team fixtures details:', teamFixtures.map(f => ({
-        id: f.id,
-        status: f.status,
-        result: f.result,
-        snapshot_home_cap: f.snapshot_home_cap,
-        snapshot_away_cap: f.snapshot_away_cap
-      })));
+      // Get fixture data for reference
+      const fixtures = fixturesData;
+      const fixturesMap = new Map(fixtures.map(f => [f.id, f]));
 
-      const matchHistoryData = teamFixtures
-        .filter(f => f.status === 'applied' && f.result !== 'pending' && f.snapshot_home_cap !== null && f.snapshot_away_cap !== null)
-        .map(fixture => {
-          const isHome = fixture.home_team_id === teamId;
-          const opponentId = isHome ? fixture.away_team_id : fixture.home_team_id;
-          const opponent = teamMap.get(opponentId); // O(1) lookup instead of O(n) find
+      const matchHistoryData = (ledgerData || [])
+        .map(ledgerEntry => {
+          // Get fixture details
+          const fixture = ledgerEntry.trigger_event_id ? fixturesMap.get(ledgerEntry.trigger_event_id) : null;
+          
+          if (!fixture) {
+            console.warn('Fixture not found for ledger entry:', ledgerEntry.id);
+            return null;
+          }
+          
+          // Get opponent from FIXTURE data (source of truth) not from ledger
+          let opponentId: number | null = null;
+          if (fixture.home_team_id === ledgerEntry.team_id) {
+            // Team is home, opponent is away
+            opponentId = fixture.away_team_id;
+          } else if (fixture.away_team_id === ledgerEntry.team_id) {
+            // Team is away, opponent is home
+            opponentId = fixture.home_team_id;
+          }
+          
+          const opponent = opponentId ? teamMap.get(opponentId) : null;
           
           if (!opponent) {
-            console.warn(`Could not find opponent team for fixture ${fixture.id}`);
+            console.warn(`Could not find opponent team for ledger entry ${ledgerEntry.id}`);
             return null;
           }
 
-          const team = teamMap.get(teamId); // O(1) lookup instead of O(n) find
-          if (!team) {
-            console.warn(`Could not find team for fixture ${fixture.id}`);
-            return null;
-          }
-
-          let result: 'win' | 'loss' | 'draw';
-          let priceImpact: number;
-          let postMatchCap: number;
-          let priceImpactPercent: number;
-
-          const preMatchCap = fixture.snapshot_home_cap || team.market_cap;
+          // Use ledger data directly
+          const result = ledgerEntry.ledger_type === 'match_win' ? 'win' 
+            : ledgerEntry.ledger_type === 'match_loss' ? 'loss' 
+            : 'draw' as 'win' | 'loss' | 'draw';
           
-          if (fixture.result === 'home_win') {
-            if (isHome) {
-              result = 'win';
-              // Winner gets 10% of loser's market cap
-              const loserCap = fixture.snapshot_away_cap || 0;
-              priceImpact = loserCap * 0.10;
-              postMatchCap = preMatchCap + priceImpact;
-            } else {
-              result = 'loss';
-              // Loser loses 10% of their market cap
-              priceImpact = -preMatchCap * 0.10;
-              postMatchCap = preMatchCap + priceImpact;
-            }
-          } else if (fixture.result === 'away_win') {
-            if (isHome) {
-              result = 'loss';
-              // Loser loses 10% of their market cap
-              priceImpact = -preMatchCap * 0.10;
-              postMatchCap = preMatchCap + priceImpact;
-            } else {
-              result = 'win';
-              // Winner gets 10% of loser's market cap
-              const loserCap = fixture.snapshot_home_cap || 0;
-              priceImpact = loserCap * 0.10;
-              postMatchCap = preMatchCap + priceImpact;
-            }
-          } else {
-            result = 'draw';
-            priceImpact = 0;
-            postMatchCap = preMatchCap;
-          }
-
-          priceImpactPercent = preMatchCap > 0 ? (priceImpact / preMatchCap) * 100 : 0;
-
-          // Calculate pre-match and post-match share prices
-          const preMatchSharesOutstanding = team.shares_outstanding;
-          const postMatchSharesOutstanding = team.shares_outstanding; // Assuming shares outstanding doesn't change from match results
+          const isHome = ledgerEntry.is_home_match;
+          const preMatchCap = ledgerEntry.market_cap_before;
+          const postMatchCap = ledgerEntry.market_cap_after;
+          const priceImpact = ledgerEntry.price_impact;
+          const priceImpactPercent = preMatchCap > 0 ? (priceImpact / preMatchCap) * 100 : 0;
           
-          const preMatchSharePrice = preMatchSharesOutstanding > 0 ? preMatchCap / preMatchSharesOutstanding : 0;
-          const postMatchSharePrice = postMatchSharesOutstanding > 0 ? postMatchCap / postMatchSharesOutstanding : 0;
+          const preMatchSharePrice = ledgerEntry.share_price_before;
+          const postMatchSharePrice = ledgerEntry.share_price_after;
 
           // Calculate user P/L if user has position
           const userPos = currentUserPosition || userPosition;
@@ -284,14 +302,28 @@ const TeamDetailsModal: React.FC<TeamDetailsModalProps> = ({ isOpen, onClose, te
             const preMatchValue = userPos.quantity * preMatchSharePrice;
             const postMatchValue = userPos.quantity * postMatchSharePrice;
             userPL = postMatchValue - preMatchValue;
-          } else {
-            console.log(`No user position for ${team.name}:`, { userPosition: userPos, teamId });
           }
 
-          const score = `${fixture.home_score || 0}-${fixture.away_score || 0}`;
+          const score = ledgerEntry.match_score || '0-0';
 
+          // Log the actual date from database for debugging
+          console.log(`📅 Ledger entry ${ledgerEntry.id} - event_date from DB: ${ledgerEntry.event_date}`);
+          console.log(`📅 Ledger entry ${ledgerEntry.id} - fixture kickoff_at: ${fixture?.kickoff_at}`);
+          console.log(`📅 Ledger entry ${ledgerEntry.id} - opponent from fixture: ${opponent.name}`);
+          
+          // ALWAYS use event_date from ledger, never fall back to fixture
+          const displayDate = ledgerEntry.event_date;
+          
+          // Override corrupted event_description with correct opponent name
+          const correctDescription = `Match vs ${opponent.name}`;
+          
           return {
-            fixture,
+            fixture: {
+              ...fixture,
+              kickoff_at: displayDate, // ALWAYS use the ledger event_date
+              // Override description with correct opponent
+              id: fixture.id
+            },
             opponent,
             isHome,
             result,
@@ -302,7 +334,8 @@ const TeamDetailsModal: React.FC<TeamDetailsModalProps> = ({ isOpen, onClose, te
             priceImpactPercent,
             preMatchSharePrice,
             postMatchSharePrice,
-            userPL
+            userPL,
+            description: correctDescription // Use correct description
           };
         })
         .filter(Boolean)
@@ -317,12 +350,29 @@ const TeamDetailsModal: React.FC<TeamDetailsModalProps> = ({ isOpen, onClose, te
     }
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+  const formatDate = (dateString: string | Date) => {
+    // Handle Date objects and strings
+    let date: Date;
+    if (typeof dateString !== 'string') {
+      date = dateString;
+    } else {
+      date = new Date(dateString);
+    }
+    
+    // Format using the actual date without timezone conversion
+    // Extract date components directly to avoid timezone issues
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const day = date.getDate();
+    
+    // Format as "MMM D, YYYY" (e.g., "Oct 26, 2025")
+    const formatted = new Date(year, month, day).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
       year: 'numeric'
     });
+    
+    return formatted;
   };
 
   const getResultIcon = (result: string) => {
@@ -413,7 +463,14 @@ const TeamDetailsModal: React.FC<TeamDetailsModalProps> = ({ isOpen, onClose, te
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {matchHistory.map((match, index) => (
+                    {matchHistory.map((match, index) => {
+                      console.log('Match history item:', {
+                        fixtureId: match.fixture.id,
+                        kickoff_at: match.fixture.kickoff_at,
+                        result: match.result,
+                        score: match.score
+                      });
+                      return (
                       <Card key={match.fixture.id} className="bg-gray-800 border-gray-700">
                         <CardContent className="p-4">
                           <div className="flex items-center justify-between mb-3">
@@ -421,10 +478,18 @@ const TeamDetailsModal: React.FC<TeamDetailsModalProps> = ({ isOpen, onClose, te
                               <Badge variant="outline" className="text-xs">
                                 {formatDate(match.fixture.kickoff_at)}
                               </Badge>
-                              <span className="font-medium">
-                                {match.isHome ? 'vs' : '@'} {match.opponent.name}
+                              <span className="text-gray-400">
+                                vs
                               </span>
-                              <span className="text-sm font-mono text-gray-300">
+                              <TeamLogo 
+                                teamName={match.opponent.name} 
+                                externalId={match.opponent.external_id ? parseInt(match.opponent.external_id.toString()) : undefined}
+                                size="sm" 
+                              />
+                              <span className="font-medium text-white">
+                                {match.opponent.name}
+                              </span>
+                              <span className="text-sm font-mono text-gray-400">
                                 {match.score}
                               </span>
                             </div>
@@ -469,7 +534,8 @@ const TeamDetailsModal: React.FC<TeamDetailsModalProps> = ({ isOpen, onClose, te
                           </div>
                         </CardContent>
                       </Card>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
                   </CardContent>

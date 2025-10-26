@@ -148,7 +148,7 @@ export const TeamOrdersModal: React.FC<TeamOrdersModalProps> = ({
                               {new Date(order.executed_at || order.updated_at).toLocaleTimeString()}
                             </p>
                           </div>
-                          <div className="text-right'>
+                          <div className="text-right">
                             <div className="text-lg font-bold text-green-600">
                               +${order.cash_added_to_market_cap.toLocaleString()}
                             </div>

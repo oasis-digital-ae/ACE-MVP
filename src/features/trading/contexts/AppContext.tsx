@@ -11,6 +11,8 @@ import type { DatabasePositionWithTeam, DatabaseOrderWithTeam } from '@/shared/t
 import { withErrorHandling, DatabaseError, ValidationError, BusinessLogicError, ExternalApiError, AuthenticationError } from '@/shared/lib/error-handling';
 import ErrorBoundary from '@/shared/components/ErrorBoundary';
 import { teamStateSnapshotService } from '@/shared/lib/team-state-snapshots';
+import { buyWindowService } from '@/shared/lib/buy-window.service';
+import { matchSchedulerService } from '@/shared/lib/services/match-scheduler.service';
 
 interface AppContextType {
   sidebarOpen: boolean;
@@ -201,12 +203,22 @@ const AppProviderInner: React.FC<{ children: React.ReactNode }> = ({ children })
   useEffect(() => {
     if (user) {
       loadData();
+      // Start match monitoring service
+      // Disabled: match monitoring now handled by database scheduled job
+      // matchSchedulerService.start();
     } else {
       setClubs([]);
       setPortfolio([]);
       setTransactions([]);
       setLoading(false);
+      // Stop match monitoring service when user logs out
+      matchSchedulerService.stop();
     }
+    
+    // Cleanup on unmount
+    return () => {
+      matchSchedulerService.stop();
+    };
   }, [user]);
 
   const toggleSidebar = () => {
@@ -300,6 +312,13 @@ const AppProviderInner: React.FC<{ children: React.ReactNode }> = ({ children })
 
       // CRITICAL: Use atomic transaction for purchase
       logger.debug(`Processing atomic purchase: User ${profileId}, Team ${teamIdInt}, Units ${units}, Price ${nav}`);
+      
+      // Validate buy window before attempting purchase
+      try {
+        await buyWindowService.validateBuyWindow(teamIdInt);
+      } catch (error: any) {
+        throw new BusinessLogicError(error.message || 'Trading window is closed');
+      }
       
       const { data: result, error: atomicError } = await supabase.rpc(
         'process_share_purchase_atomic',

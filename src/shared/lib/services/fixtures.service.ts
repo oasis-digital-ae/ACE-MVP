@@ -20,8 +20,19 @@ export interface DatabaseFixture {
   created_at: string;
 }
 
+export interface DatabaseFixtureWithTeams extends DatabaseFixture {
+  home_team: {
+    name: string;
+    external_id: string;
+  };
+  away_team: {
+    name: string;
+    external_id: string;
+  };
+}
+
 export const fixturesService = {
-  async getAll(): Promise<DatabaseFixture[]> {
+  async getAll(): Promise<DatabaseFixtureWithTeams[]> {
     const { data, error } = await supabase
       .from('fixtures')
       .select(`
@@ -35,7 +46,7 @@ export const fixturesService = {
     return data || [];
   },
 
-  async getUpcoming(): Promise<DatabaseFixture[]> {
+  async getUpcoming(): Promise<DatabaseFixtureWithTeams[]> {
     const { data, error } = await supabase
       .from('fixtures')
       .select(`
@@ -70,7 +81,7 @@ export const fixturesService = {
     if (error) throw error;
   },
 
-  async getFixturesNeedingSnapshot(): Promise<DatabaseFixture[]> {
+  async getFixturesNeedingSnapshot(): Promise<DatabaseFixtureWithTeams[]> {
     const now = new Date();
     const { data, error } = await supabase
       .from('fixtures')
@@ -87,7 +98,7 @@ export const fixturesService = {
     return data || [];
   },
 
-  async getFixturesNeedingProcessing(): Promise<DatabaseFixture[]> {
+  async getFixturesNeedingProcessing(): Promise<DatabaseFixtureWithTeams[]> {
     const { data, error } = await supabase
       .from('fixtures')
       .select(`

@@ -8,6 +8,8 @@ import TeamLogo from '@/shared/components/TeamLogo';
 import { AppValidators, validateForm, validateAndSanitize } from '@/shared/lib/validation';
 import { ValidationError } from '@/shared/lib/error-handling';
 import { sanitizeInput } from '@/shared/lib/sanitization';
+import BuyWindowIndicator from '@/shared/components/BuyWindowIndicator';
+import { buyWindowService } from '@/shared/lib/buy-window.service';
 
 interface PurchaseConfirmationModalProps {
   isOpen: boolean;
@@ -34,14 +36,25 @@ export const PurchaseConfirmationModal: React.FC<PurchaseConfirmationModalProps>
 }) => {
   const [shares, setShares] = useState<number>(1);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [buyWindowStatus, setBuyWindowStatus] = useState<any>(null);
 
   // Reset shares when modal opens
   useEffect(() => {
     if (isOpen) {
       setShares(1);
       setValidationErrors({});
+      
+      // Fetch buy window status
+      if (clubId) {
+        buyWindowService.getBuyWindowDisplayInfo(parseInt(clubId))
+          .then(setBuyWindowStatus)
+          .catch(error => {
+            console.error('Error fetching buy window status:', error);
+            setBuyWindowStatus({ isOpen: false, message: 'Unable to check trading status' });
+          });
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, clubId]);
 
   const handleSharesChange = (value: string) => {
     // Sanitize and validate input
@@ -119,6 +132,21 @@ export const PurchaseConfirmationModal: React.FC<PurchaseConfirmationModalProps>
             </h3>
           </div>
           
+          {/* Buy Window Status */}
+          {buyWindowStatus && (
+            <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium">Trading Status</span>
+                <BuyWindowIndicator teamId={clubId ? parseInt(clubId) : 0} compact={true} />
+              </div>
+              {!buyWindowStatus.isOpen && (
+                <div className="text-red-400 text-xs">
+                  ⚠️ Trading closes 30 minutes before match kickoff
+                </div>
+              )}
+            </div>
+          )}
+          
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="shares" className="text-gray-300">
@@ -179,10 +207,12 @@ export const PurchaseConfirmationModal: React.FC<PurchaseConfirmationModalProps>
           </Button>
           <Button
             onClick={handleConfirm}
-            disabled={!isValid || shares <= 0 || isProcessing}
+            disabled={!isValid || shares <= 0 || isProcessing || !buyWindowStatus?.isOpen}
             className="flex-1 bg-gradient-success hover:bg-gradient-success/80 disabled:bg-gray-600 text-white font-semibold transition-all duration-200 disabled:hover:scale-100"
+            title={!buyWindowStatus?.isOpen ? 'Trading window is closed' : 'Confirm purchase'}
           >
-            {isProcessing ? 'Processing...' : 'Confirm Purchase'}
+            {isProcessing ? 'Processing...' : 
+             !buyWindowStatus?.isOpen ? '🔒 Trading Closed' : 'Confirm Purchase'}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -4,6 +4,9 @@ export interface ChartDataPoint {
   x: number; // Match day number
   y: number; // Share price
   label?: string; // Optional label for data points
+  price?: number; // Share price (for tooltip)
+  date?: string; // Full date string
+  opponent?: string; // Match opponent
 }
 
 export interface LineChartProps {
@@ -34,6 +37,8 @@ export const LineChart: React.FC<LineChartProps> = ({
   // Responsive sizing
   const [containerWidth, setContainerWidth] = React.useState(width);
   const [containerHeight, setContainerHeight] = React.useState(height);
+  const [hoveredPoint, setHoveredPoint] = React.useState<{point: ChartDataPoint, cx: number, cy: number} | null>(null);
+  const containerRef = React.useRef<HTMLDivElement>(null);
   
   React.useEffect(() => {
     const updateSize = () => {
@@ -148,7 +153,7 @@ export const LineChart: React.FC<LineChartProps> = ({
   }
 
   return (
-    <div className="w-full p-1" data-chart-container>
+    <div className="w-full p-1 relative" data-chart-container ref={containerRef}>
       <svg width={containerWidth} height={containerHeight} viewBox={`0 0 ${containerWidth} ${containerHeight}`}>
         {/* Subtle area fill */}
         <defs>
@@ -243,9 +248,20 @@ export const LineChart: React.FC<LineChartProps> = ({
           const cx = scaleX(point.x);
           const cy = scaleY(point.y);
           
-              return (
+          return (
             <g key={index}>
-              {/* Clean point */}
+              {/* Interactive area - larger than visible circle for easier hover */}
+              <circle
+                cx={cx}
+                cy={cy}
+                r="8"
+                fill="transparent"
+                onMouseEnter={() => {
+                  setHoveredPoint({ point, cx, cy });
+                }}
+                onMouseLeave={() => setHoveredPoint(null)}
+              />
+              {/* Visible point */}
               <circle
                 cx={cx}
                 cy={cy}
@@ -276,12 +292,33 @@ export const LineChart: React.FC<LineChartProps> = ({
                 fill="rgb(107 114 128)"
                 className="font-medium"
               >
-                Day {point.x}
+                {point.label || `Day ${point.x}`}
               </text>
             ))}
           </>
         )}
       </svg>
+      
+      {/* Hover Tooltip */}
+      {hoveredPoint && (
+        <div 
+          className="absolute bg-gray-900 dark:bg-gray-700 text-white px-3 py-2 rounded-lg shadow-lg text-sm pointer-events-none z-10"
+          style={{
+            left: `${hoveredPoint.cx + 20}px`,
+            top: `${hoveredPoint.cy - 50}px`,
+          }}
+        >
+          {hoveredPoint.point.opponent && (
+            <div className="font-semibold mb-1">vs {hoveredPoint.point.opponent}</div>
+          )}
+          <div className="text-gray-300">
+            {hoveredPoint.point.date || hoveredPoint.point.label || `Day ${hoveredPoint.point.x}`}
+          </div>
+          <div className="text-green-400 font-medium">
+            ${(hoveredPoint.point.price || hoveredPoint.point.y).toFixed(2)}
+          </div>
+        </div>
+      )}
       
       {/* Minimal legend */}
       <div className="flex justify-center mt-4">

@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
-import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import { positionsService } from '@/shared/lib/database';
 import type { DatabasePositionWithTeam } from '@/shared/types/database.types';
+import type { DatabaseFixture } from '@/shared/lib/services/fixtures.service';
+import type { DatabaseTeam } from '@/shared/lib/services/teams.service';
 import { formatCurrency } from '@/shared/lib/formatters';
 import { Loader2, TrendingUp, TrendingDown, Minus, DollarSign, ShoppingCart, BarChart3 } from 'lucide-react';
 import { supabase } from '@/shared/lib/supabase';
@@ -19,6 +20,50 @@ interface TeamDetailsSlideDownProps {
   teams?: DatabaseTeam[];
 }
 
+// Utility functions
+const extractOpponentName = (eventDescription?: string): string => {
+  if (!eventDescription) return '';
+  const match = eventDescription.match(/vs\s+(.+?)(?:\s|$)/i);
+  return match?.[1]?.trim() || '';
+};
+
+const processChartData = (events: any[]): ChartDataPoint[] => {
+  const initialStates = events.filter(e => e.ledger_type === 'initial_state');
+  const matchEvents = events.filter(e => e.ledger_type !== 'initial_state');
+  
+  const sortedMatches = [...matchEvents].sort((a, b) => 
+    new Date(a.event_date).getTime() - new Date(b.event_date).getTime()
+  );
+  
+  const chartPoints: ChartDataPoint[] = [];
+  
+  // Add initial state first
+  initialStates.forEach((event: any) => {
+    const sharePrice = parseFloat(event.share_price_after || event.share_price_before || '0');
+    if (sharePrice > 0) {
+      chartPoints.push({ x: 0, y: sharePrice, label: 'Initial' });
+    }
+  });
+  
+  // Add match events in chronological order
+  sortedMatches.forEach((event: any) => {
+    const sharePrice = parseFloat(event.share_price_after || event.share_price_before || '0');
+    if (sharePrice > 0) {
+      const eventDate = new Date(event.event_date);
+      chartPoints.push({
+        x: chartPoints.length,
+        y: sharePrice,
+        label: eventDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        price: sharePrice,
+        date: eventDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        opponent: extractOpponentName(event.event_description)
+      });
+    }
+  });
+  
+  return chartPoints;
+};
+
 const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
   isOpen,
   teamId,
@@ -30,388 +75,162 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
   const [activeTab, setActiveTab] = useState<'matches' | 'orders' | 'chart'>('matches');
   const [matchHistory, setMatchHistory] = useState<any[]>([]);
   const [userPosition, setUserPosition] = useState<DatabasePositionWithTeam | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [dataLoaded, setDataLoaded] = useState(false);
-  
-  // Orders tab state
   const [orders, setOrders] = useState<any[]>([]);
-  const [ordersLoading, setOrdersLoading] = useState(false);
-  const [ordersLoaded, setOrdersLoaded] = useState(false);
-  
-  // Chart tab state
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
-  const [chartLoading, setChartLoading] = useState(false);
-  const [chartLoaded, setChartLoaded] = useState(false);
+  const [loading, setLoading] = useState({ matches: false, orders: false, chart: false });
 
-  const fixtures = useMemo(() => parentFixtures || [], [parentFixtures]);
-  const teams = useMemo(() => parentTeams || [], [parentTeams]);
+  const fixtures = parentFixtures || [];
+  const teams = parentTeams || [];
 
   const loadOrders = useCallback(async () => {
     if (!teamId) return;
 
-    setOrdersLoading(true);
+    setLoading(prev => ({ ...prev, orders: true }));
     try {
-      // Get orders with their immutable market cap data
       const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
-        .select(`
-          *,
-          market_cap_before,
-          market_cap_after,
-          shares_outstanding_before,
-          shares_outstanding_after
-        `)
+        .select('*, market_cap_before, market_cap_after, shares_outstanding_before, shares_outstanding_after')
         .eq('team_id', teamId)
         .eq('status', 'FILLED')
         .order('executed_at', { ascending: false });
 
       if (ordersError) throw ordersError;
 
-      // Use immutable data - NO RECALCULATION based on current state
-      const ordersWithImpact = ordersData.map((order, index) => {
-        // Use stored immutable snapshots instead of recalculating
-        const marketCapBefore = order.market_cap_before || 0;
-        const marketCapAfter = order.market_cap_after || 0;
-        const sharesOutstandingBefore = order.shares_outstanding_before || 0;
-        const sharesOutstandingAfter = order.shares_outstanding_after || 0;
-        
-        const navBefore = sharesOutstandingBefore > 0 ? 
-          marketCapBefore / sharesOutstandingBefore : 
-          20.00;
-        
-        const navAfter = sharesOutstandingAfter > 0 ? 
-          marketCapAfter / sharesOutstandingAfter : 
-          20.00;
+      const ordersWithImpact = ordersData?.map((order) => {
+        const { market_cap_before = 0, market_cap_after = 0, shares_outstanding_before = 0, shares_outstanding_after = 0 } = order;
+        const navBefore = shares_outstanding_before > 0 ? market_cap_before / shares_outstanding_before : 20.00;
+        const navAfter = shares_outstanding_after > 0 ? market_cap_after / shares_outstanding_after : 20.00;
 
         return {
           ...order,
           market_cap_impact: order.total_amount,
-          market_cap_before: marketCapBefore, // IMMUTABLE - never changes
-          market_cap_after: marketCapAfter,   // IMMUTABLE - never changes
+          market_cap_before,
+          market_cap_after,
           share_price_before: navBefore,
           share_price_after: navAfter,
-          cash_added_to_market_cap: order.total_amount,
-          order_sequence: ordersData.length - index
+          cash_added_to_market_cap: order.total_amount
         };
-      });
+      }) || [];
 
       setOrders(ordersWithImpact);
     } catch (error) {
-      // Handle error silently in production, track for monitoring
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Error loading orders:', error);
-      }
+      if (process.env.NODE_ENV === 'development') console.error('Error loading orders:', error);
       setOrders([]);
     } finally {
-      setOrdersLoading(false);
-      setOrdersLoaded(true);
+      setLoading(prev => ({ ...prev, orders: false }));
     }
   }, [teamId]);
 
   const loadChartData = useCallback(async () => {
     if (!teamId) return;
 
-    setChartLoading(true);
+    setLoading(prev => ({ ...prev, chart: true }));
     try {
-      // Try to get timeline data from total_ledger function
-      const { data: timelineData, error } = await supabase.rpc('get_team_complete_timeline', { 
-        p_team_id: teamId 
-      });
+      // Try to get data directly from total_ledger table
+      const { data, error } = await supabase
+        .from('total_ledger')
+        .select('*')
+        .eq('team_id', teamId)
+        .in('ledger_type', ['initial_state', 'match_win', 'match_loss', 'match_draw'])
+        .order('event_date', { ascending: true });
 
-      if (error) {
-        console.warn('Timeline function failed, trying direct query:', error);
-        // Fallback: get data directly from total_ledger table
-        const { data: directData, error: directError } = await supabase
-          .from('total_ledger')
-          .select('*')
-          .eq('team_id', teamId)
-          .in('ledger_type', ['initial_state', 'match_win', 'match_loss', 'match_draw'])
-          .order('event_date', { ascending: true });
-
-        if (directError) throw directError;
-        
-        if (!directData || directData.length === 0) {
-          setChartData([]);
-          return;
-        }
-
-        // Process direct data
-        const chartPoints: ChartDataPoint[] = [];
-        let dayCounter = 0;
-
-        directData.forEach((event: any) => {
-          const sharePrice = parseFloat(event.share_price_after || event.share_price_before || '0');
-          
-          if (sharePrice > 0) {
-            chartPoints.push({
-              x: dayCounter,
-              y: sharePrice,
-              label: event.ledger_type === 'initial_state' ? 'Initial' : `Day ${dayCounter}`,
-              type: event.ledger_type === 'initial_state' ? 'initial' : 'match',
-              priceImpact: event.price_impact || 0
-            });
-            
-            dayCounter++;
-          }
-        });
-
-        console.log('Chart data processed (direct query):', {
-          totalEvents: directData.length,
-          chartPoints: chartPoints.length,
-          points: chartPoints.map(p => ({ x: p.x, y: p.y, label: p.label, type: p.type }))
-        });
-        setChartData(chartPoints);
-        return;
-      }
-
-      if (!timelineData || timelineData.length === 0) {
-        setChartData([]);
-        return;
-      }
-
-      // Process timeline events chronologically (earliest first for proper chart progression)
-      const sortedEvents = timelineData.sort((a: any, b: any) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
+      if (error) throw error;
       
-      const chartPoints: ChartDataPoint[] = [];
-      let dayCounter = 0;
-
-      sortedEvents.forEach((event: any) => {
-        // Use actual share price from total_ledger
-        const sharePrice = parseFloat(event.share_price_after || event.share_price_before || '0');
-        
-        // Include initial state and match events only
-        if (event.event_type === 'initial' || event.event_type === 'match') {
-          // Ensure we have valid data
-          if (sharePrice > 0) {
-            chartPoints.push({
-              x: dayCounter,
-              y: sharePrice,
-              label: event.event_type === 'initial' ? 'Initial' : `Day ${dayCounter}`,
-              type: event.event_type === 'initial' ? 'initial' : 'match',
-              priceImpact: event.event_type === 'match' ? parseFloat(event.price_impact || '0') : 0
-            });
-            
-            dayCounter++;
-          }
-        }
-      });
-
-      console.log('Chart data processed (timeline function):', {
-        totalEvents: timelineData.length,
-        chartPoints: chartPoints.length,
-        points: chartPoints.map(p => ({ x: p.x, y: p.y, label: p.label, type: p.type }))
-      });
+      const chartPoints = data && data.length > 0 ? processChartData(data) : [];
       setChartData(chartPoints);
     } catch (error) {
-      // Handle error silently in production
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Error loading chart data:', error);
-      }
+      if (process.env.NODE_ENV === 'development') console.error('Error loading chart data:', error);
       setChartData([]);
     } finally {
-      setChartLoading(false);
-      setChartLoaded(true);
+      setLoading(prev => ({ ...prev, chart: false }));
     }
   }, [teamId]);
 
-  const loadTeamDataFast = useCallback(async () => {
+  const loadMatchesData = useCallback(async () => {
     if (!isOpen || !teamId) return;
 
-    setLoading(true);
+    setLoading(prev => ({ ...prev, matches: true }));
     try {
-      // Fetch user position, orders, and match data in parallel
-      const [positionResult, ordersData, matchData] = await Promise.all([
+      const [positionResult, matchData] = await Promise.all([
         positionsService.getByUserIdAndTeamId(userId, teamId),
-        supabase
-          .from('orders')
-          .select(`
-            id,
-            user_id,
-            team_id,
-            order_type,
-            quantity,
-            price_per_share,
-            total_amount,
-            status,
-            executed_at,
-            created_at,
-            market_cap_before,
-            market_cap_after,
-            shares_outstanding_before,
-            shares_outstanding_after,
-            profiles!inner(username, full_name),
-            teams!inner(name, market_cap, shares_outstanding)
-          `)
-          .eq('team_id', teamId)
-          .eq('status', 'FILLED')
-          .order('created_at', { ascending: true }),
         supabase
           .from('total_ledger')
           .select('*')
           .eq('team_id', teamId)
           .in('ledger_type', ['match_win', 'match_loss', 'match_draw'])
-          .order('created_at', { ascending: true })
+          .order('event_date', { ascending: false })
       ]);
 
-      if (ordersData.error || matchData.error) {
-        // Handle error silently in production
-        if (process.env.NODE_ENV === 'development') {
-          console.error('Failed to get team data:', ordersData.error || matchData.error);
-          console.error('Error details:', JSON.stringify(ordersData.error || matchData.error, null, 2));
-        }
+      if (matchData.error) {
+        if (process.env.NODE_ENV === 'development') console.error('Failed to get match data:', matchData.error);
         setMatchHistory([]);
-        setLoading(false);
-        setDataLoaded(true);
         return;
       }
 
-      // Process orders into timeline events
-      const processedEvents = [];
-      
-      // Add purchase events from orders
-      for (const order of ordersData.data || []) {
-        const isPurchase = true;
-        const isMatch = false;
-        
-        // Calculate user P/L for purchases if user has position
-        let userPL = 0;
-        if (positionResult && positionResult.quantity > 0) {
-          const currentPrice = order.teams?.market_cap / order.teams?.shares_outstanding || order.price_per_share;
-          userPL = (currentPrice - order.price_per_share) * order.quantity;
-        }
+      const processedEvents = (matchData.data || []).map(event => {
+        const matchResult = event.ledger_type === 'match_win' ? 'win' : 
+                           event.ledger_type === 'match_loss' ? 'loss' : 'draw';
+        const description = event.event_description || 'Match Result';
 
-        processedEvents.push({
-          event_type: 'share_purchase',
-          date: order.executed_at || order.created_at,
-          description: `Purchase: ${order.quantity} shares @ ${formatCurrency(order.price_per_share)}`,
-          marketCapBefore: order.market_cap_before,
-          marketCapAfter: order.market_cap_after,
-          sharesOutstanding: order.shares_outstanding_after,
-          sharePriceBefore: order.market_cap_before / order.shares_outstanding_before,
-          sharePriceAfter: order.market_cap_after / order.shares_outstanding_after,
-          priceImpact: order.market_cap_after - order.market_cap_before,
-          priceImpactPercent: order.market_cap_before > 0 ? ((order.market_cap_after - order.market_cap_before) / order.market_cap_before) * 100 : 0,
-          sharesTraded: order.quantity,
-          tradeAmount: order.total_amount,
-          opponentName: '',
-          matchResult: '',
-          score: '',
-          userPL: userPL,
-          isMatch: isMatch,
-          isPurchase: isPurchase
-        });
-      }
-
-      // Add match events from total_ledger
-      for (const event of matchData.data || []) {
-        const isMatch = ['match_win', 'match_loss', 'match_draw'].includes(event.ledger_type);
-        const isPurchase = false;
-
-        // Calculate user P/L for matches if user has position
-        let userPL = 0;
-        if (positionResult && positionResult.quantity > 0 && isMatch) {
-          userPL = (event.share_price_after - event.share_price_before) * positionResult.quantity;
-        }
-
-        // Determine match result
-        let matchResult = 'draw';
-        if (event.ledger_type === 'match_win') matchResult = 'win';
-        else if (event.ledger_type === 'match_loss') matchResult = 'loss';
-
-        processedEvents.push({
-          event_type: event.ledger_type,
-          date: event.created_at,
-          description: event.event_description || 'Match Result',
+        return {
+          date: event.event_date,
+          description,
           marketCapBefore: event.market_cap_before,
           marketCapAfter: event.market_cap_after,
-          sharesOutstanding: event.shares_outstanding_after,
           sharePriceBefore: event.share_price_before,
           sharePriceAfter: event.share_price_after,
           priceImpact: event.market_cap_after - event.market_cap_before,
-          priceImpactPercent: event.market_cap_before > 0 ? ((event.market_cap_after - event.market_cap_before) / event.market_cap_before) * 100 : 0,
-          sharesTraded: event.shares_traded,
-          tradeAmount: event.amount_transferred,
-          opponentName: '',
-          matchResult: matchResult,
-          score: '',
-          userPL: userPL,
-          isMatch: isMatch,
-          isPurchase: isPurchase
-        });
-      }
-
-      // Sort events by date (latest first)
-      processedEvents.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          priceImpactPercent: event.market_cap_before > 0 
+            ? ((event.market_cap_after - event.market_cap_before) / event.market_cap_before) * 100 
+            : 0,
+          matchResult,
+          isMatch: true,
+          isPurchase: false
+        };
+      });
 
       setUserPosition(positionResult);
       setMatchHistory(processedEvents);
-      setDataLoaded(true);
     } catch (error) {
-      // Handle error silently in production
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Error loading team data:', error);
-        console.error('Error details:', JSON.stringify(error, null, 2));
-      }
+      if (process.env.NODE_ENV === 'development') console.error('Error loading match data:', error);
       setMatchHistory([]);
       setUserPosition(null);
-      setDataLoaded(true);
     } finally {
-      setLoading(false);
+      setLoading(prev => ({ ...prev, matches: false }));
     }
-  }, [isOpen, teamId, userId]);
+  }, [isOpen, teamId, userId, fixtures, teams]);
 
+  // Load match data when opened
   useEffect(() => {
     if (isOpen && teamId) {
-      // Reset data first to ensure fresh load
-      setDataLoaded(false);
-      setMatchHistory([]);
-      setUserPosition(null);
-      setOrders([]);
-      setOrdersLoaded(false);
-      setChartData([]);
-      setChartLoaded(false);
-      
-      // Then load fresh data
-      loadTeamDataFast();
+      loadMatchesData();
     }
-  }, [isOpen, teamId, loadTeamDataFast]);
+  }, [isOpen, teamId, loadMatchesData]);
 
   // Load orders when switching to orders tab
   useEffect(() => {
-    if (activeTab === 'orders' && teamId && orders.length === 0) {
+    if (activeTab === 'orders' && teamId && orders.length === 0 && !loading.orders) {
       loadOrders();
     }
-  }, [activeTab, teamId, loadOrders, orders.length]);
+  }, [activeTab, teamId, loadOrders, orders.length, loading.orders]);
 
   // Load chart data when switching to chart tab
   useEffect(() => {
-    if (activeTab === 'chart' && teamId && !chartLoaded) {
+    if (activeTab === 'chart' && teamId && chartData.length === 0 && !loading.chart) {
       loadChartData();
     }
-  }, [activeTab, teamId, loadChartData, chartLoaded]);
+  }, [activeTab, teamId, loadChartData, chartData.length, loading.chart]);
 
-  // Reset data when panel closes or team changes
+  // Reset data when panel closes
   useEffect(() => {
     if (!isOpen) {
-      setDataLoaded(false);
+      setActiveTab('matches');
       setMatchHistory([]);
       setUserPosition(null);
-      setActiveTab('matches');
       setOrders([]);
-      setOrdersLoaded(false);
       setChartData([]);
-      setChartLoaded(false);
     }
   }, [isOpen]);
-
-  // Reset data when team changes
-  useEffect(() => {
-    setDataLoaded(false);
-    setMatchHistory([]);
-    setUserPosition(null);
-    setOrdersLoaded(false);
-    setChartLoaded(false);
-  }, [teamId]);
 
 
   const getResultIcon = (result: string) => {
@@ -495,7 +314,7 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
             </CardHeader>
 
             <CardContent>
-              {loading ? (
+              {loading.matches ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
                   <span className="ml-2 text-sm text-gray-500">Loading...</span>
@@ -510,7 +329,7 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
                       </h3>
                       
                       {/* Debug info for errors */}
-                      {matchHistory.length === 0 && dataLoaded && (
+                      {matchHistory.length === 0 && !loading.matches && (
                         <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
                           <div className="flex items-center">
                             <div className="ml-3">
@@ -539,7 +358,17 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
                               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
                                 <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
                                   <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
-                                    {new Date(event.date).toLocaleDateString()}
+                                    {(() => {
+                                      const date = new Date(event.date);
+                                      const year = date.getFullYear();
+                                      const month = date.getMonth();
+                                      const day = date.getDate();
+                                      return new Date(year, month, day).toLocaleDateString('en-US', {
+                                        month: 'short',
+                                        day: 'numeric',
+                                        year: 'numeric'
+                                      });
+                                    })()}
                                   </span>
                                   <span className="font-medium text-sm sm:text-base">
                                     {event.description}
@@ -600,7 +429,7 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
                         Orders & Cash Impact
                       </h3>
                       
-                      {ordersLoading ? (
+                      {loading.orders ? (
                         <div className="flex items-center justify-center py-12">
                           <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
                           <span className="ml-2 text-sm text-gray-500">Loading...</span>
@@ -689,7 +518,7 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
                         Share Price vs Match Day
                       </h3>
                       
-                      {chartLoading ? (
+                      {loading.chart ? (
                         <ChartSkeleton />
                       ) : chartData.length === 0 ? (
                         <div className="text-center py-8">

@@ -11,6 +11,8 @@ import { TradeHistoryTable } from './TradeHistoryTable';
 import { SystemActivityCard } from './SystemActivityCard';
 import { AuditLogViewer } from './AuditLogViewer';
 import { AdminErrorBoundary } from './AdminErrorBoundary';
+import { SeasonUpdatePanel } from './SeasonUpdatePanel';
+import { MarketCapProcessingPanel } from './MarketCapProcessingPanel';
 import { adminService } from '@/shared/lib/services/admin.service';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
 
@@ -65,10 +67,12 @@ export const AdminDashboard: React.FC = () => {
         {/* Main Content */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="overview">System Overview</TabsTrigger>
             <TabsTrigger value="users">User Investments</TabsTrigger>
             <TabsTrigger value="trades">Trade History</TabsTrigger>
+            <TabsTrigger value="season">Season Management</TabsTrigger>
+            <TabsTrigger value="market">Market Data</TabsTrigger>
             <TabsTrigger value="audit">Audit Logs</TabsTrigger>
           </TabsList>
 
@@ -114,6 +118,14 @@ export const AdminDashboard: React.FC = () => {
 
             <TabsContent value="trades" className="space-y-6">
               <TradeHistoryTable />
+            </TabsContent>
+
+            <TabsContent value="season" className="space-y-6">
+              <SeasonUpdatePanel />
+            </TabsContent>
+
+            <TabsContent value="market" className="space-y-6">
+              <MarketCapProcessingPanel />
             </TabsContent>
 
             <TabsContent value="audit" className="space-y-6">

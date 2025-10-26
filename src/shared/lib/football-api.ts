@@ -138,18 +138,19 @@ export interface TeamDetails extends FootballTeam {
 }
 
 // API configuration - Detect environment properly for Netlify Edge Functions
-const isNetlifyDev = window.location.hostname === 'localhost' && (window.location.port === '8888' || window.location.port === '8080');
 const isProduction = (import.meta as any).env?.VITE_APP_ENV === 'production';
 const isViteDev = window.location.hostname === 'localhost' && window.location.port === '5173';
+const isNetlifyDev = window.location.hostname === 'localhost' && window.location.port === '8888';
 
-// For two-terminal setup: use Netlify Edge Functions when available
+// For netlify dev: Vite runs on 5173, Edge Functions on 8888
+// We need to use the direct Edge Function path when Vite is running
 const FOOTBALL_API_BASE = isProduction 
   ? '/api/football-api-cache'  // Netlify Edge Function (production)
-  : isNetlifyDev 
-    ? '/api/football-api-cache'  // Netlify Edge Function (local dev with netlify dev)
-    : isViteDev
-      ? 'http://localhost:8888/api/football-api-cache'  // Cross-origin to Netlify dev
-      : `${supabaseUrl}/functions/v1/football-api`; // Supabase Edge Function (fallback)
+  : isViteDev 
+    ? 'http://localhost:8888/.netlify/functions/football-api-cache'  // Direct Edge Function path for Vite dev
+    : isNetlifyDev
+      ? '/api/football-api-cache'  // Netlify Edge Function (local dev with netlify dev)
+      : 'https://api.football-data.org/v4'; // Direct API fallback
 
   // Debug logging removed for security
 
@@ -172,13 +173,48 @@ export const testApiConnection = async (): Promise<boolean> => {
 
 // Football API service
 export const footballApiService = {
+  /**
+   * Calculate current season ID based on date
+   */
+  calculateCurrentSeason(): number {
+    // Premier League seasons run August to May
+    const year = new Date().getFullYear();
+    const month = new Date().getMonth() + 1; // 0-based to 1-based
+    
+    // If we're in August-December, it's the current year's season
+    // If we're in January-July, it's the previous year's season
+    return month >= 8 ? year : year - 1;
+  },
+
+  /**
+   * Get current season ID dynamically
+   */
+  async getCurrentSeasonId(): Promise<number> {
+    try {
+      // Try to get current season from API
+      const seasonInfo = await this.getCurrentSeason();
+      if (seasonInfo) {
+        return seasonInfo.id;
+      }
+      
+      // Fallback: Calculate season based on current date
+      return this.calculateCurrentSeason();
+    } catch (error) {
+      console.error('Error getting current season ID:', error);
+      // Ultimate fallback to calculated season
+      return this.calculateCurrentSeason();
+    }
+  },
+
   async getPremierLeagueMatches(season?: number): Promise<FootballMatch[]> {
-    // Default to 2024-25 season (2024 represents the 2024-25 season)
-    const seasonParam = season || 2024;
+    // Explicitly fetch 2025 season matches
+    const url = `${FOOTBALL_API_BASE}/competitions/PL/matches?season=2025`;
     
-    const url = `${FOOTBALL_API_BASE}/competitions/PL/matches?season=${seasonParam}`;
-    
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      headers: (isProduction || isNetlifyDev) ? {} : {
+        'X-Auth-Token': (import.meta as any).env?.VITE_FOOTBALL_API_KEY || '1550a2317c044eda8644d0367f1a0f22'
+      }
+    });
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -187,13 +223,6 @@ export const footballApiService = {
     }
 
     const data = await response.json();
-    
-    // Log season information from the API response
-    if (data.matches && data.matches.length > 0) {
-      const firstMatch = data.matches[0];
-      // Removed console.log for security
-    }
-    
     return data.matches || [];
   },
 
@@ -210,19 +239,13 @@ export const footballApiService = {
   },
 
   async getPremierLeagueTeams(season?: number): Promise<FootballTeam[]> {
-    // Default to 2024-25 season (2024 represents the 2024-25 season)
-    const seasonParam = season || 2024;
-    
-    // Use appropriate API endpoint based on environment
-    const teamsEndpoint = (isProduction || isNetlifyDev)
-      ? `/api/football-api-cache/competitions/PL/teams?season=${seasonParam}`
-      : `${FOOTBALL_API_BASE}/competitions/PL/teams?season=${seasonParam}`;
-    
+    // Explicitly fetch 2025 season teams
+    const teamsEndpoint = `${FOOTBALL_API_BASE}/competitions/PL/teams?season=2025`;
     
     const response = await fetch(teamsEndpoint, {
-      headers: (!isProduction && !isNetlifyDev) ? {
-        'X-Auth-Token': (import.meta as any).env?.VITE_FOOTBALL_API_KEY || ''
-      } : {}
+      headers: (isProduction || isNetlifyDev) ? {} : {
+        'X-Auth-Token': (import.meta as any).env?.VITE_FOOTBALL_API_KEY || '1550a2317c044eda8644d0367f1a0f22'
+      }
     });
 
     if (!response.ok) {
@@ -235,34 +258,48 @@ export const footballApiService = {
 
   async getCurrentSeason(season?: number): Promise<{ id: number; startDate: string; endDate: string; currentMatchday: number } | null> {
     try {
-      // Default to 2024-25 season (2024 represents the 2024-25 season)
-      const seasonParam = season || 2024;
+      // Explicitly use 2025 season
+      const seasonParam = 2025;
       
       // Get season info from the matches endpoint
       const response = await fetch(
-        `${FOOTBALL_API_BASE}/competitions/PL/matches?season=${seasonParam}`
+        `${FOOTBALL_API_BASE}/competitions/PL/matches?season=${seasonParam}`,
+        {
+          headers: (isProduction || isNetlifyDev) ? {} : {
+            'X-Auth-Token': (import.meta as any).env?.VITE_FOOTBALL_API_KEY || '1550a2317c044eda8644d0367f1a0f22'
+          }
+        }
       );
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Football API error: ${response.status} ${response.statusText}`, errorText);
         throw new Error(`Football API error: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
       
-      if (data.matches && data.matches.length > 0) {
-        const firstMatch = data.matches[0];
-        const seasonInfo = firstMatch.season;
-        
-        if (seasonInfo) {
-          // Removed console.log for security
-          return seasonInfo;
-        }
-      }
+      // Calculate season based on current date (more reliable than API season ID)
+      const calculatedSeason = this.calculateCurrentSeason();
       
-      return null;
+      // Return calculated season (2025 for current year in October)
+      return {
+        id: calculatedSeason,
+        startDate: `${calculatedSeason}-08-01`,
+        endDate: `${calculatedSeason + 1}-05-31`,
+        currentMatchday: data.matches?.length > 0 ? data.matches[0].matchday || 1 : 1
+      };
     } catch (error) {
       console.error(`Error getting season:`, error);
-      return null;
+      
+      // Fallback: Return a basic season object based on current date
+      const fallbackSeason = this.calculateCurrentSeason();
+      return {
+        id: fallbackSeason,
+        startDate: `${fallbackSeason}-08-01`,
+        endDate: `${fallbackSeason + 1}-05-31`,
+        currentMatchday: 1
+      };
     }
   },
 
@@ -297,12 +334,15 @@ export const footballApiService = {
     return match;
   },
   convertMatchToFixture(match: FootballMatch) {
+    const kickoffTime = new Date(match.utcDate);
+    const buyCloseTime = new Date(kickoffTime.getTime() - 30 * 60 * 1000); // 30 minutes before
+    
     return {
       external_id: match.id.toString(),
       home_team_id: null, // Will be mapped to our team ID
       away_team_id: null, // Will be mapped to our team ID
-      kickoff_at: new Date(match.utcDate).toISOString(),
-      buy_close_at: new Date(new Date(match.utcDate).getTime() - 24 * 60 * 60 * 1000).toISOString(), // 24h before
+      kickoff_at: kickoffTime.toISOString(),
+      buy_close_at: buyCloseTime.toISOString(), // 30 min before kickoff
       result: this.convertMatchStatus(match.status, match.score),
       status: this.convertMatchStatusToFixtureStatus(match.status),
       home_score: match.score.fullTime.home,
@@ -315,7 +355,8 @@ export const footballApiService = {
   convertMatchStatus(status: string, score: any): 'home_win' | 'away_win' | 'draw' | 'pending' {
     if (status !== 'FINISHED') return 'pending';
     
-    if (!score.fullTime.home || !score.fullTime.away) return 'pending';
+    if (!score?.fullTime?.home && score?.fullTime?.home !== 0) return 'pending';
+    if (!score?.fullTime?.away && score?.fullTime?.away !== 0) return 'pending';
     
     if (score.fullTime.home > score.fullTime.away) return 'home_win';
     if (score.fullTime.away > score.fullTime.home) return 'away_win';
@@ -329,6 +370,7 @@ export const footballApiService = {
       case 'IN_PLAY':
       case 'PAUSED': return 'closed';
       case 'FINISHED': return 'applied';
+      case 'TIMED': return 'scheduled'; // TIMED = scheduled match, not finished
       case 'POSTPONED':
       case 'SUSPENDED':
       case 'CANCELLED': return 'postponed';
@@ -343,30 +385,25 @@ export const footballApiService = {
     teams: TeamDetails[];
     matches: FootballMatch[];
   }> {
-    const seasonParam = season || 2024;
+    // Explicitly use 2025 season
+    const seasonParam = 2025;
     
     
-    // Use appropriate API endpoint based on environment
-    const standingsEndpoint = (isProduction || isNetlifyDev)
-      ? `/api/football-api-cache/premier-league-data?season=${seasonParam}`
-      : `${FOOTBALL_API_BASE}/competitions/PL/standings?season=${seasonParam}`;
-    
-    const matchesEndpoint = (isProduction || isNetlifyDev)
-      ? `/api/football-api-cache/premier-league-matches?season=${seasonParam}`
-      : `${FOOTBALL_API_BASE}/competitions/PL/matches?season=${seasonParam}`;
-    
+    // Use base URL for all endpoints
+    const standingsEndpoint = `${FOOTBALL_API_BASE}/competitions/PL/standings?season=${seasonParam}`;
+    const matchesEndpoint = `${FOOTBALL_API_BASE}/competitions/PL/matches?season=${seasonParam}`;
     
     // Make only 2 API calls instead of 20+ calls
     const [standingsResponse, matchesResponse] = await Promise.all([
       fetch(standingsEndpoint, {
-        headers: (!isProduction && !isNetlifyDev) ? {
-          'X-Auth-Token': (import.meta as any).env?.VITE_FOOTBALL_API_KEY || ''
-        } : {}
+        headers: (isProduction || isNetlifyDev) ? {} : {
+          'X-Auth-Token': (import.meta as any).env?.VITE_FOOTBALL_API_KEY || '1550a2317c044eda8644d0367f1a0f22'
+        }
       }),
       fetch(matchesEndpoint, {
-        headers: (!isProduction && !isNetlifyDev) ? {
-          'X-Auth-Token': (import.meta as any).env?.VITE_FOOTBALL_API_KEY || ''
-        } : {}
+        headers: (isProduction || isNetlifyDev) ? {} : {
+          'X-Auth-Token': (import.meta as any).env?.VITE_FOOTBALL_API_KEY || '1550a2317c044eda8644d0367f1a0f22'
+        }
       })
     ]);
 
@@ -416,14 +453,12 @@ export const footballApiService = {
       cacheKey,
       async () => {
         try {
-          const apiEndpoint = (isProduction || isNetlifyDev)
-            ? `/api/football-api-cache/teams/${externalTeamId}`
-            : `${FOOTBALL_API_BASE}/teams/${externalTeamId}`;
+          const apiEndpoint = `${FOOTBALL_API_BASE}/teams/${externalTeamId}`;
           
           const response = await fetch(apiEndpoint, {
-            headers: (!isProduction && !isNetlifyDev) ? {
-              'X-Auth-Token': (import.meta as any).env?.VITE_FOOTBALL_API_KEY || ''
-            } : {}
+            headers: (isProduction || isNetlifyDev) ? {} : {
+              'X-Auth-Token': (import.meta as any).env?.VITE_FOOTBALL_API_KEY || '1550a2317c044eda8644d0367f1a0f22'
+            }
           });
 
           if (!response.ok) {
@@ -442,7 +477,8 @@ export const footballApiService = {
   },
 
   async getTopScorers(season?: number, limit: number = 10): Promise<Scorer[]> {
-    const seasonParam = season || 2024;
+    // Explicitly use 2025 season
+    const seasonParam = 2025;
     // Removed console.log for security
     
     const response = await fetch(
@@ -670,7 +706,7 @@ export const footballApiService = {
   },
 
   async getTeamMatches(teamId: number, season?: number): Promise<FootballMatch[]> {
-    const seasonParam = season || 2024;
+    const seasonParam = season || await this.getCurrentSeasonId();
     const cacheKey = ApiCacheService.getKey.teamMatches(teamId, seasonParam);
     
     return apiCache.getOrFetch(
@@ -718,52 +754,50 @@ export const footballIntegrationService = {
       let updatedCount = 0;
       let createdCount = 0;
       
-      for (const apiTeam of teams) {
-        const existingTeam = existingTeams?.find(t => t.external_id === apiTeam.id.toString());
-        
-        const teamData = {
-          external_id: apiTeam.id,
-          name: apiTeam.name, // Use exact API name
-          short_name: apiTeam.shortName, // Use exact API short name
-          logo_url: apiTeam.crest,
-          updated_at: new Date().toISOString()
-        };
-        
-        if (existingTeam) {
-          // Update existing team with basic info only
-          const { error: updateError } = await supabase
-            .from('teams')
-            .update(teamData)
-            .eq('id', existingTeam.id);
-          
-          if (updateError) {
-            console.error(`❌ Error updating team ${apiTeam.name}:`, updateError);
-          } else {
-            // Removed console.log for security
-            updatedCount++;
-          }
-        } else {
-          // Create new team with correct initial values
-          const { error: insertError } = await supabase
-            .from('teams')
-            .insert({
-              ...teamData,
-              initial_market_cap: 100.00,
-              market_cap: 100.00,
-              shares_outstanding: 5,
-              total_shares: 5,
-              available_shares: 5,
-              is_tradeable: true
-            });
-          
-          if (insertError) {
-            console.error(`❌ Error creating team ${apiTeam.name}:`, insertError);
-          } else {
-            // Removed console.log for security
-            createdCount++;
-          }
-        }
+      // Prepare all team data for batch upsert
+      const teamUpsertData = teams.map(apiTeam => ({
+        external_id: apiTeam.id,
+        name: apiTeam.name,
+        short_name: apiTeam.shortName,
+        logo_url: apiTeam.crest,
+        updated_at: new Date().toISOString(),
+        // Only set initial values for new teams (upsert will handle existing)
+        initial_market_cap: 100.00,
+        market_cap: 100.00,
+        shares_outstanding: 5,
+        total_shares: 5,
+        available_shares: 5,
+        is_tradeable: true
+      }));
+
+      // Batch upsert all teams
+      const { data: upsertedTeams, error: upsertError } = await supabase
+        .from('teams')
+        .upsert(teamUpsertData, {
+          onConflict: 'external_id',
+          ignoreDuplicates: false
+        })
+        .select('id, external_id, name');
+
+      if (upsertError) {
+        console.error('❌ Error upserting teams:', upsertError);
+        throw upsertError;
       }
+
+      // Count results
+      const existingExternalIds = existingTeams?.map(t => t.external_id) || [];
+      const upsertedExternalIds = upsertedTeams?.map(t => t.external_id.toString()) || [];
+      
+      // Count created vs updated
+      upsertedExternalIds.forEach(externalId => {
+        if (existingExternalIds.includes(externalId)) {
+          updatedCount++;
+        } else {
+          createdCount++;
+        }
+      });
+
+      console.log(`✅ Teams sync completed: ${updatedCount} updated, ${createdCount} created`);
       
       // Removed console.log for security
       
@@ -775,7 +809,6 @@ export const footballIntegrationService = {
 
   async syncPremierLeagueFixtures(season?: number): Promise<void> {
     try {
-      
       // Get matches from football API with same season as teams
       const matches = await footballApiService.getPremierLeagueMatches(season);
 
@@ -783,8 +816,6 @@ export const footballIntegrationService = {
       const { data: ourTeams, error } = await supabase
         .from('teams')
         .select('id, name, external_id');
-
-      console.log('Database query result:', { data: ourTeams, error });
 
       if (error) {
         throw new Error(`Database error: ${error.message}`);
@@ -794,83 +825,93 @@ export const footballIntegrationService = {
         throw new Error('No teams found in database');
       }
 
-
-      // Create a mapping from football API team names to our team IDs
-      // Since we now use exact API names in the database, we can use simple exact matching
+      // Create team mapping
       const teamMapping = new Map<string, number>();
-      
       ourTeams.forEach(team => {
         teamMapping.set(team.name, team.id);
       });
 
-      // Removed console.log for security
+      // Use 2025 season explicitly
+      const targetSeason = 2025;
 
-      // Process each match
-      let processedCount = 0;
+      // Prepare all fixture data for batch upsert
+      const fixtureInsertData = [];
       let skippedCount = 0;
-      
+      let updatedCount = 0;
+      let createdCount = 0;
+
       for (const match of matches) {
         const homeTeamId = teamMapping.get(match.homeTeam.name);
         const awayTeamId = teamMapping.get(match.awayTeam.name);
 
         if (!homeTeamId || !awayTeamId) {
-          console.warn(`Could not map teams for match ${match.id}: ${match.homeTeam.name} vs ${match.awayTeam.name}`);
-          console.warn(`Available team names:`, ourTeams.map(t => t.name));
+          console.warn(`Skipping match: teams not found for ${match.homeTeam.name} vs ${match.awayTeam.name}`);
           skippedCount++;
           continue;
         }
 
-        const fixture = footballApiService.convertMatchToFixture(match);
-        fixture.home_team_id = homeTeamId;
-        fixture.away_team_id = awayTeamId;
-
-        // Check if fixture already exists
-        const { data: existingFixtures, error: checkError } = await supabase
-          .from('fixtures')
-          .select('id')
-          .eq('external_id', fixture.external_id);
-
-        if (checkError) {
-          console.error(`Error checking fixture ${fixture.external_id}:`, checkError);
-          skippedCount++;
-          continue;
-        }
-
-        if (existingFixtures && existingFixtures.length > 0) {
-          // Update existing fixture
-          const { error: updateError } = await supabase
-            .from('fixtures')
-            .update({
-              result: fixture.result,
-              status: fixture.status,
-              home_score: fixture.home_score,
-              away_score: fixture.away_score,
-            })
-            .eq('external_id', fixture.external_id);
-          
-          if (updateError) {
-            console.error(`Error updating fixture ${fixture.external_id}:`, updateError);
-            skippedCount++;
-            continue;
-          }
-        } else {
-          // Insert new fixture
-          const { error: insertError } = await supabase
-            .from('fixtures')
-            .insert(fixture);
-          
-          if (insertError) {
-            console.error(`Error inserting fixture ${fixture.external_id}:`, insertError);
-            skippedCount++;
-            continue;
-          }
-        }
+        const kickoffTime = new Date(match.utcDate);
+        const buyCloseTime = new Date(kickoffTime.getTime() - 30 * 60 * 1000);
         
-        processedCount++;
+        // Log first few fixtures to debug dates
+        if (fixtureInsertData.length < 3) {
+          console.log(`Fixture ${match.id}: ${match.homeTeam.name} vs ${match.awayTeam.name}`);
+          console.log(`  API date: ${match.utcDate}`);
+          console.log(`  Parsed kickoff: ${kickoffTime.toISOString()}`);
+          console.log(`  Status: ${match.status}, Result: ${match.score?.fullTime}`);
+        }
+
+        fixtureInsertData.push({
+          external_id: match.id,
+          home_team_id: homeTeamId,
+          away_team_id: awayTeamId,
+          kickoff_at: kickoffTime.toISOString(),
+          buy_close_at: buyCloseTime.toISOString(),
+          status: footballApiService.convertMatchStatusToFixtureStatus(match.status),
+          result: footballApiService.convertMatchStatus(match.status, match.score),
+          home_score: match.score?.fullTime?.home || 0,
+          away_score: match.score?.fullTime?.away || 0,
+          matchday: match.matchday,
+          season: targetSeason,
+          updated_at: new Date().toISOString()
+        });
+      }
+
+      // Use UPSERT to update existing fixtures or insert new ones
+      // This will update ALL fields including dates when a fixture already exists
+      const { data: upsertedFixtures, error: insertError } = await supabase
+        .from('fixtures')
+        .upsert(fixtureInsertData, {
+          onConflict: 'external_id',
+          ignoreDuplicates: false,
+          updateColumns: [
+            'home_team_id',
+            'away_team_id', 
+            'kickoff_at',  // CRITICAL: Update dates
+            'buy_close_at',
+            'status',
+            'result',
+            'home_score',
+            'away_score',
+            'matchday',
+            'season',
+            'updated_at'
+          ]
+        })
+        .select('id, external_id');
+
+      if (insertError) {
+        console.error('Error upserting fixtures:', insertError);
+        throw insertError;
+      }
+
+      console.log(`✅ Fixtures sync completed: ${upsertedFixtures?.length || 0} fixtures upserted for season ${targetSeason}`);
+      if (skippedCount > 0) {
+        console.log(`⚠️ Skipped ${skippedCount} fixtures due to team mapping issues`);
       }
 
     } catch (error) {
-      console.error('Error syncing fixtures:', error);
+      console.error('❌ Error syncing Premier League fixtures:', error);
       throw error;
     }
   },

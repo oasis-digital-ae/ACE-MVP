@@ -19,13 +19,44 @@ export const buyWindowService = {
     const now = new Date();
     
     try {
-      // Get upcoming fixtures for this team
+      // FIRST: Check if there's a match currently in progress (LIVE/IN_PLAY)
+      const { data: liveMatch, error: liveError } = await supabase
+        .from('fixtures')
+        .select('kickoff_at, status, result')
+        .or(`home_team_id.eq.${teamId},away_team_id.eq.${teamId}`)
+        .eq('status', 'closed') // 'closed' = match is LIVE/IN_PLAY
+        .order('kickoff_at', { ascending: false })
+        .limit(1);
+
+      if (liveError) {
+        logger.warn('Error checking live matches for buy window:', liveError);
+      }
+      
+      // If there's a match currently in progress, trading is CLOSED
+      if (liveMatch && liveMatch.length > 0 && liveMatch[0].status === 'closed') {
+        const matchKickoff = new Date(liveMatch[0].kickoff_at);
+        const matchEnd = new Date(matchKickoff.getTime() + 2 * 60 * 60 * 1000); // 2 hours after kickoff (typical match duration)
+        
+        // Only close if match is actually in progress (within 2 hours of kickoff)
+        if (now < matchEnd && now >= matchKickoff) {
+          return {
+            isOpen: false,
+            nextCloseTime: undefined,
+            nextKickoffTime: matchKickoff,
+            reason: `Trading closed. Match in progress.`
+          };
+        }
+        // If the match should have ended but status is still 'closed', it's stale data
+        // Don't close trading, let it continue with the upcoming match check
+      }
+
+      // SECOND: Check for upcoming fixtures for this team
       const { data: upcomingFixtures, error } = await supabase
         .from('fixtures')
         .select('buy_close_at, kickoff_at, home_team_id, away_team_id')
         .or(`home_team_id.eq.${teamId},away_team_id.eq.${teamId}`)
         .gte('kickoff_at', now.toISOString())
-        .eq('status', 'SCHEDULED')
+        .eq('status', 'scheduled')
         .order('kickoff_at', { ascending: true })
         .limit(1);
 

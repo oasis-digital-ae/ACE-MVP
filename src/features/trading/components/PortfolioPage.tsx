@@ -34,6 +34,35 @@ const PortfolioPage: React.FC = () => {
     setSelectedClub(null);
   }, []);
 
+  // Memoized portfolio table rows
+  const memoizedPortfolioRows = useMemo(() => portfolio.map((item) => {
+    const percentChange = ((item.currentPrice - item.purchasePrice) / item.purchasePrice) * 100;
+    const portfolioPercent = totalMarketValue > 0 ? (item.totalValue / totalMarketValue) * 100 : 0;
+    
+    return (
+      <tr 
+        key={item.clubId} 
+        className="border-b border-gray-700/30 hover:bg-gray-700/30 cursor-pointer transition-colors duration-200 group"
+        onClick={() => handleClubClick(item.clubId, item.clubName)}
+      >
+        <td className="p-4 font-medium group-hover:text-trading-primary transition-colors duration-200">
+          {item.clubName}
+        </td>
+        <td className="p-4 text-right font-mono">{formatNumber(item.units)}</td>
+        <td className="p-4 text-right font-mono">{formatCurrency(item.purchasePrice)}</td>
+        <td className="p-4 text-right font-mono">{formatCurrency(item.currentPrice)}</td>
+        <td className={`p-4 text-right font-semibold ${percentChange === 0 ? 'text-gray-400' : percentChange > 0 ? 'price-positive' : 'price-negative'}`}>
+          {percentChange > 0 ? '+' : ''}{percentChange.toFixed(2)}%
+        </td>
+        <td className="p-4 text-right font-mono">{formatCurrency(item.totalValue)}</td>
+        <td className="p-4 text-right font-semibold text-trading-primary">{portfolioPercent.toFixed(1)}%</td>
+        <td className={`p-4 text-right font-semibold ${item.profitLoss === 0 ? 'text-gray-400' : item.profitLoss > 0 ? 'price-positive' : 'price-negative'}`}>
+          {item.profitLoss > 0 ? '+' : ''}{formatCurrency(item.profitLoss)}
+        </td>
+      </tr>
+    );
+  }), [portfolio, totalMarketValue, handleClubClick]);
+
   // Realtime portfolio updates
   useEffect(() => {
     if (!user) return;
@@ -187,33 +216,7 @@ const PortfolioPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {useMemo(() => portfolio.map((item) => {
-                    const percentChange = ((item.currentPrice - item.purchasePrice) / item.purchasePrice) * 100;
-                    const portfolioPercent = totalMarketValue > 0 ? (item.totalValue / totalMarketValue) * 100 : 0;
-                    
-                    return (
-                      <tr 
-                        key={item.clubId} 
-                        className="border-b border-gray-700/30 hover:bg-gray-700/30 cursor-pointer transition-colors duration-200 group"
-                        onClick={() => handleClubClick(item.clubId, item.clubName)}
-                      >
-                        <td className="p-4 font-medium group-hover:text-trading-primary transition-colors duration-200">
-                          {item.clubName}
-                        </td>
-                        <td className="p-4 text-right font-mono">{formatNumber(item.units)}</td>
-                        <td className="p-4 text-right font-mono">{formatCurrency(item.purchasePrice)}</td>
-                        <td className="p-4 text-right font-mono">{formatCurrency(item.currentPrice)}</td>
-                        <td className={`p-4 text-right font-semibold ${percentChange === 0 ? 'text-gray-400' : percentChange > 0 ? 'price-positive' : 'price-negative'}`}>
-                          {percentChange > 0 ? '+' : ''}{percentChange.toFixed(2)}%
-                        </td>
-                        <td className="p-4 text-right font-mono">{formatCurrency(item.totalValue)}</td>
-                        <td className="p-4 text-right font-semibold text-trading-primary">{portfolioPercent.toFixed(1)}%</td>
-                        <td className={`p-4 text-right font-semibold ${item.profitLoss === 0 ? 'text-gray-400' : item.profitLoss > 0 ? 'price-positive' : 'price-negative'}`}>
-                          {item.profitLoss > 0 ? '+' : ''}{formatCurrency(item.profitLoss)}
-                        </td>
-                      </tr>
-                    );
-                  }), [portfolio, totalMarketValue, handleClubClick])}
+                  {memoizedPortfolioRows}
                 </tbody>
               </table>
             </div>

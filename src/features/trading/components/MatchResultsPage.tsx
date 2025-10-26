@@ -3,12 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
 import { fixturesService } from '@/shared/lib/database';
-import type { DatabaseFixture } from '@/shared/lib/database';
+import type { DatabaseFixtureWithTeams } from '@/shared/lib/database';
 import ClickableTeamName from '@/shared/components/ClickableTeamName';
 import TeamLogo from '@/shared/components/TeamLogo';
 
 const MatchResultsPage: React.FC = () => {
-  const [fixtures, setFixtures] = useState<DatabaseFixture[]>([]);
+  const [fixtures, setFixtures] = useState<DatabaseFixtureWithTeams[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'finished' | 'upcoming'>('all');
 

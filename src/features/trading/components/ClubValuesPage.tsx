@@ -17,6 +17,8 @@ import { ChevronDown, ChevronUp, Activity, Users } from 'lucide-react';
 import { useRealtimeMarket } from '@/shared/hooks/useRealtimeMarket';
 import { useRealtimeOrders } from '@/shared/hooks/useRealtimeOrders';
 import { useRealtimePresence } from '@/shared/hooks/useRealtimePresence';
+import BuyWindowIndicator from '@/shared/components/BuyWindowIndicator';
+import { buyWindowService } from '@/shared/lib/buy-window.service';
 
 export const ClubValuesPage: React.FC = () => {
   const { clubs, matches, purchaseClub, user } = useAppContext();
@@ -31,6 +33,7 @@ export const ClubValuesPage: React.FC = () => {
   } | null>(null);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [purchasingClubId, setPurchasingClubId] = useState<string | null>(null);
+  const [buyWindowStatuses, setBuyWindowStatuses] = useState<Map<string, any>>(new Map());
 
   // Realtime subscriptions
   const { lastUpdate, isConnected: marketConnected } = useRealtimeMarket();
@@ -87,18 +90,40 @@ export const ClubValuesPage: React.FC = () => {
     };
   }, []);
 
+  // Fetch buy window statuses for all teams
+  useEffect(() => {
+    const fetchBuyWindowStatuses = async () => {
+      const statuses = new Map();
+      for (const club of clubs) { // Check all teams
+        try {
+          const status = await buyWindowService.getBuyWindowDisplayInfo(parseInt(club.id));
+          statuses.set(club.id, status);
+        } catch (error) {
+          console.error(`Error fetching buy window status for team ${club.id}:`, error);
+        }
+      }
+      setBuyWindowStatuses(statuses);
+    };
+
+    if (clubs.length > 0) {
+      fetchBuyWindowStatuses();
+      
+      // Refresh every 30 seconds
+      const interval = setInterval(fetchBuyWindowStatuses, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [clubs]);
+
   // Memoized function to count games played for a club using fixture data
-  // Only counts fixtures that have been simulated (not synced from API)
+  // Counts all completed fixtures from API data (not just simulated games)
   const getGamesPlayed = useCallback((clubId: string): number => {
     // OPTIMIZED: Pre-filter fixtures once instead of filtering for each club
     const clubIdInt = parseInt(clubId);
     return fixtures.filter(fixture => 
       (fixture.home_team_id === clubIdInt || fixture.away_team_id === clubIdInt) &&
       fixture.status === 'applied' && 
-      fixture.result !== 'pending' &&
-      // Only count fixtures that have snapshot data (indicating they were simulated)
-      fixture.snapshot_home_cap !== null &&
-      fixture.snapshot_away_cap !== null
+      fixture.result !== 'pending'
+      // Removed snapshot requirement - now counts all completed API fixtures
     ).length;
   }, [fixtures]);
   // Function to get the latest ending value for a club from matches
@@ -350,14 +375,19 @@ export const ClubValuesPage: React.FC = () => {
                           {club.sharesOutstanding.toLocaleString()}
                         </td>
                         <td className="p-4 text-center">
-                          <Button
-                            onClick={() => handlePurchaseClick(club.id)}
-                            size="sm"
-                            disabled={isPurchasing}
-                            className="bg-gradient-success hover:bg-gradient-success/80 text-white font-semibold px-4 py-2 rounded-lg transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-                          >
-                            {isPurchasing && purchasingClubId === club.id ? 'Processing...' : 'Buy'}
-                          </Button>
+                          <div className="flex flex-col items-center gap-2">
+                            <Button
+                              onClick={() => handlePurchaseClick(club.id)}
+                              size="sm"
+                              disabled={isPurchasing || !buyWindowStatuses.get(club.id)?.isOpen}
+                              className="bg-gradient-success hover:bg-gradient-success/80 text-white font-semibold px-4 py-2 rounded-lg transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                              title={!buyWindowStatuses.get(club.id)?.isOpen ? 'Trading window is closed' : 'Buy shares'}
+                            >
+                              {isPurchasing && purchasingClubId === club.id ? 'Processing...' : 
+                               !buyWindowStatuses.get(club.id)?.isOpen ? '🔒 Closed' : 'Buy'}
+                            </Button>
+                            <BuyWindowIndicator teamId={parseInt(club.id)} compact={true} />
+                          </div>
                         </td>
                       </tr>
                       
@@ -432,53 +462,51 @@ export const ClubValuesPage: React.FC = () => {
                         </div>
                       </div>
                     </div>
-                    <Button
-                      onClick={() => handlePurchaseClick(club.id)}
-                      size="sm"
-                      disabled={isPurchasing}
-                      className="bg-gradient-success hover:bg-gradient-success/80 text-white font-semibold px-3 py-1 text-xs rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isPurchasing && purchasingClubId === club.id ? 'Processing...' : 'Buy'}
-                    </Button>
+                    <div className="flex flex-col gap-1">
+                      <Button
+                        onClick={() => handlePurchaseClick(club.id)}
+                        size="sm"
+                        disabled={isPurchasing || !buyWindowStatuses.get(club.id)?.isOpen}
+                        className="bg-gradient-success hover:bg-gradient-success/80 text-white font-semibold px-3 py-1 text-xs rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={!buyWindowStatuses.get(club.id)?.isOpen ? 'Trading window is closed' : 'Buy shares'}
+                      >
+                        {isPurchasing && purchasingClubId === club.id ? 'Processing...' : 
+                         !buyWindowStatuses.get(club.id)?.isOpen ? '🔒 Closed' : 'Buy'}
+                      </Button>
+                      <BuyWindowIndicator teamId={parseInt(club.id)} compact={true} showCountdown={false} />
+                    </div>
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-3 text-xs">
-                    <div className="space-y-1">
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">Launch:</span>
-                        <span className="text-white font-mono">{formatCurrency(club.launchPrice)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">Current:</span>
-                        <span className="text-white font-mono font-semibold">{formatCurrency(club.currentValue)}</span>
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">P/L:</span>
-                        <span className={`font-semibold ${club.profitLoss === 0 ? 'text-gray-400' : club.profitLoss > 0 ? 'price-positive' : 'price-negative'}`}>
-                          {club.profitLoss > 0 ? '+' : ''}{formatCurrency(club.profitLoss)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">Change:</span>
-                        <span className={`font-semibold ${club.percentChange === 0 ? 'text-gray-400' : club.percentChange > 0 ? 'price-positive' : 'price-negative'}`}>
-                          {club.percentChange > 0 ? '+' : ''}{formatPercent(club.percentChange)}
-                        </span>
+                  {/* Main Price Display - Large and Clear */}
+                  <div className="mb-3 p-3 rounded-lg bg-gray-700/30 border border-gray-600/30">
+                    <div className="text-center">
+                      <div className="text-xs text-gray-400 mb-1">Current Share Price</div>
+                      <div className="text-2xl font-bold text-white mb-1">{formatCurrency(club.currentValue)}</div>
+                      <div className={`text-sm font-semibold ${club.percentChange === 0 ? 'text-gray-400' : club.percentChange > 0 ? 'price-positive' : 'price-negative'}`}>
+                        {club.percentChange > 0 ? '+' : ''}{formatPercent(club.percentChange)} from launch
                       </div>
                     </div>
                   </div>
                   
-                  <div className="mt-3 pt-3 border-t border-gray-700/30">
-                    <div className="flex justify-between text-xs">
-                      <div>
-                        <span className="text-gray-400">Market Cap:</span>
-                        <span className="text-white font-mono ml-1">{formatCurrency(club.marketCap)}</span>
+                  {/* Secondary Info - Grid Layout */}
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="bg-gray-700/20 rounded p-2">
+                      <div className="text-gray-400 text-[10px] uppercase tracking-wide mb-1">Launch Price</div>
+                      <div className="text-white font-mono font-semibold">{formatCurrency(club.launchPrice)}</div>
+                    </div>
+                    <div className="bg-gray-700/20 rounded p-2">
+                      <div className="text-gray-400 text-[10px] uppercase tracking-wide mb-1">Market Cap</div>
+                      <div className="text-white font-mono font-semibold">{formatCurrency(club.marketCap)}</div>
+                    </div>
+                    <div className="bg-gray-700/20 rounded p-2">
+                      <div className="text-gray-400 text-[10px] uppercase tracking-wide mb-1">Profit/Loss</div>
+                      <div className={`font-semibold ${club.profitLoss === 0 ? 'text-gray-400' : club.profitLoss > 0 ? 'price-positive' : 'price-negative'}`}>
+                        {club.profitLoss > 0 ? '+' : ''}{formatCurrency(club.profitLoss)}
                       </div>
-                      <div>
-                        <span className="text-gray-400">Shares:</span>
-                        <span className="text-trading-primary font-semibold ml-1">{club.sharesOutstanding.toLocaleString()}</span>
-                      </div>
+                    </div>
+                    <div className="bg-gray-700/20 rounded p-2">
+                      <div className="text-gray-400 text-[10px] uppercase tracking-wide mb-1">Shares</div>
+                      <div className="text-trading-primary font-semibold">{club.sharesOutstanding.toLocaleString()}</div>
                     </div>
                   </div>
                   

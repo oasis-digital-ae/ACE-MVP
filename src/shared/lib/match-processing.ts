@@ -184,5 +184,98 @@ export const matchProcessingService = {
       console.error(`❌ Error in direct match simulation for fixture ${fixtureId}:`, error);
       throw error;
     }
+  },
+
+  // Process all completed fixtures for market cap backfill
+  // This handles fixtures that were synced from API without market cap transfers
+  async processAllCompletedFixturesForMarketCap(): Promise<{
+    processed: number;
+    skipped: number;
+    errors: Array<{fixtureId: number; error: string}>;
+  }> {
+    const results = {
+      processed: 0,
+      skipped: 0,
+      errors: []
+    };
+
+    try {
+      console.log('Processing all completed fixtures for market cap backfill...');
+
+      // Get all completed fixtures
+      const { data: allFixtures, error: fetchError } = await supabase
+        .from('fixtures')
+        .select('id, kickoff_at, home_team_id, away_team_id, result, status, snapshot_home_cap, snapshot_away_cap')
+        .eq('status', 'applied')
+        .neq('result', 'pending')
+        .order('kickoff_at', { ascending: true });
+
+      if (fetchError) {
+        throw new Error(`Error fetching fixtures: ${fetchError.message}`);
+      }
+
+      if (!allFixtures || allFixtures.length === 0) {
+        console.log('No completed fixtures found to process');
+        return results;
+      }
+
+      console.log(`Found ${allFixtures.length} completed fixtures`);
+
+      // Get already processed fixtures
+      const { data: processedFixtures, error: ledgerError } = await supabase
+        .from('transfers_ledger')
+        .select('fixture_id');
+
+      if (ledgerError) {
+        console.error('Warning: Could not check processed fixtures:', ledgerError);
+      }
+
+      const processedIds = new Set(processedFixtures?.map(t => t.fixture_id) || []);
+
+      // Process unprocessed fixtures
+      for (const fixture of allFixtures) {
+        if (processedIds.has(fixture.id)) {
+          results.skipped++;
+          continue;
+        }
+
+        // Check if snapshots exist
+        if (!fixture.snapshot_home_cap || !fixture.snapshot_away_cap) {
+          results.errors.push({
+            fixtureId: fixture.id,
+            error: 'Missing snapshot data'
+          });
+          console.warn(`⚠️ Fixture ${fixture.id} missing snapshot data, skipping`);
+          continue;
+        }
+
+        try {
+          const { data, error } = await supabase.rpc('process_match_result_atomic', {
+            p_fixture_id: fixture.id
+          });
+
+          if (error) {
+            throw error;
+          }
+
+          results.processed++;
+          console.log(`✅ Processed fixture ${fixture.id}`);
+        } catch (error: any) {
+          results.errors.push({
+            fixtureId: fixture.id,
+            error: error.message
+          });
+          console.error(`❌ Error processing fixture ${fixture.id}:`, error);
+        }
+      }
+
+      console.log(`Backfill complete: ${results.processed} processed, ${results.skipped} skipped, ${results.errors.length} errors`);
+      
+      return results;
+      
+    } catch (error) {
+      console.error('Error in processAllCompletedFixturesForMarketCap:', error);
+      throw error;
+    }
   }
 };
