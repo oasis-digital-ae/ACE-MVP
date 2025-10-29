@@ -10,6 +10,8 @@ import { ValidationError } from '@/shared/lib/error-handling';
 import { sanitizeInput } from '@/shared/lib/sanitization';
 import BuyWindowIndicator from '@/shared/components/BuyWindowIndicator';
 import { buyWindowService } from '@/shared/lib/buy-window.service';
+import { useAuth } from '@/features/auth/contexts/AuthContext';
+import { DepositModal } from './DepositModal';
 
 interface PurchaseConfirmationModalProps {
   isOpen: boolean;
@@ -34,9 +36,11 @@ export const PurchaseConfirmationModal: React.FC<PurchaseConfirmationModalProps>
   maxShares = 10000,
   isProcessing = false
 }) => {
+  const { walletBalance, refreshWalletBalance } = useAuth();
   const [shares, setShares] = useState<number>(1);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [buyWindowStatus, setBuyWindowStatus] = useState<any>(null);
+  const [depositModalOpen, setDepositModalOpen] = useState(false);
 
   // Reset shares when modal opens
   useEffect(() => {
@@ -103,7 +107,8 @@ export const PurchaseConfirmationModal: React.FC<PurchaseConfirmationModalProps>
   };
 
   const totalValue = shares * pricePerShare;
-  const isValid = Object.keys(validationErrors).length === 0 && shares > 0;
+  const hasSufficientBalance = walletBalance >= totalValue;
+  const isValid = Object.keys(validationErrors).length === 0 && shares > 0 && hasSufficientBalance;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -187,11 +192,30 @@ export const PurchaseConfirmationModal: React.FC<PurchaseConfirmationModalProps>
                 <span className="font-semibold text-white">{shares.toLocaleString()}</span>
               </div>
               
-              <div className="border-t border-trading-primary/30 pt-4">
+              <div className="border-t border-trading-primary/30 pt-4 space-y-2">
                 <div className="flex justify-between items-center text-lg">
                   <span className="font-semibold text-gray-300">Total purchase value:</span>
                   <span className="font-bold text-trading-primary text-xl">{formatCurrency(totalValue)}</span>
                 </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-400">Your balance:</span>
+                  <span className={`font-semibold ${hasSufficientBalance ? 'text-green-400' : 'text-red-400'}`}>
+                    {formatCurrency(walletBalance)}
+                  </span>
+                </div>
+                {!hasSufficientBalance && (
+                  <div className="text-red-400 text-xs flex items-center justify-between">
+                    <span>Insufficient balance</span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setDepositModalOpen(true)}
+                      className="text-xs h-6 px-2"
+                    >
+                      Deposit
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -207,15 +231,31 @@ export const PurchaseConfirmationModal: React.FC<PurchaseConfirmationModalProps>
           </Button>
           <Button
             onClick={handleConfirm}
-            disabled={!isValid || shares <= 0 || isProcessing || !buyWindowStatus?.isOpen}
+            disabled={!isValid || shares <= 0 || isProcessing || !buyWindowStatus?.isOpen || !hasSufficientBalance}
             className="flex-1 bg-gradient-success hover:bg-gradient-success/80 disabled:bg-gray-600 text-white font-semibold transition-all duration-200 disabled:hover:scale-100"
-            title={!buyWindowStatus?.isOpen ? 'Trading window is closed' : 'Confirm purchase'}
+            title={
+              !buyWindowStatus?.isOpen 
+                ? 'Trading window is closed' 
+                : !hasSufficientBalance 
+                ? 'Insufficient balance' 
+                : 'Confirm purchase'
+            }
           >
             {isProcessing ? 'Processing...' : 
-             !buyWindowStatus?.isOpen ? '🔒 Trading Closed' : 'Confirm Purchase'}
+             !buyWindowStatus?.isOpen ? '🔒 Trading Closed' : 
+             !hasSufficientBalance ? '💳 Insufficient Balance' :
+             'Confirm Purchase'}
           </Button>
         </DialogFooter>
       </DialogContent>
+      <DepositModal
+        isOpen={depositModalOpen}
+        onClose={() => setDepositModalOpen(false)}
+        onSuccess={() => {
+          refreshWalletBalance();
+          setDepositModalOpen(false);
+        }}
+      />
     </Dialog>
   );
 };

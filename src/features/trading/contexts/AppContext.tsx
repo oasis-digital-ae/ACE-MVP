@@ -348,7 +348,7 @@ const AppProviderInner: React.FC<{ children: React.ReactNode }> = ({ children })
       logger.debug('Refreshing data after purchase...');
       await loadData();
       logger.debug('Data refresh completed');
-
+      
       toast({
         title: "Purchase Successful",
         description: `Bought ${units} share(s) of ${team.name} for $${nav.toFixed(2)} per share`,

@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/shared/components/ui/button';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
+import { DepositModal } from '@/features/trading/components/DepositModal';
+import { formatCurrency } from '@/shared/lib/formatters';
 import { 
   Trophy, 
   Briefcase, 
@@ -11,7 +13,8 @@ import {
   Settings,
   LogOut,
   User,
-  Shield
+  Shield,
+  Wallet
 } from 'lucide-react';
 
 interface NavigationProps {
@@ -20,7 +23,8 @@ interface NavigationProps {
 }
 
 const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) => {
-  const { signOut, profile } = useAuth();
+  const { signOut, profile, walletBalance, refreshWalletBalance } = useAuth();
+  const [depositModalOpen, setDepositModalOpen] = useState(false);
   
   const pages = [
     { id: 'marketplace', label: 'Marketplace', icon: TrendingUp },
@@ -84,10 +88,26 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
           {/* User Menu */}
           <div className="flex items-center space-x-3">
             {profile && (
-              <div className="hidden sm:flex items-center space-x-2 text-gray-300">
-                <User className="w-4 h-4" />
-                <span className="text-sm font-medium">{profile.full_name}</span>
-              </div>
+              <>
+                <div className="hidden sm:flex items-center space-x-3 text-gray-300">
+                  <div className="flex items-center space-x-2 px-3 py-1.5 bg-gray-700/50 rounded-lg border border-gray-600">
+                    <Wallet className="w-4 h-4 text-trading-primary" />
+                    <span className="text-sm font-semibold">{formatCurrency(walletBalance)}</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <User className="w-4 h-4" />
+                    <span className="text-sm font-medium">{profile.full_name}</span>
+                  </div>
+                </div>
+                <Button
+                  onClick={() => setDepositModalOpen(true)}
+                  className="hidden sm:flex items-center space-x-2 bg-trading-primary hover:bg-trading-primary/80 text-white px-3 py-1.5"
+                  size="sm"
+                >
+                  <Wallet className="w-4 h-4" />
+                  <span>Deposit</span>
+                </Button>
+              </>
             )}
             <Button 
               variant="ghost" 
@@ -128,6 +148,14 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
           </div>
         </div>
       </div>
+      <DepositModal
+        isOpen={depositModalOpen}
+        onClose={() => setDepositModalOpen(false)}
+        onSuccess={() => {
+          refreshWalletBalance();
+          setDepositModalOpen(false);
+        }}
+      />
     </nav>
   );
 };

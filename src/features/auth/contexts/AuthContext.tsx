@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/shared/lib/supabase';
 import type { User } from '@supabase/supabase-js';
+import { walletService } from '@/shared/lib/services/wallet.service';
 
 interface UserProfile {
   id: string;
@@ -15,11 +16,13 @@ interface UserProfile {
 interface AuthContextType {
   user: User | null;
   profile: UserProfile | null;
+  walletBalance: number;
   loading: boolean;
   isAdmin: boolean;
   signUp: (email: string, password: string, userData: Omit<UserProfile, 'id' | 'email'>) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  refreshWalletBalance: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -35,6 +38,7 @@ export const useAuth = () => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [walletBalance, setWalletBalance] = useState<number>(0);
   const [loading, setLoading] = useState(true);
 
   const ensureProfile = async (authUser: User) => {
@@ -75,6 +79,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Ensure a profiles row exists to satisfy FKs
         ensureProfile(session.user);
         fetchProfile(session.user.id);
+      } else {
+        setWalletBalance(0);
       }
       setLoading(false);
     });
@@ -87,6 +93,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         fetchProfile(session.user.id);
       } else {
         setProfile(null);
+        setWalletBalance(0);
       }
       setLoading(false);
     });
@@ -104,9 +111,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) throw error;
       setProfile(data);
+      
+      // Fetch wallet balance
+      const balance = await walletService.getBalance(userId);
+      setWalletBalance(balance);
     } catch (error) {
       console.error('Error fetching profile:', error);
       setProfile(null);
+      setWalletBalance(0);
+    }
+  };
+
+  const refreshWalletBalance = async () => {
+    if (user) {
+      try {
+        const balance = await walletService.getBalance(user.id);
+        setWalletBalance(balance);
+      } catch (error) {
+        console.error('Error refreshing wallet balance:', error);
+      }
     }
   };
 
@@ -140,11 +163,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <AuthContext.Provider value={{
       user,
       profile,
+      walletBalance,
       loading,
       isAdmin: profile?.is_admin ?? false,
       signUp,
       signIn,
-      signOut
+      signOut,
+      refreshWalletBalance
     }}>
       {children}
     </AuthContext.Provider>
