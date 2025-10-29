@@ -149,11 +149,11 @@ const isProduction = viteIsProd || isHostedProd;
 // For netlify dev: Vite runs on 5173, Edge Functions on 8888
 // We need to use the direct Edge Function path when Vite is running
 const FOOTBALL_API_BASE = isProduction 
-  ? '/api/football-api-cache'  // Netlify Function (production)
+  ? '/.netlify/functions/football-api-cache'  // Use direct Functions path in production to avoid SPA redirects
   : isViteDev 
     ? 'http://localhost:8888/.netlify/functions/football-api-cache'  // Direct Function path for Vite dev
     : isNetlifyDev
-      ? '/api/football-api-cache'  // Netlify Function (local dev with netlify dev)
+      ? '/.netlify/functions/football-api-cache'  // Netlify Function (local dev with netlify dev)
       : 'https://api.football-data.org/v4'; // Direct API fallback
 
   // Debug logging removed for security
