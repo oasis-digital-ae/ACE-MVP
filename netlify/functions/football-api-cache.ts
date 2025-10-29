@@ -37,18 +37,31 @@ export const handler = async (event: any, context: any) => {
   }
 
   try {
-    const path = event.path;
+    // Extract path from different possible event formats (Netlify Edge vs regular function)
+    let path = event.path || event.rawPath;
+    
+    // If path is the full URL, extract just the pathname
+    if (path && path.startsWith('http')) {
+      try {
+        const url = new URL(path);
+        path = url.pathname;
+      } catch (e) {
+        console.warn('Could not parse URL:', path);
+      }
+    }
+    
+    // Remove any trailing slashes and remove leading /api/football-api-cache if present
+    path = path?.replace(/\/$/, '') || '';
+    if (path.startsWith('/api/football-api-cache')) {
+      path = path.replace('/api/football-api-cache', '');
+    }
+    
     const season = event.queryStringParameters?.season || '2024';
     
     console.log(`Function called with path: ${path}, season: ${season}`);
+    console.log(`Original event.path: ${event.path}`);
     console.log(`API Key present: ${!!API_KEY}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`Full event object:`, JSON.stringify({
-      path: event.path,
-      httpMethod: event.httpMethod,
-      queryStringParameters: event.queryStringParameters,
-      headers: event.headers
-    }, null, 2));
 
            // Generate cache key based on endpoint
            let cacheKey = '';

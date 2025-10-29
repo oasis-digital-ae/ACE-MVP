@@ -137,19 +137,23 @@ export interface TeamDetails extends FootballTeam {
   };
 }
 
-// API configuration - Detect environment properly for Netlify Edge Functions
-const isProduction = (import.meta as any).env?.VITE_APP_ENV === 'production';
+// API configuration - Detect environment properly for Netlify
+// Use Vite's PROD flag and common host checks
+const viteIsProd = Boolean((import.meta as any).env?.PROD);
 const isViteDev = window.location.hostname === 'localhost' && window.location.port === '5173';
 const isNetlifyDev = window.location.hostname === 'localhost' && window.location.port === '8888';
+const host = typeof window !== 'undefined' ? window.location.host : '';
+const isHostedProd = /netlify\.app$/.test(host) || /vercel\.app$/.test(host) || /\.(com|io|app|dev)$/.test(host);
+const isProduction = viteIsProd || isHostedProd;
 
 // For netlify dev: Vite runs on 5173, Edge Functions on 8888
 // We need to use the direct Edge Function path when Vite is running
 const FOOTBALL_API_BASE = isProduction 
-  ? '/api/football-api-cache'  // Netlify Edge Function (production)
+  ? '/api/football-api-cache'  // Netlify Function (production)
   : isViteDev 
-    ? 'http://localhost:8888/.netlify/functions/football-api-cache'  // Direct Edge Function path for Vite dev
+    ? 'http://localhost:8888/.netlify/functions/football-api-cache'  // Direct Function path for Vite dev
     : isNetlifyDev
-      ? '/api/football-api-cache'  // Netlify Edge Function (local dev with netlify dev)
+      ? '/api/football-api-cache'  // Netlify Function (local dev with netlify dev)
       : 'https://api.football-data.org/v4'; // Direct API fallback
 
   // Debug logging removed for security
