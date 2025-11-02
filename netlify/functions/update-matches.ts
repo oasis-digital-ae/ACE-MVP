@@ -1,9 +1,10 @@
-// Background function to update match data from Football API
-// Can run for up to 15 minutes
+// Scheduled background function to update match data from Football API
+// Runs every 5 minutes automatically via Netlify scheduled functions
 // Processes all fixtures in a single run
-// Trigger via cron job, webhook, or manual invocation
+// Maximum execution time: 15 minutes (Netlify background function limit)
 
 import type { HandlerEvent, HandlerResponse } from '@netlify/functions';
+import { schedule } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL!;
@@ -23,27 +24,40 @@ interface MatchData {
   };
 }
 
-export const handler = async (event: HandlerEvent): Promise<HandlerResponse> => {
+// Use schedule() wrapper to create a scheduled function
+// This will run every 5 minutes automatically
+export const handler = schedule('*/5 * * * *', async (event: HandlerEvent): Promise<HandlerResponse> => {
   console.log('🏈 Match update function started');
-
-  // For background functions, we need to return immediately
-  // and continue processing asynchronously
   const startTime = Date.now();
   
-  // Process in background and don't await it
-  processUpdate().catch(error => {
-    console.error('❌ Background processing error:', error);
-  });
-
-  // Return response immediately for background function
-  return {
-    statusCode: 202, // Accepted
-    body: JSON.stringify({
-      message: 'Match update started',
-      timestamp: new Date().toISOString(),
-    }),
-  };
-};
+  try {
+    // Await the processing to ensure it completes
+    const results = await processUpdate();
+    const duration = Date.now() - startTime;
+    
+    console.log(`✅ Match update completed in ${duration}ms:`, results);
+    
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        message: 'Match update completed',
+        results,
+        duration: `${duration}ms`,
+        timestamp: new Date().toISOString(),
+      }),
+    };
+  } catch (error) {
+    console.error('❌ Match update function error:', error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        error: 'Match update failed',
+        message: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString(),
+      }),
+    };
+  }
+});
 
 async function processUpdate() {
   const results = {
@@ -74,18 +88,12 @@ async function processUpdate() {
 
     if (fetchError) {
       console.error('❌ Error fetching fixtures:', fetchError);
-      return {
-        statusCode: 500,
-        body: JSON.stringify({ error: 'Failed to fetch fixtures', details: fetchError.message }),
-      };
+      throw new Error(`Failed to fetch fixtures: ${fetchError.message}`);
     }
 
     if (!fixtures || fixtures.length === 0) {
       console.log('✅ No fixtures need updating');
-      return {
-        statusCode: 200,
-        body: JSON.stringify({ message: 'No fixtures to update', results }),
-      };
+      return results;
     }
 
     console.log(`📊 Checking ${fixtures.length} fixtures...`);
@@ -200,18 +208,14 @@ async function processUpdate() {
 
     console.log(`✅ Match update complete: ${results.updated} updated, ${results.snapshots} snapshots, ${results.errors} errors`);
 
+    return results;
   } catch (error) {
     console.error('❌ Fatal error in match update function:', error);
     results.errors++;
+    throw error; // Re-throw to be caught by handler
   }
-
-  console.log(`✅ Background match update complete:`, results);
-  return results;
 }
 
-// Export schedule configuration for Netlify to pick up
-// This makes it a scheduled background function
-export const config = {
-  schedule: '*/30 * * * *', // Every 30 minutes
-};
+// Note: Schedule is configured using schedule() wrapper above
+// and also in netlify.toml for redundancy
 

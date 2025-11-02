@@ -22,3 +22,8 @@
   targetPort = 5173
   framework = "vite"
   autoLaunch = true
+
+# Scheduled function configuration
+# This ensures Netlify recognizes the scheduled function
+[functions."update-matches"]
+  schedule = "*/5 * * * *"  # Every 5 minutes
