@@ -13,6 +13,8 @@ import ErrorBoundary from '@/shared/components/ErrorBoundary';
 import { teamStateSnapshotService } from '@/shared/lib/team-state-snapshots';
 import { buyWindowService } from '@/shared/lib/buy-window.service';
 import { matchSchedulerService } from '@/shared/lib/services/match-scheduler.service';
+import { realtimeService } from '@/shared/lib/services/realtime.service';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 
 interface AppContextType {
   sidebarOpen: boolean;
@@ -87,16 +89,163 @@ const AppProviderInner: React.FC<{ children: React.ReactNode }> = ({ children })
   const [liveMatches, setLiveMatches] = useState<FootballMatch[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Poll portfolio and market data periodically (realtime not available)
+  // Set up data refresh mechanism (realtime subscriptions with polling fallback)
   useEffect(() => {
     if (!user) return;
 
-    // Refresh data periodically to catch updates
-    const interval = setInterval(() => {
-      loadData();
-    }, 10000); // Poll every 10 seconds
+    let channels: RealtimeChannel[] = [];
+    let pollingInterval: NodeJS.Timeout | null = null;
+    let isRealtimeActive = false;
 
-    return () => clearInterval(interval);
+    // Try to set up realtime subscriptions
+    const setupRealtime = () => {
+      try {
+        // Subscribe to team market cap updates (updates clubs/portfolio prices)
+        const marketChannel = realtimeService.subscribeToMarketUpdates((updatedTeam) => {
+          logger.debug('Market update received:', updatedTeam.name);
+          isRealtimeActive = true;
+          
+          // Update clubs with new market cap
+          setClubs(prevClubs => {
+            const updatedClubs = prevClubs.map(club => {
+              if (club.id === updatedTeam.id.toString()) {
+                const newPrice = updatedTeam.shares_outstanding > 0 
+                  ? updatedTeam.market_cap / updatedTeam.shares_outstanding 
+                  : club.currentValue;
+                return {
+                  ...club,
+                  currentValue: newPrice,
+                  marketCap: updatedTeam.market_cap
+                };
+              }
+              return club;
+            });
+            return updatedClubs;
+          });
+
+          // Update portfolio with new prices
+          setPortfolio(prevPortfolio => {
+            return prevPortfolio.map(item => {
+              if (item.clubId === updatedTeam.id.toString()) {
+                const newPrice = updatedTeam.shares_outstanding > 0 
+                  ? updatedTeam.market_cap / updatedTeam.shares_outstanding 
+                  : item.currentPrice;
+                return {
+                  ...item,
+                  currentPrice: newPrice,
+                  totalValue: item.units * newPrice,
+                  profitLoss: (newPrice - item.purchasePrice) * item.units
+                };
+              }
+              return item;
+            });
+          });
+        });
+        channels.push(marketChannel);
+
+        // Subscribe to user's orders (updates transactions when purchases are made)
+        const ordersChannel = supabase
+          .channel(`user-orders-${user.id}`)
+          .on(
+            'postgres_changes',
+            { 
+              event: 'INSERT', 
+              schema: 'public', 
+              table: 'orders', 
+              filter: `user_id=eq.${user.id}` 
+            },
+            async (payload) => {
+              logger.debug('New order received for user:', payload.new);
+              isRealtimeActive = true;
+              const newOrder = payload.new as any;
+              
+              // Reload transactions to include the new order
+              if (newOrder.status === 'FILLED' && newOrder.order_type === 'BUY') {
+                await loadData();
+              }
+            }
+          )
+          .subscribe();
+        channels.push(ordersChannel);
+
+        // Subscribe to user's positions (updates portfolio when positions change)
+        const positionsChannel = realtimeService.subscribeToPortfolio(user.id, async () => {
+          logger.debug('Portfolio position updated for user');
+          isRealtimeActive = true;
+          // Reload portfolio data
+          await loadData();
+        });
+        channels.push(positionsChannel);
+
+        // Subscribe to fixture/match updates (updates matches when results are applied)
+        const fixturesChannel = realtimeService.subscribeToMatchResults(async (fixture) => {
+          logger.debug('Match result applied:', fixture.id);
+          isRealtimeActive = true;
+          // Reload data to get updated market caps from match results
+          await loadData();
+        });
+        channels.push(fixturesChannel);
+
+        // Check if subscriptions are actually working after a delay
+        setTimeout(() => {
+          if (!isRealtimeActive && channels.length > 0) {
+            logger.warn('Realtime subscriptions may not be active (replication not enabled). Falling back to polling.');
+            // Fallback to polling if realtime didn't work
+            startPolling();
+          }
+        }, 5000); // Wait 5 seconds to see if we get any realtime updates
+
+      } catch (error) {
+        logger.warn('Failed to set up realtime subscriptions:', error);
+        logger.info('Falling back to polling mode');
+        startPolling();
+      }
+    };
+
+    // Fallback polling function (less frequent than before)
+    const startPolling = () => {
+      // Clear any existing polling
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
+
+      // Poll every 30 seconds (less frequent than before since it's a fallback)
+      pollingInterval = setInterval(() => {
+        loadData();
+      }, 30000); // 30 seconds
+
+      logger.info('Started polling mode (30s interval)');
+    };
+
+    // Initial load
+    loadData();
+
+    // Try to set up realtime first
+    setupRealtime();
+
+    // If realtime isn't available, we'll fall back to polling after timeout
+    // Also start polling as a backup (in case realtime works but misses some updates)
+    // Use a longer interval for backup polling
+    const backupPolling = setInterval(() => {
+      loadData();
+    }, 60000); // Backup polling every 60 seconds
+
+    // Cleanup
+    return () => {
+      channels.forEach(channel => {
+        if (channel) {
+          try {
+            realtimeService.unsubscribe(channel);
+          } catch (error) {
+            supabase.removeChannel(channel);
+          }
+        }
+      });
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
+      clearInterval(backupPolling);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 

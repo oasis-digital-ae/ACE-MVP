@@ -70,6 +70,35 @@ export const realtimeService = {
   },
 
   /**
+   * Subscribe to wallet balance changes for a specific user
+   * Real-time updates when wallet balance changes (deposits, purchases, etc.)
+   */
+  subscribeToWalletBalance(userId: string, callback: (balance: number) => void): RealtimeChannel {
+    const channel = supabase
+      .channel(`wallet-${userId}`)
+      .on(
+        'postgres_changes',
+        { 
+          event: 'UPDATE', 
+          schema: 'public', 
+          table: 'profiles', 
+          filter: `id=eq.${userId}` 
+        },
+        (payload) => {
+          logger.debug('Wallet balance updated:', payload.new);
+          const newBalance = (payload.new as any)?.wallet_balance;
+          if (newBalance !== undefined && newBalance !== null) {
+            callback(Number(newBalance));
+          }
+        }
+      )
+      .subscribe();
+
+    logger.info('Subscribed to wallet balance updates for user:', userId);
+    return channel;
+  },
+
+  /**
    * Subscribe to match results
    * Triggers when match results are processed and applied
    */

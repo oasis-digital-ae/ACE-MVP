@@ -20,12 +20,7 @@ const SeasonSimulation: React.FC = () => {
     const [nextGame, setNextGame] = useState<any>(null);
     const [teams, setTeams] = useState<any[]>([]);
 
-    // Load available games on component mount
-    useEffect(() => {
-        loadAvailableGames();
-    }, []);
-
-    const loadAvailableGames = async () => {
+    const loadAvailableGames = React.useCallback(async () => {
         try {
             const [fixtures, teamsData] = await Promise.all([
                 fixturesService.getAll(),
@@ -65,7 +60,12 @@ const SeasonSimulation: React.FC = () => {
         } catch (error) {
             console.error('Error loading available games:', error);
         }
-    };
+    }, []); // Empty dependency array - only create function once
+
+    // Load available games on component mount only
+    useEffect(() => {
+        loadAvailableGames();
+    }, [loadAvailableGames]);
 
     const simulateSingleGame = async (gameId?: string) => {
         if (!user) {

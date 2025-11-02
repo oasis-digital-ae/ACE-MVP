@@ -151,43 +151,75 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
 
     setLoading(prev => ({ ...prev, matches: true }));
     try {
-      const [positionResult, matchData] = await Promise.all([
+      const [positionResult, ledgerData] = await Promise.all([
         positionsService.getByUserIdAndTeamId(userId, teamId),
         supabase
           .from('total_ledger')
           .select('*')
           .eq('team_id', teamId)
-          .in('ledger_type', ['match_win', 'match_loss', 'match_draw'])
+          .in('ledger_type', ['match_win', 'match_loss', 'match_draw', 'share_purchase'])
           .order('event_date', { ascending: false })
       ]);
 
-      if (matchData.error) {
-        if (process.env.NODE_ENV === 'development') console.error('Failed to get match data:', matchData.error);
+      if (ledgerData.error) {
+        if (process.env.NODE_ENV === 'development') console.error('Failed to get ledger data:', ledgerData.error);
         setMatchHistory([]);
         return;
       }
 
-      const processedEvents = (matchData.data || []).map(event => {
-        const matchResult = event.ledger_type === 'match_win' ? 'win' : 
-                           event.ledger_type === 'match_loss' ? 'loss' : 'draw';
-        const description = event.event_description || 'Match Result';
+      const processedEvents = (ledgerData.data || []).map(event => {
+        const isPurchase = event.ledger_type === 'share_purchase';
+        
+        if (isPurchase) {
+          // Process purchase events
+          const description = event.event_description || 'Share purchase';
+          const priceImpact = parseFloat(event.price_impact?.toString() || '0');
+          const priceImpactPercent = event.market_cap_before > 0 
+            ? ((priceImpact / parseFloat(event.market_cap_before.toString())) * 100)
+            : 0;
 
-        return {
-          date: event.event_date,
-          description,
-          marketCapBefore: event.market_cap_before,
-          marketCapAfter: event.market_cap_after,
-          sharePriceBefore: event.share_price_before,
-          sharePriceAfter: event.share_price_after,
-          priceImpact: event.market_cap_after - event.market_cap_before,
-          priceImpactPercent: event.market_cap_before > 0 
-            ? ((event.market_cap_after - event.market_cap_before) / event.market_cap_before) * 100 
-            : 0,
-          matchResult,
-          isMatch: true,
-          isPurchase: false
-        };
+          return {
+            date: event.event_date,
+            description,
+            marketCapBefore: parseFloat(event.market_cap_before?.toString() || '0'),
+            marketCapAfter: parseFloat(event.market_cap_after?.toString() || '0'),
+            sharePriceBefore: parseFloat(event.share_price_before?.toString() || '0'),
+            sharePriceAfter: parseFloat(event.share_price_after?.toString() || '0'),
+            priceImpact,
+            priceImpactPercent,
+            tradeAmount: priceImpact,
+            matchResult: null,
+            isMatch: false,
+            isPurchase: true
+          };
+        } else {
+          // Process match events
+          const matchResult = event.ledger_type === 'match_win' ? 'win' : 
+                             event.ledger_type === 'match_loss' ? 'loss' : 'draw';
+          const description = event.event_description || 'Match Result';
+          const priceImpact = parseFloat(event.market_cap_after?.toString() || '0') - parseFloat(event.market_cap_before?.toString() || '0');
+          const priceImpactPercent = event.market_cap_before > 0 
+            ? ((priceImpact / parseFloat(event.market_cap_before.toString())) * 100)
+            : 0;
+
+          return {
+            date: event.event_date,
+            description,
+            marketCapBefore: parseFloat(event.market_cap_before?.toString() || '0'),
+            marketCapAfter: parseFloat(event.market_cap_after?.toString() || '0'),
+            sharePriceBefore: parseFloat(event.share_price_before?.toString() || '0'),
+            sharePriceAfter: parseFloat(event.share_price_after?.toString() || '0'),
+            priceImpact,
+            priceImpactPercent,
+            matchResult,
+            isMatch: true,
+            isPurchase: false
+          };
+        }
       });
+
+      // Sort by date descending (most recent first)
+      processedEvents.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
       setUserPosition(positionResult);
       setMatchHistory(processedEvents);
@@ -382,38 +414,29 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
                                 </div>
                               </div>
                               
-                              {event.isPurchase ? (
-                                <div className="text-sm">
-                                  <span className="text-gray-600 dark:text-gray-400">Cash Added:</span>
-                                  <span className="font-medium text-blue-600 ml-2">
-                                    {formatCurrency(event.tradeAmount)}
-                                  </span>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
+                                <div>
+                                  <span className="text-gray-600 dark:text-gray-400">Market Cap Impact:</span>
+                                  <div className="font-medium">
+                                    {formatCurrency(event.marketCapBefore)} → {formatCurrency(event.marketCapAfter)}
+                                    <span className={`ml-2 ${event.priceImpact >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                      ({event.priceImpact >= 0 ? '+' : ''}{formatCurrency(event.priceImpact)})
+                                    </span>
+                                  </div>
                                 </div>
-                              ) : (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
-                                  <div>
-                                    <span className="text-gray-600 dark:text-gray-400">Market Cap Impact:</span>
-                                    <div className="font-medium">
-                                      {formatCurrency(event.marketCapBefore)} → {formatCurrency(event.marketCapAfter)}
-                                      <span className={`ml-2 ${event.priceImpactPercent > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                        ({event.priceImpactPercent > 0 ? '+' : ''}{formatCurrency(event.marketCapAfter - event.marketCapBefore)})
+                                
+                                <div>
+                                  <span className="text-gray-600 dark:text-gray-400">Share Price:</span>
+                                  <div className="font-medium">
+                                    ${event.sharePriceBefore.toFixed(1)} → ${event.sharePriceAfter.toFixed(1)}
+                                    {event.priceImpactPercent !== 0 && (
+                                      <span className={`ml-2 ${event.priceImpactPercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        {event.priceImpactPercent >= 0 ? '+' : ''}{event.priceImpactPercent.toFixed(1)}%
                                       </span>
-                                    </div>
-                                  </div>
-                                  
-                                  <div>
-                                    <span className="text-gray-600 dark:text-gray-400">Share Price:</span>
-                                    <div className="font-medium">
-                                      ${event.sharePriceBefore.toFixed(1)} → ${event.sharePriceAfter.toFixed(1)}
-                                      {event.priceImpactPercent !== 0 && (
-                                        <span className={`ml-2 ${event.priceImpactPercent > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                          {event.priceImpactPercent > 0 ? '+' : ''}{event.priceImpactPercent.toFixed(1)}%
-                                        </span>
-                                      )}
-                                    </div>
+                                    )}
                                   </div>
                                 </div>
-                              )}
+                              </div>
 
                             </div>
                           ))}

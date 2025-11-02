@@ -13,10 +13,9 @@ import type { DatabaseFixture } from '@/shared/lib/database';
 import { FixtureSync } from './FixtureSync';
 import { TeamSync } from './TeamSync';
 import { useToast } from '@/shared/hooks/use-toast';
-import { ChevronDown, ChevronUp, Users } from 'lucide-react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useRealtimeMarket } from '@/shared/hooks/useRealtimeMarket';
 import { useRealtimeOrders } from '@/shared/hooks/useRealtimeOrders';
-import { useRealtimePresence } from '@/shared/hooks/useRealtimePresence';
 import BuyWindowIndicator from '@/shared/components/BuyWindowIndicator';
 import { buyWindowService } from '@/shared/lib/buy-window.service';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
@@ -40,7 +39,6 @@ export const ClubValuesPage: React.FC = () => {
   // Realtime subscriptions (for toast notifications)
   const { lastUpdate } = useRealtimeMarket();
   const { recentOrders } = useRealtimeOrders();
-  const { activeUsers, isConnected: presenceConnected } = useRealtimePresence('marketplace');
 
   // Load fixtures on component mount and when clubs change
   useEffect(() => {
@@ -92,29 +90,35 @@ export const ClubValuesPage: React.FC = () => {
     };
   }, []);
 
-  // Fetch buy window statuses for all teams
+  // Calculate buy window statuses instantly from fixtures data (no async needed!)
   useEffect(() => {
-    const fetchBuyWindowStatuses = async () => {
-      const statuses = new Map();
-      for (const club of clubs) { // Check all teams
-        try {
-          const status = await buyWindowService.getBuyWindowDisplayInfo(parseInt(club.id));
-          statuses.set(club.id, status);
-        } catch (error) {
-          console.error(`Error fetching buy window status for team ${club.id}:`, error);
-        }
+    const calculateBuyWindowStatuses = () => {
+      if (clubs.length === 0 || fixtures.length === 0) {
+        // If fixtures aren't loaded yet, calculate will default to open
+        const statuses = new Map();
+        clubs.forEach(club => {
+          statuses.set(club.id, { isOpen: true, message: 'Trading is open' });
+        });
+        setBuyWindowStatuses(statuses);
+        return;
       }
+
+      // Calculate statuses synchronously from fixtures - INSTANT!
+      const statuses = new Map();
+      clubs.forEach(club => {
+        const status = buyWindowService.getBuyWindowDisplayInfoSync(parseInt(club.id), fixtures);
+        statuses.set(club.id, status);
+      });
       setBuyWindowStatuses(statuses);
     };
 
-    if (clubs.length > 0) {
-      fetchBuyWindowStatuses();
-      
-      // Refresh every 30 seconds
-      const interval = setInterval(fetchBuyWindowStatuses, 30000);
-      return () => clearInterval(interval);
-    }
-  }, [clubs]);
+    // Calculate immediately when clubs or fixtures change
+    calculateBuyWindowStatuses();
+    
+    // Refresh every 30 seconds (recalculate from current fixtures)
+    const interval = setInterval(calculateBuyWindowStatuses, 30000);
+    return () => clearInterval(interval);
+  }, [clubs, fixtures]);
 
   // Memoized function to count games played for a club using fixture data
   // Counts all completed fixtures from API data (not just simulated games)
@@ -402,12 +406,12 @@ export const ClubValuesPage: React.FC = () => {
                             <Button
                               onClick={() => handlePurchaseClick(club.id)}
                               size="sm"
-                              disabled={isPurchasing || !buyWindowStatuses.get(club.id)?.isOpen}
+                              disabled={isPurchasing || (buyWindowStatuses.has(club.id) && !buyWindowStatuses.get(club.id)?.isOpen)}
                               className="bg-gradient-success hover:bg-gradient-success/80 text-white font-semibold px-4 py-2 rounded-lg transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-                              title={!buyWindowStatuses.get(club.id)?.isOpen ? 'Trading window is closed' : 'Buy shares'}
+                              title={(buyWindowStatuses.has(club.id) && !buyWindowStatuses.get(club.id)?.isOpen) ? 'Trading window is closed' : 'Buy shares'}
                             >
                               {isPurchasing && purchasingClubId === club.id ? 'Processing...' : 
-                               !buyWindowStatuses.get(club.id)?.isOpen ? '🔒 Closed' : 'Buy'}
+                               (buyWindowStatuses.has(club.id) && !buyWindowStatuses.get(club.id)?.isOpen) ? '🔒 Closed' : 'Buy'}
                             </Button>
                             <BuyWindowIndicator teamId={parseInt(club.id)} compact={true} />
                           </div>
@@ -489,12 +493,12 @@ export const ClubValuesPage: React.FC = () => {
                       <Button
                         onClick={() => handlePurchaseClick(club.id)}
                         size="sm"
-                        disabled={isPurchasing || !buyWindowStatuses.get(club.id)?.isOpen}
+                        disabled={isPurchasing || (buyWindowStatuses.has(club.id) && !buyWindowStatuses.get(club.id)?.isOpen)}
                         className="bg-gradient-success hover:bg-gradient-success/80 text-white font-semibold px-3 py-1 text-xs rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
-                        title={!buyWindowStatuses.get(club.id)?.isOpen ? 'Trading window is closed' : 'Buy shares'}
+                        title={(buyWindowStatuses.has(club.id) && !buyWindowStatuses.get(club.id)?.isOpen) ? 'Trading window is closed' : 'Buy shares'}
                       >
                         {isPurchasing && purchasingClubId === club.id ? 'Processing...' : 
-                         !buyWindowStatuses.get(club.id)?.isOpen ? '🔒 Closed' : 'Buy'}
+                         (buyWindowStatuses.has(club.id) && !buyWindowStatuses.get(club.id)?.isOpen) ? '🔒 Closed' : 'Buy'}
                       </Button>
                       <BuyWindowIndicator teamId={parseInt(club.id)} compact={true} showCountdown={false} />
                     </div>
@@ -577,20 +581,6 @@ export const ClubValuesPage: React.FC = () => {
         isProcessing={isPurchasing}
       />
 
-      {/* Active Users Indicator - Moved to avoid nav overlap */}
-      <div className="fixed top-20 right-4 z-40">
-        <Card className="bg-gray-900/95 backdrop-blur-sm border-gray-700">
-          <CardContent className="p-3">
-            <div className="flex items-center gap-2 text-sm">
-              <Users className={`h-4 w-4 ${presenceConnected ? 'text-blue-500' : 'text-gray-500'}`} />
-              <span className="text-white">
-                {activeUsers} active
-              </span>
-              <div className={`w-2 h-2 rounded-full ${presenceConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`} />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
 
     </div>
   );

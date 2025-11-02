@@ -1,7 +1,10 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/shared/lib/supabase';
 import type { User } from '@supabase/supabase-js';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { walletService } from '@/shared/lib/services/wallet.service';
+import { realtimeService } from '@/shared/lib/services/realtime.service';
+import { logger } from '@/shared/lib/logger';
 
 interface UserProfile {
   id: string;
@@ -101,32 +104,61 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => subscription.unsubscribe();
   }, []);
 
-  // Poll wallet balance periodically (realtime not available)
+  // Set up wallet balance updates (realtime with polling fallback)
   useEffect(() => {
     if (!user) return;
 
-    // Refresh balance immediately
+    // Refresh balance immediately on login
     refreshWalletBalance();
 
-    // Then poll every 5 seconds for updates (lightweight polling)
-    const interval = setInterval(() => {
-      refreshWalletBalance();
-    }, 5000);
+    let channel: RealtimeChannel | null = null;
+    let pollingInterval: NodeJS.Timeout | null = null;
+    let isRealtimeActive = false;
 
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+    // Try to set up realtime subscription
+    try {
+      channel = realtimeService.subscribeToWalletBalance(user.id, (newBalance) => {
+        isRealtimeActive = true;
+        setWalletBalance(newBalance);
+      });
 
-  // Listen for manual wallet balance refresh events (e.g., after purchase/deposit)
-  useEffect(() => {
+      // Check if realtime is working after a delay
+      setTimeout(() => {
+        if (!isRealtimeActive && channel) {
+          logger.warn('Wallet balance realtime not active (replication not enabled). Using polling fallback.');
+          // Fallback to polling
+          pollingInterval = setInterval(() => {
+            refreshWalletBalance();
+          }, 30000); // Poll every 30 seconds
+        }
+      }, 5000);
+    } catch (error) {
+      logger.warn('Failed to set up wallet balance realtime subscription:', error);
+      // Start polling immediately if realtime fails
+      pollingInterval = setInterval(() => {
+        refreshWalletBalance();
+      }, 30000); // Poll every 30 seconds
+    }
+
+    // Also refresh after key events (purchases, deposits) via event listener
     const handleWalletChange = () => {
       refreshWalletBalance();
     };
-
     window.addEventListener('wallet-balance-changed', handleWalletChange);
-    return () => window.removeEventListener('wallet-balance-changed', handleWalletChange);
+
+    // Cleanup
+    return () => {
+      if (channel) {
+        realtimeService.unsubscribe(channel);
+      }
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
+      window.removeEventListener('wallet-balance-changed', handleWalletChange);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
 
   const fetchProfile = async (userId: string) => {
     try {
@@ -160,15 +192,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Listen for manual wallet balance refresh events
-  useEffect(() => {
-    const handleWalletChange = () => {
-      refreshWalletBalance();
-    };
-
-    window.addEventListener('wallet-balance-changed', handleWalletChange);
-    return () => window.removeEventListener('wallet-balance-changed', handleWalletChange);
-  }, [user]);
 
   const signUp = async (email: string, password: string, userData: Omit<UserProfile, 'id' | 'email'>) => {
     const { data, error } = await supabase.auth.signUp({

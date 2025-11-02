@@ -17,23 +17,52 @@ export const BuyWindowIndicator: React.FC<BuyWindowIndicatorProps> = ({
   const [timeLeft, setTimeLeft] = useState<string>('');
 
   useEffect(() => {
+    let isMounted = true;
+    let retryCount = 0;
+    const maxRetries = 3;
+
     const fetchStatus = async () => {
       try {
         const result = await buyWindowService.getBuyWindowDisplayInfo(teamId);
-        setStatus(result);
+        if (isMounted) {
+          setStatus(result);
+          setLoading(false);
+          retryCount = 0; // Reset retry count on success
+        }
       } catch (error) {
         console.error('Error fetching buy window status:', error);
-        setStatus({ isOpen: false, message: 'Unable to check trading status' });
-      } finally {
-        setLoading(false);
+        // Only show error state after multiple retries
+        if (retryCount < maxRetries) {
+          retryCount++;
+          // Retry after a short delay
+          setTimeout(() => {
+            if (isMounted) {
+              fetchStatus();
+            }
+          }, 1000 * retryCount); // Exponential backoff: 1s, 2s, 3s
+        } else {
+          // After max retries, default to open (don't block trading)
+          if (isMounted) {
+            setStatus({ isOpen: true, message: 'Trading is open' });
+            setLoading(false);
+          }
+        }
       }
     };
 
     fetchStatus();
     
     // Refresh every 30 seconds
-    const interval = setInterval(fetchStatus, 30000);
-    return () => clearInterval(interval);
+    const interval = setInterval(() => {
+      if (isMounted) {
+        fetchStatus();
+      }
+    }, 30000);
+    
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, [teamId]);
 
   useEffect(() => {
