@@ -414,7 +414,7 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
                                 </div>
                               </div>
                               
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
+                              <div className={`grid gap-3 sm:gap-4 text-sm ${event.isPurchase ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
                                 <div>
                                   <span className="text-gray-600 dark:text-gray-400">Market Cap Impact:</span>
                                   <div className="font-medium">
@@ -425,17 +425,19 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
                                   </div>
                                 </div>
                                 
-                                <div>
-                                  <span className="text-gray-600 dark:text-gray-400">Share Price:</span>
-                                  <div className="font-medium">
-                                    ${event.sharePriceBefore.toFixed(1)} → ${event.sharePriceAfter.toFixed(1)}
-                                    {event.priceImpactPercent !== 0 && (
-                                      <span className={`ml-2 ${event.priceImpactPercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                        {event.priceImpactPercent >= 0 ? '+' : ''}{event.priceImpactPercent.toFixed(1)}%
-                                      </span>
-                                    )}
+                                {!event.isPurchase && (
+                                  <div>
+                                    <span className="text-gray-600 dark:text-gray-400">Share Price:</span>
+                                    <div className="font-medium">
+                                      ${event.sharePriceBefore.toFixed(1)} → ${event.sharePriceAfter.toFixed(1)}
+                                      {event.priceImpactPercent !== 0 && (
+                                        <span className={`ml-2 ${event.priceImpactPercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                          {event.priceImpactPercent >= 0 ? '+' : ''}{event.priceImpactPercent.toFixed(1)}%
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
-                                </div>
+                                )}
                               </div>
 
                             </div>
