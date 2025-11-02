@@ -193,9 +193,9 @@ async function processUpdate() {
 
         results.checked++;
 
-        const kickoffTime = new Date(fixture.kickoff_at);
-        const matchEndTime = new Date(kickoffTime.getTime() + 120 * 60 * 1000);
-        const buyCloseTime = new Date(kickoffTime.getTime() - 30 * 60 * 1000);
+                const kickoffTime = new Date(fixture.kickoff_at);
+                const matchEndTime = new Date(kickoffTime.getTime() + 90 * 60 * 1000); // 90 minutes after kickoff
+                const buyCloseTime = new Date(kickoffTime.getTime() - 30 * 60 * 1000);
         const timeToBuyClose = buyCloseTime.getTime() - now.getTime();
 
         // Capture snapshots 30 min before kickoff

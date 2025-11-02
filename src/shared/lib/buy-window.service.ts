@@ -3,6 +3,7 @@
 
 import { supabase } from './supabase';
 import { logger } from './logger';
+import { footballApiService } from './football-api';
 
 export interface BuyWindowStatus {
   isOpen: boolean;
@@ -14,22 +15,51 @@ export interface BuyWindowStatus {
 export const buyWindowService = {
   /**
    * Calculate buy window status synchronously from fixtures data (instant, no DB call)
+   * Trusts fixture status 'closed' which is updated from API and handles extra time correctly
    */
   calculateBuyWindowStatus(teamId: number, fixtures: any[]): BuyWindowStatus {
     const now = new Date();
     
     try {
       // FIRST: Check if there's a match currently in progress (LIVE/IN_PLAY)
-      const liveMatch = fixtures
-        .filter(f => (f.home_team_id === teamId || f.away_team_id === teamId) && f.status === 'closed')
+      // Use result field to determine if match is finished - if result is NOT 'pending', match is over
+      const teamFixtures = fixtures.filter(f => f.home_team_id === teamId || f.away_team_id === teamId);
+      
+      // Find matches that might be live (status 'closed' or 'scheduled' with kickoff passed)
+      // But exclude matches with a result (home_win, away_win, draw) - those are finished
+      const potentiallyLiveMatch = teamFixtures
+        .filter(f => {
+          const kickoff = new Date(f.kickoff_at);
+          const isPastKickoff = now >= kickoff;
+          
+          // Match is potentially live if:
+          // 1. Result is 'pending' (match not finished yet)
+          // 2. AND status is 'closed' (confirmed live from API) OR 'scheduled' with kickoff passed
+          // 3. AND status is not 'applied' or 'postponed'
+          const hasResult = f.result && f.result !== 'pending';
+          return !hasResult && // Match doesn't have a final result yet
+                 (f.status === 'closed' || (f.status === 'scheduled' && isPastKickoff)) && 
+                 f.status !== 'applied' && 
+                 f.status !== 'postponed';
+        })
         .sort((a, b) => new Date(b.kickoff_at).getTime() - new Date(a.kickoff_at).getTime())[0];
 
-      if (liveMatch) {
-        const matchKickoff = new Date(liveMatch.kickoff_at);
-        const matchEnd = new Date(matchKickoff.getTime() + 2 * 60 * 60 * 1000); // 2 hours after kickoff
+      if (potentiallyLiveMatch) {
+        const matchKickoff = new Date(potentiallyLiveMatch.kickoff_at);
         
-        // Only close if match is actually in progress (within 2 hours of kickoff)
-        if (now < matchEnd && now >= matchKickoff) {
+        // If status is 'closed' and result is 'pending', match is definitely live (from API, handles extra time)
+        if (potentiallyLiveMatch.status === 'closed' && (!potentiallyLiveMatch.result || potentiallyLiveMatch.result === 'pending')) {
+          return {
+            isOpen: false,
+            nextCloseTime: undefined,
+            nextKickoffTime: matchKickoff,
+            reason: `Trading closed. Match in progress.`
+          };
+        }
+        
+        // If status is 'scheduled' but kickoff passed and no result, close temporarily (until status updates)
+        // This handles the case where status hasn't been updated from API yet
+        if (potentiallyLiveMatch.status === 'scheduled' && now >= matchKickoff && (!potentiallyLiveMatch.result || potentiallyLiveMatch.result === 'pending')) {
           return {
             isOpen: false,
             nextCloseTime: undefined,
@@ -39,13 +69,19 @@ export const buyWindowService = {
         }
       }
 
-      // SECOND: Check for upcoming fixtures for this team
+      // SECOND: Check for upcoming fixtures for this team (exclude matches currently in progress)
       const upcomingFixtures = fixtures
-        .filter(f => 
-          (f.home_team_id === teamId || f.away_team_id === teamId) &&
-          new Date(f.kickoff_at) >= now &&
-          f.status === 'scheduled'
-        )
+        .filter(f => {
+          const kickoff = new Date(f.kickoff_at);
+          
+          // Only include fixtures that are:
+          // - For this team
+          // - In the future (kickoff hasn't passed)
+          // - Scheduled (not closed/live, not already applied/postponed)
+          return (f.home_team_id === teamId || f.away_team_id === teamId) &&
+                 kickoff > now && // Future matches only
+                 f.status === 'scheduled'; // Not live, not finished
+        })
         .sort((a, b) => new Date(a.kickoff_at).getTime() - new Date(b.kickoff_at).getTime());
 
       if (!upcomingFixtures || upcomingFixtures.length === 0) {
@@ -92,11 +128,13 @@ export const buyWindowService = {
     
     try {
       // FIRST: Check if there's a match currently in progress (LIVE/IN_PLAY)
+      // Only check matches with status 'closed' AND result 'pending' (not finished yet)
       const { data: liveMatch, error: liveError } = await supabase
         .from('fixtures')
         .select('kickoff_at, status, result')
         .or(`home_team_id.eq.${teamId},away_team_id.eq.${teamId}`)
         .eq('status', 'closed') // 'closed' = match is LIVE/IN_PLAY
+        .or('result.is.null,result.eq.pending') // Only matches without final result
         .order('kickoff_at', { ascending: false })
         .limit(1);
 
@@ -104,13 +142,23 @@ export const buyWindowService = {
         logger.warn('Error checking live matches for buy window:', liveError);
       }
       
-      // If there's a match currently in progress, trading is CLOSED
-      if (liveMatch && liveMatch.length > 0 && liveMatch[0].status === 'closed') {
-        const matchKickoff = new Date(liveMatch[0].kickoff_at);
-        const matchEnd = new Date(matchKickoff.getTime() + 2 * 60 * 60 * 1000); // 2 hours after kickoff (typical match duration)
+      // If there's a match currently in progress, check result field to determine if match is finished
+      // If result is 'home_win', 'away_win', or 'draw', match is finished - trading should be OPEN
+      // If result is 'pending' or null, match is still in progress - trading should be CLOSED
+      if (liveMatch && liveMatch.length > 0) {
+        const match = liveMatch[0];
+        const matchKickoff = new Date(match.kickoff_at);
         
-        // Only close if match is actually in progress (within 2 hours of kickoff)
-        if (now < matchEnd && now >= matchKickoff) {
+        // Check if match has a final result (not 'pending')
+        const hasFinalResult = match.result && 
+                              match.result !== 'pending' && 
+                              (match.result === 'home_win' || match.result === 'away_win' || match.result === 'draw');
+        
+        // If match has a final result, it's finished - trading should be OPEN
+        if (hasFinalResult) {
+          // Match is finished, continue to check upcoming fixtures
+        } else if (match.status === 'closed') {
+          // Status is 'closed' and result is still 'pending' - match is live
           return {
             isOpen: false,
             nextCloseTime: undefined,
@@ -118,8 +166,62 @@ export const buyWindowService = {
             reason: `Trading closed. Match in progress.`
           };
         }
-        // If the match should have ended but status is still 'closed', it's stale data
-        // Don't close trading, let it continue with the upcoming match check
+      }
+      
+      // Also check for matches that might be live but status hasn't updated yet
+      // Check fixtures where kickoff has passed but status is still 'scheduled' and result is 'pending'
+      const { data: potentiallyLiveMatches } = await supabase
+        .from('fixtures')
+        .select('kickoff_at, status, result, external_id')
+        .or(`home_team_id.eq.${teamId},away_team_id.eq.${teamId}`)
+        .eq('status', 'scheduled')
+        .lte('kickoff_at', now.toISOString())
+        .order('kickoff_at', { ascending: false })
+        .limit(1);
+      
+      if (potentiallyLiveMatches && potentiallyLiveMatches.length > 0) {
+        const potentialMatch = potentiallyLiveMatches[0];
+        
+        // Check if match has a final result - if so, it's finished
+        const hasFinalResult = potentialMatch.result && 
+                              potentialMatch.result !== 'pending' && 
+                              (potentialMatch.result === 'home_win' || potentialMatch.result === 'away_win' || potentialMatch.result === 'draw');
+        
+        if (hasFinalResult) {
+          // Match is finished, continue to check upcoming fixtures
+        } else if (potentialMatch.external_id) {
+          // No final result yet, check API directly for live status
+          try {
+            const matchData = await footballApiService.getMatchDetails(parseInt(potentialMatch.external_id));
+            // Check if match is actually live (LIVE, IN_PLAY, PAUSED) and not finished
+            if (matchData.status === 'LIVE' || matchData.status === 'IN_PLAY' || matchData.status === 'PAUSED') {
+              return {
+                isOpen: false,
+                nextCloseTime: undefined,
+                nextKickoffTime: new Date(potentialMatch.kickoff_at),
+                reason: `Trading closed. Match in progress.`
+              };
+            }
+            // If API says FINISHED, match is over - continue to check upcoming fixtures
+          } catch (error) {
+            // If API check fails, close trading if kickoff has passed (safer approach)
+            logger.warn('Failed to check live match status from API:', error);
+            return {
+              isOpen: false,
+              nextCloseTime: undefined,
+              nextKickoffTime: new Date(potentialMatch.kickoff_at),
+              reason: `Trading closed. Match in progress.`
+            };
+          }
+        } else {
+          // No external_id and no result, close if kickoff has passed (fallback)
+          return {
+            isOpen: false,
+            nextCloseTime: undefined,
+            nextKickoffTime: new Date(potentialMatch.kickoff_at),
+            reason: `Trading closed. Match in progress.`
+          };
+        }
       }
 
       // SECOND: Check for upcoming fixtures for this team
