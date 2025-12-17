@@ -46,11 +46,13 @@ export const adminService = {
   async getSystemStats(): Promise<SystemStats> {
 
     try {
-      // Get total cash injected (sum of all filled orders)
+      // Get total cash injected (sum of BUY orders only - SELL orders return cash to users)
+      // Fixed Shares Model: Purchases don't change market cap, only available_shares
       const { data: cashData, error: cashError } = await supabase
         .from('orders')
-        .select('total_amount')
-        .eq('status', 'FILLED');
+        .select('total_amount, order_type')
+        .eq('status', 'FILLED')
+        .eq('order_type', 'BUY'); // Only count purchases, not sales
 
       if (cashError) throw cashError;
 
@@ -66,24 +68,28 @@ export const adminService = {
 
       const totalActiveUsers = new Set(usersData?.map(p => p.user_id) || []).size;
 
-      // Get total trades executed
+      // Get total trades executed (both BUY and SELL orders)
       const { data: tradesData, error: tradesError } = await supabase
         .from('orders')
-        .select('total_amount')
+        .select('total_amount, order_type')
         .eq('status', 'FILLED');
 
       if (tradesError) throw tradesError;
 
       const totalTradesExecuted = tradesData?.length || 0;
-      const averageTradeSize = totalTradesExecuted > 0 ? totalCashInjected / totalTradesExecuted : 0;
+      // Calculate average trade size from all trades (BUY and SELL)
+      const totalTradeVolume = (tradesData || []).reduce((sum, order) => sum + order.total_amount, 0);
+      const averageTradeSize = totalTradesExecuted > 0 ? totalTradeVolume / totalTradesExecuted : 0;
 
-      // Get market cap overview by team
+      // Get market cap overview by team (Fixed Shares Model)
       const { data: teamsData, error: teamsError } = await supabase
         .from('teams')
         .select(`
           id,
           name,
           market_cap,
+          total_shares,
+          available_shares,
           shares_outstanding
         `);
 
@@ -105,7 +111,10 @@ export const adminService = {
 
       const marketCapOverview: TeamMarketCapOverview[] = (teamsData || []).map(team => {
         const totalInvestments = teamInvestments.get(team.id) || 0;
-        const sharePrice = team.shares_outstanding > 0 ? team.market_cap / team.shares_outstanding : 0;
+        // Fixed Shares Model: Price = market_cap / total_shares (1000)
+        // Market cap only changes on match results, not on purchases/sales
+        const totalShares = team.total_shares || 1000;
+        const sharePrice = totalShares > 0 ? team.market_cap / totalShares : 0;
 
         return {
           teamId: team.id,
@@ -113,7 +122,7 @@ export const adminService = {
           currentMarketCap: team.market_cap,
           totalInvestments,
           sharePrice,
-          sharesOutstanding: team.shares_outstanding
+          availableShares: team.available_shares || 1000 // Available shares for purchase (out of 1000 total fixed shares)
         };
       });
 
@@ -132,12 +141,13 @@ export const adminService = {
   },
 
   /**
-   * Get individual purchase records (orders)
+   * Get individual trade records (orders) - includes both BUY and SELL orders
+   * Fixed Shares Model: Market cap does NOT change on purchases/sales, only available_shares changes
    */
   async getUserInvestments(): Promise<UserInvestment[]> {
 
     try {
-      // Get all filled orders with user and team details
+      // Get all filled orders (both BUY and SELL) with user and team details
       const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
         .select(`
@@ -156,20 +166,26 @@ export const adminService = {
           shares_outstanding_before,
           shares_outstanding_after,
           profiles!inner(username, full_name),
-          teams!inner(name, market_cap, shares_outstanding)
+          teams!inner(name, market_cap, total_shares, available_shares, shares_outstanding)
         `)
         .eq('status', 'FILLED')
         .order('created_at', { ascending: false });
 
       if (ordersError) throw ordersError;
 
-      // Convert each order to UserInvestment format (one row per purchase)
+      // Convert each order to UserInvestment format (one row per trade)
       const userInvestments: UserInvestment[] = (ordersData || []).map(order => {
-        // Calculate current value from team data
+        // Calculate current value from team data (Fixed Shares Model)
+        // Price = market_cap / total_shares (1000 fixed)
         const teamMarketCap = order.teams?.market_cap || 0;
-        const teamSharesOutstanding = order.teams?.shares_outstanding || 1;
-        const currentValue = order.quantity * (teamMarketCap / teamSharesOutstanding);
-        const profitLoss = currentValue - order.total_amount;
+        const teamTotalShares = order.teams?.total_shares || 1000; // Fixed at 1000 shares
+        const currentSharePrice = teamTotalShares > 0 ? teamMarketCap / teamTotalShares : 0;
+        const currentValue = order.quantity * currentSharePrice;
+        // For BUY: profitLoss = currentValue - cost
+        // For SELL: profitLoss calculation would need cost basis (not calculated here)
+        const profitLoss = order.order_type === 'BUY' 
+          ? currentValue - order.total_amount 
+          : 0; // SELL profitLoss would need cost basis calculation
 
         return {
           userId: order.user_id,
@@ -197,10 +213,10 @@ export const adminService = {
           teamName: order.teams?.name || 'Unknown',
           executedAt: order.executed_at,
           marketCapBefore: order.market_cap_before,
-          marketCapAfter: order.market_cap_after,
-          sharesOutstandingBefore: order.shares_outstanding_before,
-          sharesOutstandingAfter: order.shares_outstanding_after,
-          currentSharePrice: teamMarketCap / teamSharesOutstanding
+          marketCapAfter: order.market_cap_after, // In Fixed Shares Model: market_cap_before === market_cap_after for trades
+          sharesOutstandingBefore: order.shares_outstanding_before, // This is total_shares (1000) in fixed model
+          sharesOutstandingAfter: order.shares_outstanding_after, // This is total_shares (1000) in fixed model
+          currentSharePrice: currentSharePrice
         };
       });
 

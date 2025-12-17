@@ -40,14 +40,27 @@ const TeamDetailsModal: React.FC<TeamDetailsModalProps> = ({ isOpen, onClose, te
     largestInjection: number;
     injectionCount: number;
   } | null>(null);
+  const [isLoadingData, setIsLoadingData] = useState(false); // Guard to prevent multiple simultaneous loads
 
   useEffect(() => {
-    if (isOpen && teamId) {
+    if (isOpen && teamId && !isLoadingData) {
       loadTeamData();
+    } else if (!isOpen) {
+      // Reset loading state when modal closes
+      setLoading(false);
+      setError(null);
+      setIsLoadingData(false);
     }
   }, [isOpen, teamId]);
 
   const loadTeamData = async () => {
+    // Prevent multiple simultaneous loads
+    if (isLoadingData) {
+      console.log('Load already in progress, skipping...');
+      return;
+    }
+    
+    setIsLoadingData(true);
     setLoading(true);
     setError(null);
     
@@ -66,44 +79,18 @@ const TeamDetailsModal: React.FC<TeamDetailsModalProps> = ({ isOpen, onClose, te
       console.log('Using external team ID:', externalTeamId, 'for team:', team.name);
       
       // Try to get Premier League data (this will use Netlify function if available)
+      // Skip this if it takes too long - it's optional data
       let premierLeague = null;
       try {
-        const premierLeagueData = await footballApiService.getPremierLeagueData();
+        // Don't wait too long for this optional data
+        const premierLeagueData = await Promise.race([
+          footballApiService.getPremierLeagueData(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000))
+        ]) as any;
         premierLeague = premierLeagueData;
       } catch (error) {
-        console.warn('Netlify function failed, attempting fallback with direct API calls:', error);
-        
-        // Fallback: Use direct API calls
-        try {
-          const [matchesData] = await Promise.allSettled([
-            footballApiService.getPremierLeagueMatches()
-          ]);
-          
-          const matches = matchesData.status === 'fulfilled' ? matchesData.value : [];
-          
-          // For fallback, we'll use basic team info from matches
-          const teams = new Map();
-          matches.forEach(match => {
-            if (!teams.has(match.homeTeam.id)) {
-              teams.set(match.homeTeam.id, match.homeTeam);
-            }
-            if (!teams.has(match.awayTeam.id)) {
-              teams.set(match.awayTeam.id, match.awayTeam);
-            }
-          });
-          
-          // Reconstruct the data structure
-          premierLeague = {
-            standings: [], // Empty standings for fallback
-            matches,
-            teams: Array.from(teams.values())
-          };
-          
-          console.log('Fallback successful:', { matches: matches.length, teams: teams.size });
-        } catch (fallbackError) {
-          console.error('Fallback also failed:', fallbackError);
-          premierLeague = null;
-        }
+        console.warn('Premier League API failed or timed out, continuing without it:', error);
+        premierLeague = null;
       }
 
       // Check if we have Premier League data
@@ -149,35 +136,55 @@ const TeamDetailsModal: React.FC<TeamDetailsModalProps> = ({ isOpen, onClose, te
       console.log('🚀 About to load match history...');
       console.log('Fixture count:', fixtures.length);
       console.log('Teams count:', allTeams.length);
-      await loadMatchHistory(fixtures, allTeams, null);
-      console.log('✅ Match history loaded!');
-      console.log('Match history state updated, count:', matchHistory.length);
+      
+      try {
+        await loadMatchHistory(fixtures, allTeams, null);
+        console.log('✅ Match history loaded!');
+      } catch (matchHistoryError) {
+        console.error('Error loading match history:', matchHistoryError);
+        // Continue even if match history fails
+      }
       
       // Load user position if userId is provided (optional, don't block on this)
       let currentUserPosition = null;
       if (userId) {
         try {
-          currentUserPosition = await loadUserPositionAndReturn(userId, teamId);
+          currentUserPosition = await Promise.race([
+            loadUserPositionAndReturn(userId, teamId),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000))
+          ]) as any;
+          
           // Update match history with position data if available
           if (currentUserPosition) {
-            await loadMatchHistory(fixtures, allTeams, currentUserPosition);
+            try {
+              await loadMatchHistory(fixtures, allTeams, currentUserPosition);
+            } catch (updateError) {
+              console.warn('Error updating match history with position:', updateError);
+            }
           }
         } catch (positionError) {
           console.warn('Could not load user position (user may not have any positions yet):', positionError);
           // Don't fail the entire modal - just continue without position data
-          // Reload match history without position data to ensure it displays
-          await loadMatchHistory(fixtures, allTeams, null);
         }
       }
 
-      // Load cash injections
-      await loadCashInjections();
+      // Load cash injections (non-blocking, with timeout)
+      try {
+        await Promise.race([
+          loadCashInjections(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000))
+        ]);
+      } catch (cashError) {
+        console.warn('Error loading cash injections (non-critical):', cashError);
+        // Continue even if cash injections fail - this is optional data
+      }
 
     } catch (err) {
       console.error('Error loading team data:', err);
       setError(err instanceof Error ? err.message : 'Failed to load team data');
     } finally {
       setLoading(false);
+      setIsLoadingData(false);
     }
   };
 
@@ -224,7 +231,8 @@ const TeamDetailsModal: React.FC<TeamDetailsModalProps> = ({ isOpen, onClose, te
         .select('*')
         .eq('team_id', teamId)
         .in('ledger_type', ['match_win', 'match_loss', 'match_draw'])
-        .order('event_date', { ascending: false });
+        .order('event_date', { ascending: false })
+        .limit(100); // Add limit to prevent huge queries
       
       if (ledgerError) {
         console.error('❌❌❌ ERROR LOADING FROM TOTAL_LEDGER ❌❌❌');
@@ -247,6 +255,35 @@ const TeamDetailsModal: React.FC<TeamDetailsModalProps> = ({ isOpen, onClose, te
         console.log('🔍 🔍 🔍 END OF SAMPLE EVENT_DATES 🔍 🔍 🔍');
       }
       
+      // Deduplicate match events by trigger_event_id (keep most recent by created_at or id)
+      const matchEventsMap = new Map<number, typeof ledgerData[0]>();
+      
+      (ledgerData || []).forEach(event => {
+        const triggerEventId = event.trigger_event_id;
+        if (!triggerEventId) {
+          // Skip events without trigger_event_id (shouldn't happen for match events)
+          return;
+        }
+        
+        const existing = matchEventsMap.get(triggerEventId);
+        if (!existing) {
+          matchEventsMap.set(triggerEventId, event);
+          return;
+        }
+        
+        // Compare by created_at (most recent) or id (fallback)
+        const existingTime = existing.created_at ? new Date(existing.created_at).getTime() : 0;
+        const currentTime = event.created_at ? new Date(event.created_at).getTime() : 0;
+        
+        if (currentTime > existingTime || (currentTime === existingTime && event.id > existing.id)) {
+          // Replace with more recent entry
+          matchEventsMap.set(triggerEventId, event);
+        }
+      });
+      
+      // Use deduplicated match events
+      const deduplicatedLedgerData = Array.from(matchEventsMap.values());
+      
       // OPTIMIZED: Create team lookup map for O(1) access
       const teamMap = new Map(teamsData.map(team => [team.id, team]));
       
@@ -254,89 +291,89 @@ const TeamDetailsModal: React.FC<TeamDetailsModalProps> = ({ isOpen, onClose, te
       const fixtures = fixturesData;
       const fixturesMap = new Map(fixtures.map(f => [f.id, f]));
 
-      const matchHistoryData = (ledgerData || [])
+      const matchHistoryData = deduplicatedLedgerData
         .map(ledgerEntry => {
-          // Get fixture details
-          const fixture = ledgerEntry.trigger_event_id ? fixturesMap.get(ledgerEntry.trigger_event_id) : null;
-          
-          if (!fixture) {
-            console.warn('Fixture not found for ledger entry:', ledgerEntry.id);
-            return null;
-          }
-          
-          // Get opponent from FIXTURE data (source of truth) not from ledger
-          let opponentId: number | null = null;
-          if (fixture.home_team_id === ledgerEntry.team_id) {
-            // Team is home, opponent is away
-            opponentId = fixture.away_team_id;
-          } else if (fixture.away_team_id === ledgerEntry.team_id) {
-            // Team is away, opponent is home
-            opponentId = fixture.home_team_id;
-          }
-          
-          const opponent = opponentId ? teamMap.get(opponentId) : null;
-          
-          if (!opponent) {
-            console.warn(`Could not find opponent team for ledger entry ${ledgerEntry.id}`);
-            return null;
-          }
+          try {
+            // Get fixture details
+            const fixture = ledgerEntry.trigger_event_id ? fixturesMap.get(ledgerEntry.trigger_event_id) : null;
+            
+            if (!fixture) {
+              console.warn('Fixture not found for ledger entry:', ledgerEntry.id);
+              return null;
+            }
+            
+            // Get opponent from FIXTURE data (source of truth) not from ledger
+            let opponentId: number | null = null;
+            if (fixture.home_team_id === ledgerEntry.team_id) {
+              // Team is home, opponent is away
+              opponentId = fixture.away_team_id;
+            } else if (fixture.away_team_id === ledgerEntry.team_id) {
+              // Team is away, opponent is home
+              opponentId = fixture.home_team_id;
+            }
+            
+            const opponent = opponentId ? teamMap.get(opponentId) : null;
+            
+            if (!opponent) {
+              console.warn(`Could not find opponent team for ledger entry ${ledgerEntry.id}`);
+              return null;
+            }
 
-          // Use ledger data directly
-          const result = ledgerEntry.ledger_type === 'match_win' ? 'win' 
-            : ledgerEntry.ledger_type === 'match_loss' ? 'loss' 
-            : 'draw' as 'win' | 'loss' | 'draw';
-          
-          const isHome = ledgerEntry.is_home_match;
-          const preMatchCap = ledgerEntry.market_cap_before;
-          const postMatchCap = ledgerEntry.market_cap_after;
-          const priceImpact = ledgerEntry.price_impact;
-          const priceImpactPercent = preMatchCap > 0 ? (priceImpact / preMatchCap) * 100 : 0;
-          
-          const preMatchSharePrice = ledgerEntry.share_price_before;
-          const postMatchSharePrice = ledgerEntry.share_price_after;
+            // Use ledger data directly
+            const result = ledgerEntry.ledger_type === 'match_win' ? 'win' 
+              : ledgerEntry.ledger_type === 'match_loss' ? 'loss' 
+              : 'draw' as 'win' | 'loss' | 'draw';
+            
+            const isHome = ledgerEntry.is_home_match;
+            const preMatchCap = parseFloat(ledgerEntry.market_cap_before?.toString() || '0');
+            const postMatchCap = parseFloat(ledgerEntry.market_cap_after?.toString() || '0');
+            const priceImpact = parseFloat(ledgerEntry.price_impact?.toString() || '0');
+            const priceImpactPercent = preMatchCap > 0 ? (priceImpact / preMatchCap) * 100 : 0;
+            
+            const preMatchSharePrice = parseFloat(ledgerEntry.share_price_before?.toString() || '0');
+            const postMatchSharePrice = parseFloat(ledgerEntry.share_price_after?.toString() || '0');
 
-          // Calculate user P/L if user has position
-          const userPos = currentUserPosition || userPosition;
-          let userPL = 0;
-          if (userPos && userPos.quantity > 0) {
-            const preMatchValue = userPos.quantity * preMatchSharePrice;
-            const postMatchValue = userPos.quantity * postMatchSharePrice;
-            userPL = postMatchValue - preMatchValue;
+            // Calculate user P/L if user has position
+            const userPos = currentUserPosition || userPosition;
+            let userPL = 0;
+            if (userPos && userPos.quantity > 0) {
+              const preMatchValue = userPos.quantity * preMatchSharePrice;
+              const postMatchValue = userPos.quantity * postMatchSharePrice;
+              userPL = postMatchValue - preMatchValue;
+            }
+
+            const score = ledgerEntry.match_score || '0-0';
+            
+            // ALWAYS use event_date from ledger, never fall back to fixture
+            const displayDate = ledgerEntry.event_date;
+            
+            // Override corrupted event_description with correct opponent name
+            const correctDescription = `Match vs ${opponent.name}`;
+            
+            return {
+              fixture: {
+                ...fixture,
+                kickoff_at: displayDate, // ALWAYS use the ledger event_date
+                // Override description with correct opponent
+                id: fixture.id
+              },
+              opponent,
+              isHome,
+              result,
+              score,
+              preMatchCap,
+              postMatchCap,
+              priceImpact,
+              priceImpactPercent,
+              preMatchSharePrice,
+              postMatchSharePrice,
+              userPL,
+              description: correctDescription // Use correct description
+            };
+          } catch (entryError) {
+            console.error(`Error processing ledger entry ${ledgerEntry.id}:`, entryError);
+            return null; // Skip this entry if there's an error
           }
-
-          const score = ledgerEntry.match_score || '0-0';
-
-          // Log the actual date from database for debugging
-          console.log(`📅 Ledger entry ${ledgerEntry.id} - event_date from DB: ${ledgerEntry.event_date}`);
-          console.log(`📅 Ledger entry ${ledgerEntry.id} - fixture kickoff_at: ${fixture?.kickoff_at}`);
-          console.log(`📅 Ledger entry ${ledgerEntry.id} - opponent from fixture: ${opponent.name}`);
-          
-          // ALWAYS use event_date from ledger, never fall back to fixture
-          const displayDate = ledgerEntry.event_date;
-          
-          // Override corrupted event_description with correct opponent name
-          const correctDescription = `Match vs ${opponent.name}`;
-          
-          return {
-            fixture: {
-              ...fixture,
-              kickoff_at: displayDate, // ALWAYS use the ledger event_date
-              // Override description with correct opponent
-              id: fixture.id
-            },
-            opponent,
-            isHome,
-            result,
-            score,
-            preMatchCap,
-            postMatchCap,
-            priceImpact,
-            priceImpactPercent,
-            preMatchSharePrice,
-            postMatchSharePrice,
-            userPL,
-            description: correctDescription // Use correct description
-          };
         })
         .filter(Boolean)
         .sort((a, b) => new Date(b.fixture.kickoff_at).getTime() - new Date(a.fixture.kickoff_at).getTime());
@@ -347,6 +384,8 @@ const TeamDetailsModal: React.FC<TeamDetailsModalProps> = ({ isOpen, onClose, te
       setMatchHistory(matchHistoryData);
     } catch (error) {
       console.error('Error loading match history:', error);
+      // Set empty array on error to prevent infinite loading
+      setMatchHistory([]);
     }
   };
 
@@ -509,7 +548,7 @@ const TeamDetailsModal: React.FC<TeamDetailsModalProps> = ({ isOpen, onClose, te
                                   {formatCurrency(match.preMatchCap)} → {formatCurrency(match.postMatchCap)}
                                 </span>
                                 <span className={`text-xs ${match.priceImpactPercent > 0 ? 'text-green-400' : match.priceImpactPercent < 0 ? 'text-red-400' : 'text-gray-400'}`}>
-                                  {match.priceImpactPercent > 0 ? '+' : ''}{match.priceImpactPercent.toFixed(1)}%
+                                  {match.priceImpactPercent > 0 ? '+' : ''}{match.priceImpactPercent.toFixed(2)}%
                                 </span>
                               </div>
                             </div>
@@ -655,7 +694,7 @@ const TeamDetailsModal: React.FC<TeamDetailsModalProps> = ({ isOpen, onClose, te
                                   +{formatCurrency(injection.amount)}
                                 </div>
                                 <div className="text-xs text-gray-500">
-                                  {((injection.amount / injection.market_cap_before) * 100).toFixed(1)}% increase
+                                  {((injection.amount / injection.market_cap_before) * 100).toFixed(2)}% increase
                                 </div>
                               </div>
                             </div>

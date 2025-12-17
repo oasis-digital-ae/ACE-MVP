@@ -136,9 +136,10 @@ App
 - logo_url
 - launch_price
 - initial_market_cap
-- market_cap (current)
-- shares_outstanding
-- total_shares
+- market_cap (current) - Only changes with match results
+- total_shares (fixed at 1000) - Fixed supply, no minting
+- available_shares (platform inventory) - Decreases on purchase
+- shares_outstanding (deprecated, kept for migration)
 - is_latest
 - created_at
 - updated_at
@@ -287,28 +288,31 @@ App
 
 ### Functions
 
-#### process_share_purchase_atomic()
+#### process_share_purchase_atomic() (Fixed Shares Model)
 ```sql
 1. Lock team row
-2. Read current market cap and shares
-3. Calculate new market cap = old + (quantity * price)
-4. Update teams.market_cap
-5. Insert into orders table
-6. Update/insert into positions
-7. Insert into total_ledger
-8. Commit transaction
+2. Read current market cap, total_shares, and available_shares
+3. Validate available_shares >= purchase quantity
+4. Calculate price = market_cap / total_shares (1000)
+5. Market cap stays unchanged (no cash injection)
+6. Decrease available_shares by purchase quantity
+7. Insert into orders table
+8. Update/insert into positions
+9. Insert into total_ledger (market cap unchanged)
+10. Commit transaction
 ```
 
-#### process_match_result(fixture_id)
+#### process_match_result_atomic(fixture_id) (Fixed Shares Model)
 ```sql
-1. Get fixture data
+1. Get fixture data with snapshot market caps
 2. Calculate transfer amount
-   - Transfer = 10% of loser's market cap
+   - Transfer = 10% of loser's snapshot market cap
 3. Update winner's market cap (+transfer)
 4. Update loser's market cap (-transfer)
-5. Insert into transfers_ledger
-6. Insert into total_ledger for both teams
-7. Mark fixture as 'applied'
+5. Calculate prices using total_shares (1000): price = market_cap / 1000
+6. Insert into transfers_ledger
+7. Insert into total_ledger for both teams (using total_shares in price calculations)
+8. Mark fixture as 'applied'
 ```
 
 ---

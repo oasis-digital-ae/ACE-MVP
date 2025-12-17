@@ -98,8 +98,10 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
 
       const ordersWithImpact = ordersData?.map((order) => {
         const { market_cap_before = 0, market_cap_after = 0, shares_outstanding_before = 0, shares_outstanding_after = 0 } = order;
-        const navBefore = shares_outstanding_before > 0 ? market_cap_before / shares_outstanding_before : 20.00;
-        const navAfter = shares_outstanding_after > 0 ? market_cap_after / shares_outstanding_after : 20.00;
+        // Fixed Shares Model: Use total_shares (1000) for price calculation, not shares_outstanding
+        const totalShares = 1000; // Fixed at 1000
+        const navBefore = totalShares > 0 ? market_cap_before / totalShares : 20.00;
+        const navAfter = totalShares > 0 ? market_cap_after / totalShares : 20.00;
 
         return {
           ...order,
@@ -167,7 +169,46 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
         return;
       }
 
-      const processedEvents = (ledgerData.data || []).map(event => {
+      // Deduplicate match events by trigger_event_id (keep most recent by created_at or id)
+      const matchEventsMap = new Map<number, typeof ledgerData.data[0]>();
+      const nonMatchEvents: typeof ledgerData.data = [];
+      
+      (ledgerData.data || []).forEach(event => {
+        const isMatch = ['match_win', 'match_loss', 'match_draw'].includes(event.ledger_type);
+        
+        if (!isMatch) {
+          // Keep all non-match events (share purchases, etc.)
+          nonMatchEvents.push(event);
+          return;
+        }
+        
+        const triggerEventId = event.trigger_event_id;
+        if (!triggerEventId) {
+          // Keep events without trigger_event_id (shouldn't happen, but be safe)
+          nonMatchEvents.push(event);
+          return;
+        }
+        
+        const existing = matchEventsMap.get(triggerEventId);
+        if (!existing) {
+          matchEventsMap.set(triggerEventId, event);
+          return;
+        }
+        
+        // Compare by created_at (most recent) or id (fallback)
+        const existingTime = existing.created_at ? new Date(existing.created_at).getTime() : 0;
+        const currentTime = event.created_at ? new Date(event.created_at).getTime() : 0;
+        
+        if (currentTime > existingTime || (currentTime === existingTime && event.id > existing.id)) {
+          // Replace with more recent entry
+          matchEventsMap.set(triggerEventId, event);
+        }
+      });
+      
+      // Combine deduplicated match events with non-match events
+      const deduplicatedLedgerData = [...Array.from(matchEventsMap.values()), ...nonMatchEvents];
+
+      const processedEvents = deduplicatedLedgerData.map(event => {
         const isPurchase = event.ledger_type === 'share_purchase';
         
         if (isPurchase) {
@@ -429,10 +470,10 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
                                   <div>
                                     <span className="text-gray-600 dark:text-gray-400">Share Price:</span>
                                     <div className="font-medium">
-                                      ${event.sharePriceBefore.toFixed(1)} → ${event.sharePriceAfter.toFixed(1)}
+                                      ${event.sharePriceBefore.toFixed(2)} → ${event.sharePriceAfter.toFixed(2)}
                                       {event.priceImpactPercent !== 0 && (
                                         <span className={`ml-2 ${event.priceImpactPercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                          {event.priceImpactPercent >= 0 ? '+' : ''}{event.priceImpactPercent.toFixed(1)}%
+                                          {event.priceImpactPercent >= 0 ? '+' : ''}{event.priceImpactPercent.toFixed(2)}%
                                         </span>
                                       )}
                                     </div>
@@ -576,7 +617,7 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
                                 {chartData.length > 1 ? (() => {
                                   const initialPrice = chartData.find(point => point.x === 0)?.y || chartData[0]?.y || 0;
                                   const latestPrice = chartData[chartData.length - 1]?.y || 0;
-                                  const changePercent = initialPrice > 0 ? ((latestPrice - initialPrice) / initialPrice * 100).toFixed(1) : '0';
+                                  const changePercent = initialPrice > 0 ? ((latestPrice - initialPrice) / initialPrice * 100).toFixed(2) : '0.00';
                                   return `${changePercent}%`;
                                 })() : '0%'}
                               </p>

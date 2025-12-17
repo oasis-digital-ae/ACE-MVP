@@ -10,7 +10,7 @@ interface EnvironmentConfig {
 
 function getEnvironmentConfig(): EnvironmentConfig {
   // Cast import.meta.env to any to avoid TypeScript errors
-  const env = (import.meta as any).env;
+  const env = import.meta.env;
   
   // Support multiple environment variable naming conventions
   const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL || 

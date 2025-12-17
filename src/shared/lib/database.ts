@@ -110,9 +110,12 @@ export const teamDetailsService = {
 };
 
 // Type conversion utilities
+// Fixed shares model: Price = market_cap / total_shares (1000)
 export const convertTeamToClub = (team: DatabaseTeam): Club => {
-  const currentNAV = team.shares_outstanding > 0 ? 
-    team.market_cap / team.shares_outstanding : 20.00;
+  // Use total_shares (fixed at 1000) instead of shares_outstanding
+  const totalShares = team.total_shares || 1000;
+  const currentNAV = totalShares > 0 ? 
+    team.market_cap / totalShares : 20.00;
   const launchPrice = team.launch_price;
   const profitLoss = currentNAV - launchPrice;
   const percentChange = launchPrice > 0 ? ((currentNAV - launchPrice) / launchPrice) * 100 : 0;
@@ -126,13 +129,15 @@ export const convertTeamToClub = (team: DatabaseTeam): Club => {
     profitLoss: profitLoss,
     percentChange: percentChange,
     marketCap: team.market_cap,
-    sharesOutstanding: team.shares_outstanding
+    sharesOutstanding: team.available_shares || 1000 // Show available_shares instead
   };
 };
 
 export const convertPositionToPortfolioItem = (position: DatabasePositionWithTeam): PortfolioItem => {
-  const currentPrice = position.team.shares_outstanding > 0 ? 
-    position.team.market_cap / position.team.shares_outstanding : 20.00;
+  // Use total_shares (fixed at 1000) instead of shares_outstanding
+  const totalShares = position.team.total_shares || 1000;
+  const currentPrice = totalShares > 0 ? 
+    position.team.market_cap / totalShares : 20.00;
   const avgCost = position.quantity > 0 ? position.total_invested / position.quantity : 0;
   
   return {

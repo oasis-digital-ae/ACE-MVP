@@ -29,13 +29,14 @@ sequenceDiagram
     DB->>Trigger: process_share_purchase_atomic()
     
     Trigger->>DB: Lock team row (SELECT ... FOR UPDATE)
-    Trigger->>DB: Read current market_cap
-    Trigger->>DB: Calculate new_market_cap = old + (quantity * price)
-    Trigger->>DB: UPDATE teams SET market_cap = new_market_cap
-    Trigger->>DB: UPDATE teams SET shares_outstanding += quantity
+    Trigger->>DB: Read current market_cap, total_shares, available_shares
+    Trigger->>DB: Validate available_shares >= quantity
+    Trigger->>DB: Calculate price = market_cap / total_shares (1000)
+    Trigger->>DB: Market cap stays unchanged (no cash injection)
+    Trigger->>DB: UPDATE teams SET available_shares = available_shares - quantity
     Trigger->>DB: INSERT into orders
     Trigger->>DB: UPDATE/INSERT positions
-    Trigger->>DB: INSERT into total_ledger
+    Trigger->>DB: INSERT into total_ledger (market_cap unchanged)
     Trigger->>DB: INSERT into audit_log
     Trigger->>DB: Commit transaction
     
@@ -52,9 +53,11 @@ sequenceDiagram
     OtherUsers->>OtherUsers: Update UI automatically
 ```
 
-**Key Points:**
+**Key Points (Fixed Shares Model):**
 - Atomic transaction ensures data consistency
-- Market cap updated immediately
+- Market cap stays unchanged (no cash injection)
+- Available shares decreases (platform inventory)
+- Price unchanged (market_cap / 1000)
 - Real-time update to all users
 - Audit log records every transaction
 
@@ -115,12 +118,15 @@ sequenceDiagram
     Frontend->>Frontend: Re-render components
 ```
 
-**Transfer Calculation:**
+**Transfer Calculation (Fixed Shares Model):**
 ```sql
-transfer_amount = loser.market_cap * 0.10
+transfer_amount = loser.snapshot_market_cap * 0.10
 
 Winner.market_cap += transfer_amount
 Loser.market_cap -= transfer_amount
+
+Winner.price = winner.market_cap / 1000
+Loser.price = loser.market_cap / 1000
 ```
 
 ---
@@ -297,22 +303,22 @@ All services fetch data concurrently using `Promise.all()` for faster initial lo
 
 ---
 
-## 7. Market Cap Update from Order
+## 7. Share Purchase Flow (Fixed Shares Model)
 
 ```mermaid
 flowchart TD
     A[User clicks Buy] --> B[Modal opens]
     B --> C[User enters shares]
     C --> D[Calculate total value]
-    D --> E{Validate input}
+    D --> E{Validate input & available_shares}
     E -->|Invalid| F[Show error]
     E -->|Valid| G[Create order]
     G --> H[process_share_purchase_atomic]
     H --> I[Lock team row]
-    I --> J[Read current market_cap]
-    J --> K[Calculate new market_cap]
-    K --> L[UPDATE teams.market_cap]
-    L --> M[UPDATE teams.shares_outstanding]
+    I --> J[Read market_cap, total_shares, available_shares]
+    J --> K[Calculate price = market_cap / 1000]
+    K --> L[Market cap stays unchanged]
+    L --> M[UPDATE teams.available_shares -= quantity]
     M --> N[INSERT into orders]
     N --> O[UPDATE positions]
     O --> P[INSERT into total_ledger]
@@ -322,8 +328,8 @@ flowchart TD
     S --> T[Show success message]
     T --> U[Close modal]
     
-    L --> V[Trigger real-time update]
-    V --> W[All users see new share price]
+    M --> V[Trigger real-time update]
+    V --> W[All users see updated available_shares]
 ```
 
 ---

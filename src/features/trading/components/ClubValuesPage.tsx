@@ -40,10 +40,12 @@ export const ClubValuesPage: React.FC = () => {
   const { lastUpdate } = useRealtimeMarket();
   const { recentOrders } = useRealtimeOrders();
 
-  // Load fixtures on component mount and when clubs change
+  // Load fixtures only on component mount - fixtures don't change frequently
+  // Don't reload every time clubs change (that causes excessive DB calls)
   useEffect(() => {
     loadFixtures();
-  }, [clubs]); // Refresh fixtures when clubs data changes (e.g., after simulation)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only load once on mount
 
   // Show toast when market updates
   useEffect(() => {
@@ -161,15 +163,15 @@ export const ClubValuesPage: React.FC = () => {
       name: c.name,
       short_name: c.name,
       logo_url: null,
-      initial_market_cap: c.launchPrice * c.sharesOutstanding,
+      initial_market_cap: c.launchValue * 1000, // Fixed shares model: $20 * 1000 = $20,000
       market_cap: c.marketCap,
-      total_shares: c.sharesOutstanding,
-      available_shares: c.sharesOutstanding,
-      shares_outstanding: c.sharesOutstanding,
+      total_shares: 1000, // Fixed at 1000 shares
+      available_shares: c.sharesOutstanding, // This represents available_shares from Club interface
+      shares_outstanding: 1000, // Keep for backward compatibility
       is_tradeable: true,
       created_at: now,
       updated_at: now,
-      launch_price: c.launchPrice
+      launch_price: c.launchValue
     }));
   }, [clubs]);
 
@@ -332,8 +334,6 @@ export const ClubValuesPage: React.FC = () => {
                   <th className="text-right p-4 font-semibold text-gray-300">Current</th>
                   <th className="text-right p-4 font-semibold text-gray-300">P/L</th>
                   <th className="text-right p-4 font-semibold text-gray-300">Change</th>
-                  <th className="text-right p-4 font-semibold text-gray-300">Market Cap</th>
-                  <th className="text-center p-4 font-semibold text-gray-300">Shares</th>
                   <th className="text-center p-4 font-semibold text-gray-300">Action</th>
                 </tr>
               </thead>
@@ -389,17 +389,13 @@ export const ClubValuesPage: React.FC = () => {
                         >
                           {getGamesPlayed(club.id)}
                         </td>
-                        <td className="p-4 text-right font-mono">{formatCurrency(club.launchPrice)}</td>
+                        <td className="p-4 text-right font-mono">{formatCurrency(club.launchValue)}</td>
                         <td className="p-4 text-right font-mono font-semibold">{formatCurrency(club.currentValue)}</td>
                         <td className={`p-4 text-right font-semibold ${club.profitLoss === 0 ? 'text-gray-400' : club.profitLoss > 0 ? 'price-positive' : 'price-negative'}`}>
                           {club.profitLoss > 0 ? '+' : ''}{formatCurrency(club.profitLoss)}
                         </td>
                         <td className={`p-4 text-right font-semibold ${club.percentChange === 0 ? 'text-gray-400' : club.percentChange > 0 ? 'price-positive' : 'price-negative'}`}>
                           {club.percentChange > 0 ? '+' : ''}{formatPercent(club.percentChange)}
-                        </td>
-                        <td className="p-4 text-right font-mono">{formatCurrency(club.marketCap)}</td>
-                        <td className="p-4 text-center text-trading-primary font-semibold">
-                          {club.sharesOutstanding.toLocaleString()}
                         </td>
                         <td className="p-4 text-center">
                           <div className="flex flex-col items-center gap-2">
@@ -420,7 +416,7 @@ export const ClubValuesPage: React.FC = () => {
                       
                       {/* Slide-down panel for team details */}
                       <tr>
-                        <td colSpan={10} className="p-0">
+                        <td colSpan={8} className="p-0">
                           <TeamDetailsSlideDown
                             isOpen={selectedClub === club.id}
                             teamId={parseInt(club.id)}
@@ -519,21 +515,13 @@ export const ClubValuesPage: React.FC = () => {
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div className="bg-gray-700/20 rounded p-2">
                       <div className="text-gray-400 text-[10px] uppercase tracking-wide mb-1">Launch Price</div>
-                      <div className="text-white font-mono font-semibold">{formatCurrency(club.launchPrice)}</div>
-                    </div>
-                    <div className="bg-gray-700/20 rounded p-2">
-                      <div className="text-gray-400 text-[10px] uppercase tracking-wide mb-1">Market Cap</div>
-                      <div className="text-white font-mono font-semibold">{formatCurrency(club.marketCap)}</div>
+                      <div className="text-white font-mono font-semibold">{formatCurrency(club.launchValue)}</div>
                     </div>
                     <div className="bg-gray-700/20 rounded p-2">
                       <div className="text-gray-400 text-[10px] uppercase tracking-wide mb-1">Profit/Loss</div>
                       <div className={`font-semibold ${club.profitLoss === 0 ? 'text-gray-400' : club.profitLoss > 0 ? 'price-positive' : 'price-negative'}`}>
                         {club.profitLoss > 0 ? '+' : ''}{formatCurrency(club.profitLoss)}
                       </div>
-                    </div>
-                    <div className="bg-gray-700/20 rounded p-2">
-                      <div className="text-gray-400 text-[10px] uppercase tracking-wide mb-1">Shares</div>
-                      <div className="text-trading-primary font-semibold">{club.sharesOutstanding.toLocaleString()}</div>
                     </div>
                   </div>
                   

@@ -7,7 +7,7 @@ import { RealtimeChannel } from '@supabase/supabase-js';
 import { logger } from '../lib/logger';
 
 interface OrderFeedItem {
-  order: any;
+  order: { id: number; user_id: string; team_id: number; quantity: number; status: string; order_type: string; [key: string]: unknown };
   timestamp: Date;
 }
 

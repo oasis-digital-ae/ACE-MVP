@@ -11,13 +11,15 @@ export interface SystemStats {
   lastUpdated: string;
 }
 
+// Fixed Shares Model: Market cap only changes on match results, not on trades
+// Each team has 1000 total shares (fixed), available_shares decreases on purchase, increases on sale
 export interface TeamMarketCapOverview {
   teamId: number;
   teamName: string;
   currentMarketCap: number;
   totalInvestments: number;
   sharePrice: number;
-  sharesOutstanding: number;
+  availableShares: number; // Available shares for purchase (out of 1000 total fixed shares)
 }
 
 // Individual purchase record (one row per order)

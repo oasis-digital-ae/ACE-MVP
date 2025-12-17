@@ -331,6 +331,7 @@ export const buyWindowService = {
     isOpen: boolean;
     message: string;
     nextAction?: string;
+    nextActionTime?: Date; // Add raw Date object for proper timezone handling
   }> {
     const status = await this.isBuyWindowOpen(teamId);
     
@@ -338,7 +339,8 @@ export const buyWindowService = {
       return {
         isOpen: true,
         message: status.reason || 'Trading is open',
-        nextAction: status.nextCloseTime ? `Closes at ${status.nextCloseTime.toLocaleString()}` : undefined
+        nextAction: status.nextCloseTime ? `Closes at ${status.nextCloseTime.toLocaleString('en-US', { timeZone: 'Asia/Dubai' })}` : undefined,
+        nextActionTime: status.nextCloseTime || undefined
       };
     } else {
       // Check if match is in progress (nextCloseTime is undefined but match is live)
@@ -350,7 +352,8 @@ export const buyWindowService = {
         isOpen: false,
         message: status.reason || 'Trading is closed',
         nextAction: isMatchInProgress ? 'will reopen after match' : 
-                   (status.nextKickoffTime ? `Next match at ${status.nextKickoffTime.toLocaleString()}` : undefined)
+                   (status.nextKickoffTime ? `Next match at ${status.nextKickoffTime.toLocaleString('en-US', { timeZone: 'Asia/Dubai' })}` : undefined),
+        nextActionTime: status.nextKickoffTime || undefined
       };
     }
   }

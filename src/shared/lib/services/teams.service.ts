@@ -12,7 +12,9 @@ export interface DatabaseTeam {
   launch_price: number;
   initial_market_cap: number;
   market_cap: number;
-  shares_outstanding: number;
+  shares_outstanding: number; // Keep for backward compatibility, but use total_shares for calculations
+  total_shares?: number; // Fixed at 1000
+  available_shares?: number; // Platform inventory
   is_latest?: boolean;
   created_at: string;
   updated_at: string;

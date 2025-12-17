@@ -338,6 +338,9 @@ export const MarketCapProcessingPanel: React.FC = () => {
               <p><strong>Sync Fixtures:</strong> Fetches latest fixture statuses from Football API (updates LIVE match status).</p>
               <p><strong>Process All:</strong> Runs market cap transfers for all completed fixtures that haven't been processed yet.</p>
               <p><strong>Reset Market Caps:</strong> Resets all team market caps to $100.00 and clears transfer history.</p>
+              <p className="text-xs text-muted-foreground mt-2">
+                <strong>Note:</strong> In the Fixed Shares Model, market cap only changes on match results, not on purchases/sales. Trades only affect available_shares.
+              </p>
             </div>
           </>
         )}

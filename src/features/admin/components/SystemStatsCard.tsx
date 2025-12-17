@@ -159,8 +159,8 @@ export const SystemStatsCard: React.FC = () => {
                   <p className="text-sm font-semibold">
                     {formatCurrency(team.currentMarketCap)}
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    {team.sharesOutstanding} shares
+                  <p className="text-xs text-muted-foreground" title="Available shares for purchase (Total: 1000 fixed)">
+                    {team.availableShares} available
                   </p>
                 </div>
               </div>

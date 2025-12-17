@@ -3,13 +3,23 @@ import { AppContext } from '@/features/trading/contexts/AppContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { formatCurrency, formatNumber } from '@/shared/lib/formatters';
 import TransactionHistoryModal from './TransactionHistoryModal';
+import { SellConfirmationModal } from './SellConfirmationModal';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
 import { realtimeService } from '@/shared/lib/services/realtime.service';
 import { useToast } from '@/shared/hooks/use-toast';
+import { Button } from '@/shared/components/ui/button';
 
 const PortfolioPage: React.FC = () => {
-  const { portfolio, getTransactionsByClub } = useContext(AppContext);
+  const { portfolio, getTransactionsByClub, sellClub, clubs } = useContext(AppContext);
   const [selectedClub, setSelectedClub] = useState<{ id: string; name: string } | null>(null);
+  const [sellModalData, setSellModalData] = useState<{
+    clubId: string;
+    clubName: string;
+    externalId?: number;
+    pricePerShare: number;
+    currentQuantity: number;
+  } | null>(null);
+  const [isSelling, setIsSelling] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -34,6 +44,44 @@ const PortfolioPage: React.FC = () => {
     setSelectedClub(null);
   }, []);
 
+  const handleSellClick = useCallback((e: React.MouseEvent, item: typeof portfolio[0]) => {
+    e.stopPropagation(); // Prevent row click from opening transaction history
+    
+    // Find club to get external_id
+    const club = clubs.find(c => c.id === item.clubId);
+    
+    setSellModalData({
+      clubId: item.clubId,
+      clubName: item.clubName,
+      externalId: club?.externalId ? parseInt(club.externalId) : undefined,
+      pricePerShare: item.currentPrice,
+      currentQuantity: item.units
+    });
+  }, [clubs]);
+
+  const handleCloseSellModal = useCallback(() => {
+    setSellModalData(null);
+  }, []);
+
+  const handleConfirmSell = useCallback(async (shares: number) => {
+    if (!sellModalData) return;
+    
+    setIsSelling(true);
+    try {
+      await sellClub(sellModalData.clubId, shares);
+      setSellModalData(null);
+    } catch (error: any) {
+      toast({
+        title: "Sale Failed",
+        description: error.message || "An error occurred while selling shares",
+        variant: "destructive",
+        duration: 5000,
+      });
+    } finally {
+      setIsSelling(false);
+    }
+  }, [sellModalData, sellClub, toast]);
+
   // Memoized portfolio table rows
   const memoizedPortfolioRows = useMemo(() => portfolio.map((item) => {
     const percentChange = ((item.currentPrice - item.purchasePrice) / item.purchasePrice) * 100;
@@ -55,13 +103,23 @@ const PortfolioPage: React.FC = () => {
           {percentChange > 0 ? '+' : ''}{percentChange.toFixed(2)}%
         </td>
         <td className="p-4 text-right font-mono">{formatCurrency(item.totalValue)}</td>
-        <td className="p-4 text-right font-semibold text-trading-primary">{portfolioPercent.toFixed(1)}%</td>
+        <td className="p-4 text-right font-semibold text-trading-primary">{portfolioPercent.toFixed(2)}%</td>
         <td className={`p-4 text-right font-semibold ${item.profitLoss === 0 ? 'text-gray-400' : item.profitLoss > 0 ? 'price-positive' : 'price-negative'}`}>
           {item.profitLoss > 0 ? '+' : ''}{formatCurrency(item.profitLoss)}
         </td>
+        <td className="p-4 text-center" onClick={(e) => handleSellClick(e, item)}>
+          <Button
+            size="sm"
+            variant="outline"
+            className="bg-gradient-danger hover:bg-gradient-danger/80 text-white border-danger hover:border-danger/80 font-semibold"
+            onClick={(e) => handleSellClick(e, item)}
+          >
+            Sell
+          </Button>
+        </td>
       </tr>
     );
-  }), [portfolio, totalMarketValue, handleClubClick]);
+  }), [portfolio, totalMarketValue, handleClubClick, handleSellClick]);
 
   // Realtime portfolio updates
   useEffect(() => {
@@ -213,6 +271,7 @@ const PortfolioPage: React.FC = () => {
                     <th className="text-right p-4 font-semibold text-gray-300">Total Value</th>
                     <th className="text-right p-4 font-semibold text-gray-300">% Portfolio</th>
                     <th className="text-right p-4 font-semibold text-gray-300">P&L</th>
+                    <th className="text-center p-4 font-semibold text-gray-300">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -230,6 +289,20 @@ const PortfolioPage: React.FC = () => {
           onClose={handleCloseModal}
           clubName={selectedClub.name}
           transactions={getTransactionsByClub(selectedClub.id)}
+        />
+      )}
+
+      {sellModalData && (
+        <SellConfirmationModal
+          isOpen={!!sellModalData}
+          onClose={handleCloseSellModal}
+          onConfirm={handleConfirmSell}
+          clubName={sellModalData.clubName}
+          clubId={sellModalData.clubId}
+          externalId={sellModalData.externalId}
+          pricePerShare={sellModalData.pricePerShare}
+          currentQuantity={sellModalData.currentQuantity}
+          isProcessing={isSelling}
         />
       )}
     </div>

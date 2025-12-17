@@ -6,7 +6,9 @@ export interface DatabasePositionWithTeam extends DatabasePosition {
   team: {
     name: string;
     market_cap: number;
-    shares_outstanding: number;
+    shares_outstanding: number; // Keep for backward compatibility
+    total_shares?: number; // Fixed at 1000
+    available_shares?: number; // Platform inventory
   };
 }
 
@@ -32,7 +34,9 @@ export interface TeamMarketData {
   id: number;
   name: string;
   market_cap: number;
-  shares_outstanding: number;
+  shares_outstanding: number; // Keep for backward compatibility
+  total_shares?: number; // Fixed at 1000
+  available_shares?: number; // Platform inventory
   external_id?: string;
 }
 

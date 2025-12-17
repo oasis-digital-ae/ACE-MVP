@@ -80,19 +80,20 @@ User → AuthPage → Supabase Auth → User Session → AppContext → Dashboar
 ### 2. Trading Flow (Share Purchase)
 ```
 User clicks Buy → Purchase Modal → Validate Input → 
-Create Order → Update Market Cap → Update Position → Refresh UI
+Create Order → Decrease Available Shares → Update Position → Refresh UI
 ```
 
 **Detailed steps:**
 1. User browses marketplace (`/marketplace`)
 2. Clicks "Buy" on a team
-3. Modal opens with price, buy window status
-4. User enters shares (validated)
+3. Modal opens with price, buy window status, available shares
+4. User enters shares (validated against available_shares)
 5. Order created in database (via atomic transaction)
-6. Market cap increases (cash injection)
-7. User position updated
-8. Portfolio refreshes automatically
-9. Success message shown
+6. Available shares decreases (platform inventory)
+7. Market cap stays unchanged (no cash injection)
+8. User position updated
+9. Portfolio refreshes automatically
+10. Success message shown
 
 ### 3. Market Update Flow (Match Result Processing)
 ```
@@ -117,22 +118,34 @@ Real-time Update → UI Refresh
 
 ## Data Flow
 
-### Market Cap Calculation
+### Market Cap Calculation (Fixed Shares Model)
 ```
-Initial Launch Price → Share Purchases (cash injection) → Match Results (transfer) → 
-Periodic Market Cap = Previous Cap + Cash From Purchases + Transfers From Matches
+Initial Market Cap ($20,000) → Match Results (transfer) → 
+Market Cap = Previous Cap + Transfers From Matches
+
+Note: Purchases do NOT change market cap (no cash injection)
 ```
 
-### Share Price Calculation
+### Share Price Calculation (Fixed Shares Model)
 ```
-Share Price = Market Cap / Shares Outstanding
+Share Price = Market Cap / Total Shares (1000)
 
 Price increases when:
-- Users buy shares (cash injection)
 - Team wins matches (gain market cap)
 
 Price decreases when:
 - Team loses matches (loses market cap)
+
+Note: Purchases do NOT change price (market cap unchanged, total_shares fixed)
+```
+
+### Platform Inventory
+```
+Available Shares = Total Shares (1000) - User Holdings
+
+- Platform owns all shares initially (1000 per team)
+- Purchases decrease available_shares
+- No minting capability (fixed supply)
 ```
 
 ### Real-time Updates

@@ -202,7 +202,7 @@ export const CashInjectionModal: React.FC<CashInjectionModalProps> = ({
                               +{formatCurrency(injection.amount)}
                             </div>
                             <div className="text-xs text-gray-500">
-                              {((injection.amount / injection.market_cap_before) * 100).toFixed(1)}% increase
+                              {((injection.amount / injection.market_cap_before) * 100).toFixed(2)}% increase
                             </div>
                           </div>
                         </div>

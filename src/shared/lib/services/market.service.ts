@@ -14,8 +14,11 @@ export interface MarketData {
 export const marketService = {
   /**
    * Calculate current share price (NAV)
+   * Fixed Shares Model: Uses total_shares (1000) as denominator, not shares_outstanding
+   * @param sharesOutstanding - Should be total_shares (1000) in fixed shares model
    */
   calculateSharePrice(marketCap: number, sharesOutstanding: number, defaultValue: number = 20.00): number {
+    // In fixed shares model, sharesOutstanding parameter represents total_shares (fixed at 1000)
     if (sharesOutstanding <= 0) {
       return defaultValue;
     }

@@ -7,12 +7,19 @@ interface BuyWindowIndicatorProps {
   showCountdown?: boolean;
 }
 
+interface BuyWindowStatus {
+  isOpen: boolean;
+  message: string;
+  nextAction?: string;
+  nextActionTime?: Date;
+}
+
 export const BuyWindowIndicator: React.FC<BuyWindowIndicatorProps> = ({ 
   teamId, 
   compact = false, 
   showCountdown = true 
 }) => {
-  const [status, setStatus] = useState<any>(null);
+  const [status, setStatus] = useState<BuyWindowStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [timeLeft, setTimeLeft] = useState<string>('');
 
@@ -69,41 +76,93 @@ export const BuyWindowIndicator: React.FC<BuyWindowIndicatorProps> = ({
     if (!status || !showCountdown) return;
 
     const updateDisplay = () => {
-      if (status.isOpen && status.nextAction) {
-        // Extract time from nextAction (e.g., "Closes at 12/25/2024, 2:30:00 PM")
+      // Use the raw Date object if available (more reliable than parsing strings)
+      if (status.isOpen && status.nextActionTime) {
+        const closeTime = status.nextActionTime;
+        
+        // Format as "until Oct 26, 2:30 PM (UAE time)"
+        const datePart = closeTime.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          timeZone: 'Asia/Dubai'
+        });
+        const timePart = closeTime.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+          timeZone: 'Asia/Dubai'
+        });
+        const formatted = `${datePart}, ${timePart}`;
+        setTimeLeft(`until ${formatted} (UAE time)`);
+      } else if (status.isOpen && status.nextAction) {
+        // Fallback: Extract time from nextAction string if Date object not available
         const timeMatch = status.nextAction.match(/(\d{1,2}\/\d{1,2}\/\d{4}, \d{1,2}:\d{2}:\d{2} [AP]M)/);
         if (timeMatch) {
-          const closeTime = new Date(timeMatch[1]);
-          
-          // Format as "until Oct 26, 2:30 PM"
-          const formatted = closeTime.toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true
-          });
-          setTimeLeft(`until ${formatted}`);
+          try {
+            const closeTime = new Date(timeMatch[1]);
+            if (!isNaN(closeTime.getTime())) {
+              const datePart = closeTime.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                timeZone: 'Asia/Dubai'
+              });
+              const timePart = closeTime.toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true,
+                timeZone: 'Asia/Dubai'
+              });
+              const formatted = `${datePart}, ${timePart}`;
+              setTimeLeft(`until ${formatted} (UAE time)`);
+            }
+          } catch (e) {
+            console.warn('Failed to parse date from nextAction:', e);
+          }
         }
       } else if (!status.isOpen && status.nextAction) {
         // If nextAction is "will reopen after match", use it directly
         if (status.nextAction === 'will reopen after match') {
           setTimeLeft('will reopen after match');
+        } else if (status.nextActionTime) {
+          // Use raw Date object if available
+          const matchTime = status.nextActionTime;
+          const datePart = matchTime.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            timeZone: 'Asia/Dubai'
+          });
+          const timePart = matchTime.toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true,
+            timeZone: 'Asia/Dubai'
+          });
+          const formatted = `${datePart}, ${timePart}`;
+          setTimeLeft(`reopens ${formatted} (UAE time)`);
         } else {
-          // Extract match time from nextAction
+          // Fallback: Extract match time from nextAction string
           const timeMatch = status.nextAction.match(/(\d{1,2}\/\d{1,2}\/\d{4}, \d{1,2}:\d{2}:\d{2} [AP]M)/);
           if (timeMatch) {
-            const matchTime = new Date(timeMatch[1]);
-            
-            // Format as "until Oct 26, 2:30 PM"
-            const formatted = matchTime.toLocaleDateString('en-US', {
-              month: 'short',
-              day: 'numeric',
-              hour: 'numeric',
-              minute: '2-digit',
-              hour12: true
-            });
-            setTimeLeft(`reopens ${formatted}`);
+            try {
+              const matchTime = new Date(timeMatch[1]);
+              if (!isNaN(matchTime.getTime())) {
+                const datePart = matchTime.toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  timeZone: 'Asia/Dubai'
+                });
+                const timePart = matchTime.toLocaleTimeString('en-US', {
+                  hour: 'numeric',
+                  minute: '2-digit',
+                  hour12: true,
+                  timeZone: 'Asia/Dubai'
+                });
+                const formatted = `${datePart}, ${timePart}`;
+                setTimeLeft(`reopens ${formatted} (UAE time)`);
+              }
+            } catch (e) {
+              console.warn('Failed to parse date from nextAction:', e);
+            }
           }
         }
       }

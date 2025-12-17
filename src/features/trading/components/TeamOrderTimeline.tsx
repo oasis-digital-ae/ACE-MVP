@@ -226,7 +226,7 @@ export const TeamOrderTimeline: React.FC<TeamOrderTimelineProps> = ({
                         <span className={`text-sm font-medium ${getMarketCapChangeColor(event.data.marketCapChange)}`}>
                           Market Cap: {formatCurrency(event.data.marketCapBefore)} → {formatCurrency(event.data.marketCapAfter)}
                           {' '}
-                          ({event.data.marketCapChangePercent > 0 ? '+' : ''}{event.data.marketCapChangePercent.toFixed(1)}%)
+                          ({event.data.marketCapChangePercent > 0 ? '+' : ''}{event.data.marketCapChangePercent.toFixed(2)}%)
                         </span>
                       </div>
                     </div>

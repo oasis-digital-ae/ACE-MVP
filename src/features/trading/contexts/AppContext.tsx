@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { Club, Match, PortfolioItem, Transaction, PREMIER_LEAGUE_CLUBS } from '@/shared/constants/clubs';
 import { toast } from '@/shared/components/ui/use-toast';
 import { teamsService, positionsService, convertTeamToClub } from '@/shared/lib/database';
@@ -29,6 +29,7 @@ interface AppContextType {
   currentPage: string;
   setCurrentPage: (page: string) => void;
   purchaseClub: (clubId: string, units: number) => Promise<void>;
+  sellClub: (clubId: string, units: number) => Promise<void>;
   simulateMatch: () => void;
   getTransactionsByClub: (clubId: string) => Transaction[];
   loading: boolean;
@@ -52,6 +53,7 @@ const defaultAppContext: AppContextType = {
   currentPage: 'marketplace',
   setCurrentPage: () => {},
   purchaseClub: async () => {},
+  sellClub: async () => {},
   simulateMatch: () => {},
   getTransactionsByClub: () => [],
   loading: true,
@@ -89,182 +91,33 @@ const AppProviderInner: React.FC<{ children: React.ReactNode }> = ({ children })
   const [liveMatches, setLiveMatches] = useState<FootballMatch[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Set up data refresh mechanism (realtime subscriptions with polling fallback)
-  useEffect(() => {
-    if (!user) return;
-
-    let channels: RealtimeChannel[] = [];
-    let pollingInterval: NodeJS.Timeout | null = null;
-    let isRealtimeActive = false;
-
-    // Try to set up realtime subscriptions
-    const setupRealtime = () => {
-      try {
-        // Subscribe to team market cap updates (updates clubs/portfolio prices)
-        const marketChannel = realtimeService.subscribeToMarketUpdates((updatedTeam) => {
-          logger.debug('Market update received:', updatedTeam.name);
-          isRealtimeActive = true;
-          
-          // Update clubs with new market cap
-          setClubs(prevClubs => {
-            const updatedClubs = prevClubs.map(club => {
-              if (club.id === updatedTeam.id.toString()) {
-                const newPrice = updatedTeam.shares_outstanding > 0 
-                  ? updatedTeam.market_cap / updatedTeam.shares_outstanding 
-                  : club.currentValue;
-                return {
-                  ...club,
-                  currentValue: newPrice,
-                  marketCap: updatedTeam.market_cap
-                };
-              }
-              return club;
-            });
-            return updatedClubs;
-          });
-
-          // Update portfolio with new prices
-          setPortfolio(prevPortfolio => {
-            return prevPortfolio.map(item => {
-              if (item.clubId === updatedTeam.id.toString()) {
-                const newPrice = updatedTeam.shares_outstanding > 0 
-                  ? updatedTeam.market_cap / updatedTeam.shares_outstanding 
-                  : item.currentPrice;
-                return {
-                  ...item,
-                  currentPrice: newPrice,
-                  totalValue: item.units * newPrice,
-                  profitLoss: (newPrice - item.purchasePrice) * item.units
-                };
-              }
-              return item;
-            });
-          });
-        });
-        channels.push(marketChannel);
-
-        // Subscribe to user's orders (updates transactions when purchases are made)
-        const ordersChannel = supabase
-          .channel(`user-orders-${user.id}`)
-          .on(
-            'postgres_changes',
-            { 
-              event: 'INSERT', 
-              schema: 'public', 
-              table: 'orders', 
-              filter: `user_id=eq.${user.id}` 
-            },
-            async (payload) => {
-              logger.debug('New order received for user:', payload.new);
-              isRealtimeActive = true;
-              const newOrder = payload.new as any;
-              
-              // Reload transactions to include the new order
-              if (newOrder.status === 'FILLED' && newOrder.order_type === 'BUY') {
-                await loadData();
-              }
-            }
-          )
-          .subscribe();
-        channels.push(ordersChannel);
-
-        // Subscribe to user's positions (updates portfolio when positions change)
-        const positionsChannel = realtimeService.subscribeToPortfolio(user.id, async () => {
-          logger.debug('Portfolio position updated for user');
-          isRealtimeActive = true;
-          // Reload portfolio data
-          await loadData();
-        });
-        channels.push(positionsChannel);
-
-        // Subscribe to fixture/match updates (updates matches when results are applied)
-        const fixturesChannel = realtimeService.subscribeToMatchResults(async (fixture) => {
-          logger.debug('Match result applied:', fixture.id);
-          isRealtimeActive = true;
-          // Reload data to get updated market caps from match results
-          await loadData();
-        });
-        channels.push(fixturesChannel);
-
-        // Check if subscriptions are actually working after a delay
-        setTimeout(() => {
-          if (!isRealtimeActive && channels.length > 0) {
-            logger.warn('Realtime subscriptions may not be active (replication not enabled). Falling back to polling.');
-            // Fallback to polling if realtime didn't work
-            startPolling();
-          }
-        }, 5000); // Wait 5 seconds to see if we get any realtime updates
-
-      } catch (error) {
-        logger.warn('Failed to set up realtime subscriptions:', error);
-        logger.info('Falling back to polling mode');
-        startPolling();
-      }
-    };
-
-    // Fallback polling function (less frequent than before)
-    const startPolling = () => {
-      // Clear any existing polling
-      if (pollingInterval) {
-        clearInterval(pollingInterval);
-      }
-
-      // Poll every 30 seconds (less frequent than before since it's a fallback)
-      pollingInterval = setInterval(() => {
-        loadData();
-      }, 30000); // 30 seconds
-
-      logger.info('Started polling mode (30s interval)');
-    };
-
-    // Initial load
-    loadData();
-
-    // Try to set up realtime first
-    setupRealtime();
-
-    // If realtime isn't available, we'll fall back to polling after timeout
-    // Also start polling as a backup (in case realtime works but misses some updates)
-    // Use a longer interval for backup polling
-    const backupPolling = setInterval(() => {
-      loadData();
-    }, 60000); // Backup polling every 60 seconds
-
-    // Cleanup
-    return () => {
-      channels.forEach(channel => {
-        if (channel) {
-          try {
-            realtimeService.unsubscribe(channel);
-          } catch (error) {
-            supabase.removeChannel(channel);
-          }
-        }
-      });
-      if (pollingInterval) {
-        clearInterval(pollingInterval);
-      }
-      clearInterval(backupPolling);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
-
   // Load data from database
+  // Use ref to track loading state across renders (prevents hot reload issues)
+  const isLoadingDataRef = React.useRef(false);
   const loadData = withErrorHandling(async () => {
     if (!user) return;
     
+    // Prevent multiple simultaneous loads (especially during hot reload)
+    if (isLoadingDataRef.current) {
+      logger.debug('loadData already in progress, skipping...');
+      return;
+    }
+    
     try {
+      isLoadingDataRef.current = true;
       setLoading(true);
       
       // Load teams/clubs
       const dbTeams = await teamsService.getAll();
       logger.db('Loaded teams from database', { count: dbTeams.length });
       
-      // Log market cap and shares for first few teams in debug mode
+      // Log market cap and shares for first few teams in debug mode (Fixed Shares Model)
       if (dbTeams.length > 0) {
         logger.debug('Sample team data:', dbTeams[0]);
         dbTeams.slice(0, 3).forEach(team => {
-          logger.debug(`Team ${team.name}: Market Cap=$${team.market_cap}, Shares=${team.shares_outstanding}, NAV=$${(team.market_cap / team.shares_outstanding).toFixed(2)}`);
+          const totalShares = team.total_shares || 1000;
+          const nav = totalShares > 0 ? team.market_cap / totalShares : 20.00;
+          logger.debug(`Team ${team.name}: Market Cap=$${team.market_cap}, Total Shares=${totalShares}, Available=${team.available_shares || 1000}, NAV=$${nav.toFixed(2)}`);
         });
       }
       
@@ -358,30 +211,185 @@ const AppProviderInner: React.FC<{ children: React.ReactNode }> = ({ children })
       throw new DatabaseError('Failed to load application data');
     } finally {
       setLoading(false);
+      isLoadingDataRef.current = false;
     }
   }, 'loadData');
-
-  // Load data when user changes
+  
+  // Set up data refresh mechanism (realtime subscriptions with polling fallback)
   useEffect(() => {
-    if (user) {
-      loadData();
-      // Start match monitoring service
-      // Disabled: match monitoring now handled by database scheduled job
-      // matchSchedulerService.start();
-    } else {
-      setClubs([]);
-      setPortfolio([]);
-      setTransactions([]);
-      setLoading(false);
-      // Stop match monitoring service when user logs out
-      matchSchedulerService.stop();
-    }
-    
-    // Cleanup on unmount
-    return () => {
-      matchSchedulerService.stop();
+    if (!user) return;
+
+    let channels: RealtimeChannel[] = [];
+    let pollingInterval: NodeJS.Timeout | null = null;
+    let isRealtimeActive = false;
+    let loadDataTimeout: NodeJS.Timeout | null = null;
+
+    // Debounce helper to prevent rapid-fire database calls during hot reload
+    const debouncedLoadData = () => {
+      if (loadDataTimeout) {
+        clearTimeout(loadDataTimeout);
+      }
+      loadDataTimeout = setTimeout(() => {
+        loadData();
+      }, 2000); // Debounce to 2 seconds - batch rapid updates (especially during hot reload)
     };
-  }, [user]);
+
+    // Try to set up realtime subscriptions
+    const setupRealtime = () => {
+      try {
+        // Subscribe to team market cap updates (updates clubs/portfolio prices)
+        const marketChannel = realtimeService.subscribeToMarketUpdates((updatedTeam) => {
+          logger.debug('Market update received:', updatedTeam.name);
+          isRealtimeActive = true;
+          
+          // Update clubs with new market cap (Fixed Shares Model: price = market_cap / total_shares)
+          setClubs(prevClubs => {
+            const updatedClubs = prevClubs.map(club => {
+              if (club.id === updatedTeam.id.toString()) {
+                const totalShares = updatedTeam.total_shares || 1000;
+                const newPrice = totalShares > 0 
+                  ? updatedTeam.market_cap / totalShares 
+                  : club.currentValue;
+                return {
+                  ...club,
+                  currentValue: newPrice,
+                  marketCap: updatedTeam.market_cap
+                };
+              }
+              return club;
+            });
+            return updatedClubs;
+          });
+
+          // Update portfolio with new prices (Fixed Shares Model: price = market_cap / total_shares)
+          setPortfolio(prevPortfolio => {
+            return prevPortfolio.map(item => {
+              if (item.clubId === updatedTeam.id.toString()) {
+                const totalShares = updatedTeam.total_shares || 1000;
+                const newPrice = totalShares > 0 
+                  ? updatedTeam.market_cap / totalShares 
+                  : item.currentPrice;
+                return {
+                  ...item,
+                  currentPrice: newPrice,
+                  totalValue: item.units * newPrice,
+                  profitLoss: (newPrice - item.purchasePrice) * item.units
+                };
+              }
+              return item;
+            });
+          });
+        });
+        channels.push(marketChannel);
+
+        // Subscribe to user's orders (updates transactions when purchases are made)
+        const ordersChannel = supabase
+          .channel(`user-orders-${user.id}`)
+          .on(
+            'postgres_changes',
+            { 
+              event: 'INSERT', 
+              schema: 'public', 
+              table: 'orders', 
+              filter: `user_id=eq.${user.id}` 
+            },
+            async (payload) => {
+              logger.debug('New order received for user:', payload.new);
+              isRealtimeActive = true;
+              const newOrder = payload.new as any;
+              
+              // Reload transactions to include the new order (debounced to prevent rapid calls)
+              if (newOrder.status === 'FILLED' && newOrder.order_type === 'BUY') {
+                debouncedLoadData();
+              }
+            }
+          )
+          .subscribe();
+        channels.push(ordersChannel);
+
+        // Subscribe to user's positions (updates portfolio when positions change)
+        const positionsChannel = realtimeService.subscribeToPortfolio(user.id, async () => {
+          logger.debug('Portfolio position updated for user');
+          isRealtimeActive = true;
+          // Reload portfolio data (debounced to prevent rapid calls)
+          debouncedLoadData();
+        });
+        channels.push(positionsChannel);
+
+        // Subscribe to fixture/match updates (updates matches when results are applied)
+        const fixturesChannel = realtimeService.subscribeToMatchResults(async (fixture) => {
+          logger.debug('Match result applied:', fixture.id);
+          isRealtimeActive = true;
+          // Reload data to get updated market caps from match results (debounced)
+          debouncedLoadData();
+        });
+        channels.push(fixturesChannel);
+
+        // Check if subscriptions are actually working after a delay
+        setTimeout(() => {
+          if (!isRealtimeActive && channels.length > 0) {
+            logger.warn('Realtime subscriptions may not be active (replication not enabled). Falling back to polling.');
+            // Fallback to polling if realtime didn't work
+            startPolling();
+          }
+        }, 5000); // Wait 5 seconds to see if we get any realtime updates
+
+      } catch (error) {
+        logger.warn('Failed to set up realtime subscriptions:', error);
+        logger.info('Falling back to polling mode');
+        startPolling();
+      }
+    };
+
+    // Fallback polling function (less frequent than before)
+    const startPolling = () => {
+      // Clear any existing polling
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
+
+      // Poll every 30 seconds (less frequent than before since it's a fallback)
+      pollingInterval = setInterval(() => {
+        loadData();
+      }, 30000); // 30 seconds
+
+      logger.info('Started polling mode (30s interval)');
+    };
+
+    // Initial load
+    loadData();
+
+    // Try to set up realtime first
+    setupRealtime();
+
+    // Note: Backup polling removed - if realtime works, we don't need it.
+    // If realtime fails, startPolling() will handle fallback polling at 30s interval.
+
+    // Cleanup function
+    return () => {
+      // Clear debounce timeout
+      if (loadDataTimeout) {
+        clearTimeout(loadDataTimeout);
+      }
+      
+      // Unsubscribe from all realtime channels
+      channels.forEach(channel => {
+        if (channel) {
+          try {
+            realtimeService.unsubscribe(channel);
+          } catch (error) {
+            supabase.removeChannel(channel);
+          }
+        }
+      });
+      
+      // Clear polling interval
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]); // loadData is stable (wrapped in withErrorHandling), but we disable exhaustive-deps to avoid re-running on every render
 
   const toggleSidebar = () => {
     setSidebarOpen(prev => !prev);
@@ -414,13 +422,15 @@ const AppProviderInner: React.FC<{ children: React.ReactNode }> = ({ children })
         throw new BusinessLogicError('Team not found');
       }
 
-      // Calculate proper NAV based on current market cap and shares outstanding
-      const currentNAV = team.shares_outstanding > 0 ? 
-        team.market_cap / team.shares_outstanding : 
-        20.00; // Use $20 as default when no shares outstanding
+      // Calculate proper NAV using total_shares (fixed at 1000) - Fixed Shares Model
+      const totalShares = team.total_shares || 1000;
+      const currentNAV = totalShares > 0 ? 
+        team.market_cap / totalShares : 
+        20.00; // Use $20 as default when no total_shares
       
       const nav = currentNAV;
-      const totalCost = nav * units;
+      // Round to 2 decimal places to avoid floating point precision issues
+      const totalCost = Math.round((nav * units) * 100) / 100;
 
       // Validate purchase amount
       if (totalCost <= 0) {
@@ -555,6 +565,181 @@ const AppProviderInner: React.FC<{ children: React.ReactNode }> = ({ children })
     }
   }, 'purchaseClub');
 
+  const sellClub = withErrorHandling(async (clubId: string, units: number) => {
+    if (!user) {
+      throw new AuthenticationError('You must be logged in to sell shares');
+    }
+
+    // Add a small delay to prevent rapid-fire sale conflicts
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Validate input
+    if (!clubId || units <= 0) {
+      throw new ValidationError('Invalid club ID or share quantity');
+    }
+
+    try {
+      // Convert string ID to integer for database operations
+      const teamIdInt = parseInt(clubId);
+      
+      if (isNaN(teamIdInt)) {
+        throw new ValidationError('Invalid club ID format');
+      }
+      
+      // Get current team data
+      const team = await teamsService.getById(teamIdInt);
+      if (!team) {
+        throw new BusinessLogicError('Team not found');
+      }
+
+      // Check if user has a position for this team
+      const userPositions = await positionsService.getUserPositions(user.id);
+      const userPosition = userPositions.find(p => p.team_id === teamIdInt);
+      
+      if (!userPosition || userPosition.quantity < units) {
+        throw new BusinessLogicError(`You do not have enough shares to sell. You own ${userPosition?.quantity || 0} share(s).`);
+      }
+
+      // Calculate proper NAV using total_shares (fixed at 1000) - Fixed Shares Model
+      const totalShares = team.total_shares || 1000;
+      const currentNAV = totalShares > 0 ? 
+        team.market_cap / totalShares : 
+        20.00; // Use $20 as default when no total_shares
+      
+      const nav = currentNAV;
+      // Round to 2 decimal places to avoid floating point precision issues
+      const totalProceeds = Math.round((nav * units) * 100) / 100;
+
+      // Validate sale amount
+      if (totalProceeds <= 0) {
+        throw new BusinessLogicError('Invalid sale amount');
+      }
+
+      // Get or create profile for the user (using id directly as auth user ID)
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', user.id)
+        .single();
+      
+      if (profileError && profileError.code !== 'PGRST116') { // PGRST116 = no rows returned
+        throw new DatabaseError('Failed to get user profile');
+      }
+      
+      let profileId: string;
+      if (profile) {
+        profileId = profile.id;
+      } else {
+        // Use upsert to handle existing profiles gracefully
+        const { data: newProfile, error: createError } = await supabase
+          .from('profiles')
+          .upsert(
+            { 
+              id: user.id, 
+              username: user.email ?? `user_${user.id.slice(0, 8)}` 
+            },
+            { 
+              onConflict: 'id',
+              ignoreDuplicates: false 
+            }
+          )
+          .select('id')
+          .single();
+        
+        if (createError) {
+          // If it's a duplicate key error, that's actually fine - profile already exists
+          if (createError.code === '23505') {
+            profileId = user.id; // Use the user ID directly
+          } else {
+            throw new DatabaseError('Failed to create user profile');
+          }
+        } else if (!newProfile) {
+          throw new DatabaseError('Failed to create user profile');
+        } else {
+          profileId = newProfile.id;
+        }
+      }
+
+      // CRITICAL: Use atomic transaction for sale
+      logger.debug(`Processing atomic sale: User ${profileId}, Team ${teamIdInt}, Units ${units}, Price ${nav}`);
+      
+      const { data: result, error: atomicError } = await supabase.rpc(
+        'process_share_sale_atomic',
+        {
+          p_user_id: profileId,
+          p_team_id: teamIdInt,
+          p_shares: units,
+          p_price_per_share: nav,
+          p_total_amount: totalProceeds
+        }
+      );
+
+      if (atomicError) {
+        logger.error('Atomic sale failed:', atomicError);
+        
+        // Parse error message for user-friendly display
+        let errorMessage = atomicError.message || 'Sale failed';
+        
+        // Handle specific error cases
+        if (errorMessage.includes('Insufficient shares')) {
+          errorMessage = 'You do not have enough shares to sell.';
+        } else if (errorMessage.includes('do not have any shares')) {
+          errorMessage = 'You do not have any shares of this team to sell.';
+        } else if (errorMessage.includes('row-level security')) {
+          errorMessage = 'Sale failed due to security policy. Please try again or contact support.';
+        } else if (errorMessage.includes('Price mismatch')) {
+          errorMessage = 'Price has changed. Please refresh and try again.';
+        } else if (errorMessage.includes('Team not found')) {
+          errorMessage = 'Team not found. Please refresh the page.';
+        }
+        
+        throw new DatabaseError(errorMessage);
+      }
+
+      if (!result?.success) {
+        const errorMsg = result?.error || 'Sale transaction failed';
+        let friendlyMessage = errorMsg;
+        
+        if (errorMsg.includes('Insufficient shares')) {
+          friendlyMessage = 'You do not have enough shares to sell.';
+        } else if (errorMsg.includes('do not have any shares')) {
+          friendlyMessage = 'You do not have any shares of this team to sell.';
+        }
+        
+        throw new BusinessLogicError(friendlyMessage);
+      }
+
+      logger.debug(`Atomic sale completed successfully:`, result);
+
+      // Refresh data immediately after sale
+      logger.debug('Refreshing data after sale...');
+      await loadData();
+      logger.debug('Data refresh completed');
+      
+      // Trigger wallet balance refresh via custom event (since we can't import hook here)
+      // Components that use useAuth will handle the refresh
+      window.dispatchEvent(new CustomEvent('wallet-balance-changed'));
+      
+      toast({
+        title: "Sale Successful",
+        description: `Successfully sold ${units} share(s) of ${team.name} at $${nav.toFixed(2)} per share. $${totalProceeds.toFixed(2)} has been credited to your wallet.`,
+        variant: "default",
+      });
+
+    } catch (error) {
+      logger.error('Error selling shares:', error);
+      
+      // Throw with user-friendly error message
+      if (error instanceof BusinessLogicError || error instanceof DatabaseError) {
+        throw error; // Already has user-friendly message
+      } else if (error instanceof Error) {
+        throw new DatabaseError(`Sale failed: ${error.message}`);
+      } else {
+        throw new DatabaseError('Sale failed. Please try again.');
+      }
+    }
+  }, 'sellClub');
+
   const simulateMatch = withErrorHandling(async () => {
     try {
       // Get fixtures that need processing
@@ -645,6 +830,7 @@ const AppProviderInner: React.FC<{ children: React.ReactNode }> = ({ children })
         currentPage,
         setCurrentPage,
         purchaseClub,
+        sellClub,
         simulateMatch,
         getTransactionsByClub,
         loading,

@@ -91,8 +91,18 @@ export const UserInvestmentsTable: React.FC = () => {
           bValue = b.currentSharePrice || 0;
           break;
         case 'marketCapChange':
-          const aChange = a.marketCapAfter && a.marketCapBefore ? a.marketCapAfter - a.marketCapBefore : 0;
-          const bChange = b.marketCapAfter && b.marketCapBefore ? b.marketCapAfter - b.marketCapBefore : 0;
+          // Fixed Shares Model: Market cap doesn't change on purchases/sales
+          // Only match results change market cap, so trades should show $0.00
+          const aChange = a.marketCapAfter && a.marketCapBefore 
+            ? Math.abs(a.marketCapAfter - a.marketCapBefore) > 0.01 
+              ? a.marketCapAfter - a.marketCapBefore 
+              : 0 
+            : 0;
+          const bChange = b.marketCapAfter && b.marketCapBefore 
+            ? Math.abs(b.marketCapAfter - b.marketCapBefore) > 0.01 
+              ? b.marketCapAfter - b.marketCapBefore 
+              : 0 
+            : 0;
           aValue = aChange;
           bValue = bChange;
           break;
@@ -169,7 +179,7 @@ export const UserInvestmentsTable: React.FC = () => {
           <div className="flex items-center space-x-2">
             <Users className="h-5 w-5" />
             <span>User Investments</span>
-            <Badge variant="secondary">{filteredAndSortedInvestments.length} purchases</Badge>
+            <Badge variant="secondary">{filteredAndSortedInvestments.length} trades</Badge>
           </div>
           <Button variant="outline" size="sm" onClick={refetch}>
             Refresh
@@ -342,19 +352,39 @@ export const UserInvestmentsTable: React.FC = () => {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center space-x-1">
-                      {investment.marketCapBefore && investment.marketCapAfter && (
-                        <>
-                          {investment.marketCapAfter > investment.marketCapBefore ? (
-                            <TrendingUp className="h-3 w-3 text-green-600" />
-                          ) : (
-                            <TrendingDown className="h-3 w-3 text-red-600" />
-                          )}
-                          <span className={`text-xs ${
-                            investment.marketCapAfter > investment.marketCapBefore ? 'text-green-600' : 'text-red-600'
-                          }`}>
-                            {formatCurrency(investment.marketCapAfter - investment.marketCapBefore)}
-                          </span>
-                        </>
+                      {investment.marketCapBefore !== undefined && investment.marketCapAfter !== undefined ? (
+                        (() => {
+                          // Fixed Shares Model: Market cap doesn't change on purchases/sales
+                          const marketCapChange = investment.marketCapAfter - investment.marketCapBefore;
+                          const hasChange = Math.abs(marketCapChange) > 0.01; // Only show if actually changed (> 1 cent)
+                          
+                          if (hasChange) {
+                            // This would be a match result, not a trade
+                            return (
+                              <>
+                                {marketCapChange > 0 ? (
+                                  <TrendingUp className="h-3 w-3 text-green-600" />
+                                ) : (
+                                  <TrendingDown className="h-3 w-3 text-red-600" />
+                                )}
+                                <span className={`text-xs ${
+                                  marketCapChange > 0 ? 'text-green-600' : 'text-red-600'
+                                }`}>
+                                  {formatCurrency(marketCapChange)}
+                                </span>
+                              </>
+                            );
+                          } else {
+                            // No change - this is a purchase/sale (market cap doesn't change on trades)
+                            return (
+                              <span className="text-xs text-muted-foreground" title="Market cap only changes on match results, not trades">
+                                $0.00
+                              </span>
+                            );
+                          }
+                        })()
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
                       )}
                     </div>
                   </TableCell>

@@ -96,7 +96,8 @@ export const TradeHistoryTable: React.FC = () => {
       'Total Amount',
       'Status',
       'Market Cap Before',
-      'Market Cap After'
+      'Market Cap After',
+      'Market Cap Change'
     ];
 
     const csvData = trades.map(trade => [
@@ -109,7 +110,11 @@ export const TradeHistoryTable: React.FC = () => {
       trade.total_amount,
       trade.status,
       trade.market_cap_before || '',
-      trade.market_cap_after || ''
+      trade.market_cap_after || '',
+      (() => {
+        const change = (trade.market_cap_after || 0) - (trade.market_cap_before || 0);
+        return Math.abs(change) > 0.01 ? change.toFixed(2) : '0.00';
+      })()
     ]);
 
     const csvContent = [
@@ -357,10 +362,26 @@ export const TradeHistoryTable: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         <p className="font-semibold">{formatCurrency(trade.total_amount)}</p>
-                        {trade.market_cap_before && trade.market_cap_after && (
-                          <p className="text-xs text-muted-foreground">
-                            MC: {formatCurrency(trade.market_cap_before)} → {formatCurrency(trade.market_cap_after)}
-                          </p>
+                        {trade.market_cap_before !== undefined && trade.market_cap_after !== undefined && (
+                          (() => {
+                            // Fixed Shares Model: Market cap doesn't change on purchases/sales
+                            const marketCapChange = Math.abs((trade.market_cap_after || 0) - (trade.market_cap_before || 0));
+                            const hasMarketCapChange = marketCapChange > 0.01; // Only show if actually changed (> 1 cent)
+                            
+                            if (hasMarketCapChange) {
+                              return (
+                                <p className="text-xs text-muted-foreground">
+                                  MC: {formatCurrency(trade.market_cap_before || 0)} → {formatCurrency(trade.market_cap_after || 0)}
+                                </p>
+                              );
+                            } else {
+                              return (
+                                <p className="text-xs text-muted-foreground" title="Market cap only changes on match results, not trades">
+                                  MC: No change
+                                </p>
+                              );
+                            }
+                          })()
                         )}
                       </TableCell>
                       <TableCell>

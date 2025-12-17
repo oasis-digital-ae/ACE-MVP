@@ -240,7 +240,7 @@ export const MatchHistoryModal: React.FC<MatchHistoryModalProps> = ({
                         {getResultIcon(match.result)}
                         {match.priceImpact > 0 ? '+' : ''}{formatCurrency(match.priceImpact)}
                         <span className="text-xs">
-                          ({match.priceImpactPercent > 0 ? '+' : ''}{match.priceImpactPercent.toFixed(1)}%)
+                          ({match.priceImpactPercent > 0 ? '+' : ''}{match.priceImpactPercent.toFixed(2)}%)
                         </span>
                       </div>
                     </div>
