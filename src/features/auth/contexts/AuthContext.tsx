@@ -8,11 +8,13 @@ import { logger } from '@/shared/lib/logger';
 
 interface UserProfile {
   id: string;
-  email?: string;
-  full_name?: string | null;
-  birthday?: string | null;
-  country?: string | null;
-  phone?: string | null;
+  email: string;
+  first_name: string;
+  last_name: string;
+  full_name?: string; // Kept for backward compatibility
+  birthday: string;
+  country: string;
+  phone: string;
   is_admin?: boolean;
 }
 
@@ -26,7 +28,6 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshWalletBalance: () => Promise<void>;
-  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -90,44 +91,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
       if (session?.user) {
-        // Check if user has metadata from signup (email verification case)
-        const userMetadata = session.user.user_metadata;
-        if (userMetadata && (userMetadata.full_name || userMetadata.birthday || userMetadata.country)) {
-          // User just verified email - create full profile with signup data
-          try {
-            const birthdayDate = userMetadata.birthday ? new Date(userMetadata.birthday).toISOString().split('T')[0] : null;
-            const { error: profileError } = await supabase
-              .from('profiles')
-              .upsert(
-                {
-                  id: session.user.id,
-                  username: session.user.email ?? `user_${session.user.id.slice(0, 8)}`,
-                  full_name: userMetadata.full_name || null,
-                  birthday: birthdayDate,
-                  country: userMetadata.country || null,
-                  phone: userMetadata.phone || null,
-                  email: session.user.email || null
-                },
-                {
-                  onConflict: 'id',
-                  ignoreDuplicates: false
-                }
-              );
-            if (profileError) {
-              logger.warn('Failed to create profile from metadata:', profileError);
-              await ensureProfile(session.user);
-            }
-          } catch (err) {
-            logger.error('Error creating profile from metadata:', err);
-            await ensureProfile(session.user);
-          }
-        } else {
-          // Normal login - just ensure profile exists
-          await ensureProfile(session.user);
-        }
+        ensureProfile(session.user);
         fetchProfile(session.user.id);
       } else {
         setProfile(null);
@@ -199,7 +166,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, full_name, email, birthday, country, phone, is_admin, username')
+        .select('*')
         .eq('id', userId)
         .maybeSingle();
 
@@ -208,15 +175,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw error;
       }
       
-      logger.debug('Profile fetched:', { userId, isAdmin: data?.is_admin, hasData: !!data, fullName: data?.full_name, email: data?.email });
-      console.log('Profile data:', { 
-        userId, 
-        full_name: data?.full_name, 
-        email: data?.email, 
-        user_email: user?.email,
-        hasFullName: !!data?.full_name,
-        fullNameLength: data?.full_name?.length 
-      });
+      logger.debug('Profile fetched:', { userId, isAdmin: data?.is_admin, hasData: !!data });
       setProfile(data);
       
       // Fetch wallet balance
@@ -266,7 +225,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             {
               id: data.user.id,
               username: email,
-              full_name: userData.full_name,
+              first_name: userData.first_name,
+              last_name: userData.last_name,
+              full_name: `${userData.first_name} ${userData.last_name}`, // Keep full_name for backward compatibility
               birthday: birthdayDate,
               country: userData.country,
               phone: userData.phone,
@@ -302,28 +263,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signIn = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
     if (error) throw error;
-    
-    // Refresh profile after sign in to ensure we have the latest data
-    if (data.user) {
-      await fetchProfile(data.user.id);
-    }
   };
 
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
-  };
-
-  const refreshProfile = async () => {
-    if (user) {
-      await fetchProfile(user.id);
-    }
   };
 
   return (
@@ -336,8 +286,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       signUp,
       signIn,
       signOut,
-      refreshWalletBalance,
-      refreshProfile
+      refreshWalletBalance
     }}>
       {children}
     </AuthContext.Provider>

@@ -40,3 +40,4 @@ COMMENT ON COLUMN public.profiles.email IS 'User email address (synced from auth
 COMMENT ON COLUMN public.profiles.birthday IS 'User date of birth';
 COMMENT ON COLUMN public.profiles.country IS 'User country of residence';
 COMMENT ON COLUMN public.profiles.phone IS 'User telephone number';
+

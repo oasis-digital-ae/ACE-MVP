@@ -23,8 +23,6 @@ const PortfolioPage: React.FC = () => {
   const { user, profile } = useAuth();
   const { toast } = useToast();
 
-  // Get user profile for welcome message
-
   // Memoized KPI calculations
   const { totalInvested, totalMarketValue, totalProfitLoss } = useMemo(() => {
     const invested = portfolio.reduce((sum, item) => sum + (item.purchasePrice * item.units), 0);
@@ -142,14 +140,14 @@ const PortfolioPage: React.FC = () => {
     return () => {
       realtimeService.unsubscribe(channel);
     };
-  }, [user, toast]);
+    }, [user, toast]);
 
   return (
     <div className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
       {/* Welcome Header */}
-      {profile?.full_name && (
+      {profile && (profile.first_name || profile.full_name) && (
         <div className="mb-2">
-          <h1 className="text-2xl font-bold">Welcome, {profile.full_name}</h1>
+          <h1 className="text-2xl font-bold">Welcome, {profile.first_name || (profile.full_name ? profile.full_name.split(' ')[0] : 'User')}</h1>
         </div>
       )}
       

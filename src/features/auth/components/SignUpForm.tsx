@@ -41,7 +41,8 @@ export const SignUpForm: React.FC<SignUpFormProps> = ({ onSwitchToLogin }) => {
     email: '',
     password: '',
     confirmPassword: '',
-    fullName: '',
+    firstName: '',
+    lastName: '',
     birthday: '',
     country: '',
     phone: ''
@@ -54,18 +55,19 @@ export const SignUpForm: React.FC<SignUpFormProps> = ({ onSwitchToLogin }) => {
     e.preventDefault();
     
     try {
-      // Sanitize fullName with name type to preserve spaces properly
+      // Sanitize firstName and lastName with name type to preserve spaces properly
       const sanitizedFormData = {
         ...formData,
-        fullName: sanitizeInput(formData.fullName, 'name')
+        firstName: sanitizeInput(formData.firstName, 'name'),
+        lastName: sanitizeInput(formData.lastName, 'name')
       };
 
       // Validate and sanitize form data
       const validation = validateAndSanitize(AppValidators.userRegistration, sanitizedFormData, {
         email: 'email',
         password: 'text',
-        confirmPassword: 'text',
-        fullName: 'text',
+        firstName: 'text',
+        lastName: 'text',
         birthday: 'text',
         country: 'text',
         phone: 'text'
@@ -108,7 +110,8 @@ export const SignUpForm: React.FC<SignUpFormProps> = ({ onSwitchToLogin }) => {
       setValidationErrors({});
       
       await signUp(validation.data.email, validation.data.password, {
-        full_name: validation.data.fullName,
+        first_name: validation.data.firstName,
+        last_name: validation.data.lastName,
         birthday: validation.data.birthday,
         country: validation.data.country,
         phone: validation.data.phone
@@ -125,7 +128,8 @@ export const SignUpForm: React.FC<SignUpFormProps> = ({ onSwitchToLogin }) => {
         email: '',
         password: '',
         confirmPassword: '',
-        fullName: '',
+        firstName: '',
+        lastName: '',
         birthday: '',
         country: '',
         phone: ''
@@ -167,9 +171,13 @@ export const SignUpForm: React.FC<SignUpFormProps> = ({ onSwitchToLogin }) => {
   // Real-time validation checks
   const validationChecks = useMemo(() => {
     return {
-      fullName: {
-        isValid: formData.fullName.length >= 2,
-        message: formData.fullName.length > 0 && formData.fullName.length < 2 ? 'Must be at least 2 characters' : ''
+      firstName: {
+        isValid: formData.firstName.length >= 2,
+        message: formData.firstName.length > 0 && formData.firstName.length < 2 ? 'Must be at least 2 characters' : ''
+      },
+      lastName: {
+        isValid: formData.lastName.length >= 2,
+        message: formData.lastName.length > 0 && formData.lastName.length < 2 ? 'Must be at least 2 characters' : ''
       },
       email: {
         isValid: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email),
@@ -232,53 +240,100 @@ export const SignUpForm: React.FC<SignUpFormProps> = ({ onSwitchToLogin }) => {
             </div>
           )}
 
-          <div className="space-y-2">
-            <Label htmlFor="fullName" className="text-sm font-medium flex items-center gap-2">
-              <User className="h-4 w-4" />
-              Full Name
-            </Label>
-            <div className="relative">
-              <Input
-                id="fullName"
-                type="text"
-                value={formData.fullName}
-                onChange={(e) => {
-                  // Allow spaces - don't sanitize on input
-                  setFormData(prev => ({ ...prev, fullName: e.target.value }));
-                  if (validationErrors.fullName) {
-                    setValidationErrors(prev => ({ ...prev, fullName: '' }));
-                  }
-                }}
-                onBlur={(e) => {
-                  // Sanitize on blur to clean up the input
-                  const sanitized = sanitizeInput(e.target.value, 'name');
-                  if (sanitized !== e.target.value) {
-                    setFormData(prev => ({ ...prev, fullName: sanitized }));
-                  }
-                }}
-                placeholder="Enter your full name"
-                required
-                className={`pr-10 ${validationErrors.fullName ? 'border-red-500 focus:border-red-500' : validationChecks.fullName.isValid && formData.fullName.length > 0 ? 'border-green-500/50' : ''}`}
-              />
-              {formData.fullName.length > 0 && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  {validationChecks.fullName.isValid ? (
-                    <CheckCircle2 className="h-4 w-4 text-green-500" />
-                  ) : (
-                    <XCircle className="h-4 w-4 text-red-500" />
-                  )}
-                </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="firstName" className="text-sm font-medium flex items-center gap-2">
+                <User className="h-4 w-4" />
+                First Name
+              </Label>
+              <div className="relative">
+                <Input
+                  id="firstName"
+                  type="text"
+                  value={formData.firstName}
+                  onChange={(e) => {
+                    setFormData(prev => ({ ...prev, firstName: e.target.value }));
+                    if (validationErrors.firstName) {
+                      setValidationErrors(prev => ({ ...prev, firstName: '' }));
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const sanitized = sanitizeInput(e.target.value, 'name');
+                    if (sanitized !== e.target.value) {
+                      setFormData(prev => ({ ...prev, firstName: sanitized }));
+                    }
+                  }}
+                  placeholder="First name"
+                  required
+                  className={`pr-10 ${validationErrors.firstName ? 'border-red-500 focus:border-red-500' : validationChecks.firstName.isValid && formData.firstName.length > 0 ? 'border-green-500/50' : ''}`}
+                />
+                {formData.firstName.length > 0 && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    {validationChecks.firstName.isValid ? (
+                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-red-500" />
+                    )}
+                  </div>
+                )}
+              </div>
+              {validationErrors.firstName && (
+                <p className="text-xs text-red-400 flex items-center gap-1">
+                  <XCircle className="h-3 w-3" />
+                  {validationErrors.firstName}
+                </p>
+              )}
+              {!validationErrors.firstName && validationChecks.firstName.message && (
+                <p className="text-xs text-red-400">{validationChecks.firstName.message}</p>
               )}
             </div>
-            {validationErrors.fullName && (
-              <p className="text-xs text-red-400 flex items-center gap-1">
-                <XCircle className="h-3 w-3" />
-                {validationErrors.fullName}
-              </p>
-            )}
-            {!validationErrors.fullName && validationChecks.fullName.message && (
-              <p className="text-xs text-red-400">{validationChecks.fullName.message}</p>
-            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="lastName" className="text-sm font-medium flex items-center gap-2">
+                <User className="h-4 w-4" />
+                Last Name
+              </Label>
+              <div className="relative">
+                <Input
+                  id="lastName"
+                  type="text"
+                  value={formData.lastName}
+                  onChange={(e) => {
+                    setFormData(prev => ({ ...prev, lastName: e.target.value }));
+                    if (validationErrors.lastName) {
+                      setValidationErrors(prev => ({ ...prev, lastName: '' }));
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const sanitized = sanitizeInput(e.target.value, 'name');
+                    if (sanitized !== e.target.value) {
+                      setFormData(prev => ({ ...prev, lastName: sanitized }));
+                    }
+                  }}
+                  placeholder="Last name"
+                  required
+                  className={`pr-10 ${validationErrors.lastName ? 'border-red-500 focus:border-red-500' : validationChecks.lastName.isValid && formData.lastName.length > 0 ? 'border-green-500/50' : ''}`}
+                />
+                {formData.lastName.length > 0 && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    {validationChecks.lastName.isValid ? (
+                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-red-500" />
+                    )}
+                  </div>
+                )}
+              </div>
+              {validationErrors.lastName && (
+                <p className="text-xs text-red-400 flex items-center gap-1">
+                  <XCircle className="h-3 w-3" />
+                  {validationErrors.lastName}
+                </p>
+              )}
+              {!validationErrors.lastName && validationChecks.lastName.message && (
+                <p className="text-xs text-red-400">{validationChecks.lastName.message}</p>
+              )}
+            </div>
           </div>
           
           <div className="space-y-2">

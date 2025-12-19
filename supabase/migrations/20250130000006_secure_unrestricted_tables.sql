@@ -169,3 +169,4 @@ COMMENT ON POLICY teams_select_public ON public.teams IS
 
 COMMENT ON POLICY transfers_ledger_select_public ON public.transfers_ledger IS 
   'Public read access for market transfers. Only service role can insert.';
+

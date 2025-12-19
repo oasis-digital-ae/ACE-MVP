@@ -122,7 +122,8 @@ export const AppValidators = {
   userRegistration: new Validator<{
     email: string;
     password: string;
-    fullName: string;
+    firstName: string;
+    lastName: string;
     birthday: string;
     country: string;
     phone: string;
@@ -131,8 +132,10 @@ export const AppValidators = {
     .addRule('email', ValidationRules.email())
     .addRule('password', ValidationRules.required('Password is required'))
     .addRule('password', ValidationRules.minLength(6, 'Password must be at least 6 characters'))
-    .addRule('fullName', ValidationRules.required('Full name is required'))
-    .addRule('fullName', ValidationRules.minLength(2, 'Full name must be at least 2 characters'))
+    .addRule('firstName', ValidationRules.required('First name is required'))
+    .addRule('firstName', ValidationRules.minLength(2, 'First name must be at least 2 characters'))
+    .addRule('lastName', ValidationRules.required('Last name is required'))
+    .addRule('lastName', ValidationRules.minLength(2, 'Last name must be at least 2 characters'))
     .addRule('birthday', ValidationRules.required('Birthday is required'))
     .addRule('country', ValidationRules.required('Country is required'))
     .addRule('phone', ValidationRules.required('Phone number is required')),
