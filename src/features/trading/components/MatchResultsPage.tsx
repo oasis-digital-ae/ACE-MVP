@@ -278,7 +278,8 @@ const MatchResultsPage: React.FC = () => {
                             <div className="flex items-center gap-2 flex-1 justify-end">
                               <ClickableTeamName
                                 teamName={fixture.home_team?.name || 'Home Team'}
-                                teamId={fixture.home_team?.external_id ? parseInt(fixture.home_team.external_id) : undefined}
+                                teamId={fixture.home_team?.id}
+                                externalId={fixture.home_team?.external_id ? parseInt(fixture.home_team.external_id) : undefined}
                                 className="text-sm font-medium text-white hover:text-trading-primary transition-colors text-right"
                               />
                               <TeamLogo 
@@ -322,7 +323,8 @@ const MatchResultsPage: React.FC = () => {
                               />
                               <ClickableTeamName
                                 teamName={fixture.away_team?.name || 'Away Team'}
-                                teamId={fixture.away_team?.external_id ? parseInt(fixture.away_team.external_id) : undefined}
+                                teamId={fixture.away_team?.id}
+                                externalId={fixture.away_team?.external_id ? parseInt(fixture.away_team.external_id) : undefined}
                                 className="text-sm font-medium text-white hover:text-trading-primary transition-colors text-left"
                               />
                             </div>
