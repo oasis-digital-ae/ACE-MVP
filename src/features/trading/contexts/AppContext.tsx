@@ -452,34 +452,26 @@ const AppProviderInner: React.FC<{ children: React.ReactNode }> = ({ children })
       if (profile) {
         profileId = profile.id;
       } else {
-        // Use upsert to handle existing profiles gracefully
-        const { data: newProfile, error: createError } = await supabase
-          .from('profiles')
-          .upsert(
-            { 
-              id: user.id, 
-              username: user.email ?? `user_${user.id.slice(0, 8)}` 
-            },
-            { 
-              onConflict: 'id',
-              ignoreDuplicates: false 
-            }
-          )
-          .select('id')
-          .single();
+        // Use atomic RPC function to ensure profile exists
+        const { error: createError } = await supabase.rpc(
+          'create_or_update_profile_atomic',
+          {
+            p_user_id: user.id,
+            p_username: user.email ?? `user_${user.id.slice(0, 8)}`,
+            p_first_name: null,
+            p_last_name: null,
+            p_email: user.email || null,
+            p_birthday: null,
+            p_country: null,
+            p_phone: null
+          }
+        );
         
         if (createError) {
-          // If it's a duplicate key error, that's actually fine - profile already exists
-          if (createError.code === '23505') {
-            profileId = user.id; // Use the user ID directly
-          } else {
-            throw new DatabaseError('Failed to create user profile');
-          }
-        } else if (!newProfile) {
-          throw new DatabaseError('Failed to create user profile');
-        } else {
-          profileId = newProfile.id;
+          throw new DatabaseError(`Failed to create user profile: ${createError.message}`);
         }
+        
+        profileId = user.id; // Profile ID is same as user ID
       }
 
       // CRITICAL: Use atomic transaction for purchase

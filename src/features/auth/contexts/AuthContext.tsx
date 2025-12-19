@@ -91,10 +91,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setUser(session?.user ?? null);
       if (session?.user) {
-        ensureProfile(session.user);
+        // Only ensure minimal profile if it doesn't exist - don't overwrite existing profiles
+        // This prevents race conditions during signup
+        const { data: existingProfile } = await supabase
+          .from('profiles')
+          .select('id, first_name, last_name, username')
+          .eq('id', session.user.id)
+          .maybeSingle();
+        
+        if (!existingProfile) {
+          // Only create minimal profile if it doesn't exist
+          await ensureProfile(session.user);
+        } else if (!existingProfile.first_name && !existingProfile.last_name && !existingProfile.username) {
+          // Profile exists but is empty - this shouldn't happen, but if it does, ensure username at least
+          await ensureProfile(session.user);
+        }
         fetchProfile(session.user.id);
       } else {
         setProfile(null);
@@ -219,33 +233,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Convert birthday string to date if provided
         const birthdayDate = userData.birthday ? new Date(userData.birthday).toISOString().split('T')[0] : null;
         
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .upsert(
-            {
-              id: data.user.id,
-              username: email,
-              first_name: userData.first_name,
-              last_name: userData.last_name,
-              full_name: `${userData.first_name} ${userData.last_name}`, // Keep full_name for backward compatibility
-              birthday: birthdayDate,
-              country: userData.country,
-              phone: userData.phone,
-              email: email
-            },
-            {
-              onConflict: 'id',
-              ignoreDuplicates: false
-            }
-          );
+        // Use atomic RPC function to create/update profile
+        // This ensures all fields are set atomically in a single transaction
+        const { error: profileError } = await supabase.rpc(
+          'create_or_update_profile_atomic',
+          {
+            p_user_id: data.user.id,
+            p_username: email,
+            p_first_name: userData.first_name || null,
+            p_last_name: userData.last_name || null,
+            p_email: email,
+            p_birthday: birthdayDate,
+            p_country: userData.country || null,
+            p_phone: userData.phone || null
+          }
+        );
 
         if (profileError) {
-          // Log but don't throw - auth user is created, profile can be updated later
-          logger.warn('Failed to create profile after signup:', profileError);
-          // Try to create minimal profile as fallback
-          await ensureProfile(data.user);
+          // Log the error with details
+          logger.error('Failed to save profile after signup:', {
+            error: profileError,
+            userId: data.user.id,
+            hasFirstName: !!userData.first_name,
+            hasLastName: !!userData.last_name,
+            firstName: userData.first_name,
+            lastName: userData.last_name
+          });
+          // Don't throw - auth user is created, but log the error for debugging
+          console.error('Profile save error:', profileError);
         } else {
-          logger.info('Profile created successfully for user:', data.user.id);
+          logger.info('Profile saved successfully for user:', data.user.id);
         }
       } catch (profileErr) {
         logger.error('Error creating profile:', profileErr);
