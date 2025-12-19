@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/shared/components/ui/button';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
 import { DepositModal } from '@/features/trading/components/DepositModal';
@@ -23,8 +23,16 @@ interface NavigationProps {
 }
 
 const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) => {
-  const { signOut, profile, walletBalance, refreshWalletBalance, isAdmin } = useAuth();
+  const { signOut, profile, user, walletBalance, refreshWalletBalance, refreshProfile, isAdmin } = useAuth();
   const [depositModalOpen, setDepositModalOpen] = useState(false);
+  
+  // Refresh profile on mount to ensure we have latest data
+  useEffect(() => {
+    if (user && !profile?.full_name) {
+      console.log('Profile missing full_name, refreshing...');
+      refreshProfile();
+    }
+  }, [user, profile, refreshProfile]);
   
   const allPages = [
     { id: 'marketplace', label: 'Marketplace', icon: TrendingUp },
@@ -100,9 +108,38 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
                     <Wallet className="w-4 h-4 text-trading-primary flex-shrink-0" />
                     <span className="text-sm font-semibold whitespace-nowrap">{formatCurrency(walletBalance)}</span>
                   </div>
-                  <div className="hidden lg:flex items-center space-x-1.5 px-2">
+                  <div className="hidden md:flex items-center space-x-1.5 px-2">
                     <User className="w-4 h-4 flex-shrink-0" />
-                    <span className="text-sm font-medium whitespace-nowrap truncate max-w-[120px]">{profile.full_name}</span>
+                    <span 
+                      className="text-sm font-medium whitespace-nowrap truncate max-w-[120px]"
+                      title={profile?.full_name || user?.email || 'User'}
+                    >
+                      {(() => {
+                        // Debug: log what we have
+                        console.log('Navigation profile display:', {
+                          hasProfile: !!profile,
+                          full_name: profile?.full_name,
+                          profile_email: profile?.email,
+                          user_email: user?.email,
+                          full_name_length: profile?.full_name?.length
+                        });
+                        
+                        // Try full_name first
+                        if (profile?.full_name && profile.full_name.trim()) {
+                          return profile.full_name;
+                        }
+                        // Fallback to email from profile
+                        if (profile?.email) {
+                          return profile.email.split('@')[0]; // Show username part only
+                        }
+                        // Fallback to email from auth user
+                        if (user?.email) {
+                          return user.email.split('@')[0]; // Show username part only
+                        }
+                        // Last resort
+                        return 'User';
+                      })()}
+                    </span>
                   </div>
                 </div>
                 <Button

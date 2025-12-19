@@ -300,6 +300,7 @@ export const buyWindowService = {
     isOpen: boolean;
     message: string;
     nextAction?: string;
+    nextCloseTime?: Date;
   } {
     const status = this.calculateBuyWindowStatus(teamId, fixtures);
     
@@ -307,7 +308,8 @@ export const buyWindowService = {
       return {
         isOpen: true,
         message: status.reason || 'Trading is open',
-        nextAction: status.nextCloseTime ? `Closes at ${status.nextCloseTime.toLocaleString()}` : undefined
+        nextAction: status.nextCloseTime ? `Closes at ${status.nextCloseTime.toLocaleString()}` : undefined,
+        nextCloseTime: status.nextCloseTime
       };
     } else {
       // Check if match is in progress (nextCloseTime is undefined but match is live)
@@ -319,7 +321,8 @@ export const buyWindowService = {
         isOpen: false,
         message: status.reason || 'Trading is closed',
         nextAction: isMatchInProgress ? 'will reopen after match' : 
-                   (status.nextKickoffTime ? `Next match at ${status.nextKickoffTime.toLocaleString()}` : undefined)
+                   (status.nextKickoffTime ? `Next match at ${status.nextKickoffTime.toLocaleString()}` : undefined),
+        nextCloseTime: status.nextCloseTime
       };
     }
   },

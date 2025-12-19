@@ -278,3 +278,4 @@ WHERE tl.trigger_event_type = 'fixture'
   AND tl.trigger_event_id = f.id
   AND tl.ledger_type IN ('match_win', 'match_loss', 'match_draw')
   AND tl.event_date != f.kickoff_at;
+

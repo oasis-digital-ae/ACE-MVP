@@ -46,10 +46,22 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToSignUp }) => {
         description: "Signed in successfully!",
       });
     } catch (error: any) {
+      let errorMessage = error.message || 'An error occurred while signing in';
+      
+      // Handle common Supabase auth errors with better messages
+      if (error.message?.includes('Invalid login credentials') || error.message?.includes('invalid')) {
+        errorMessage = 'Invalid email or password. Please check your credentials and try again.';
+      } else if (error.message?.includes('Email not confirmed') || error.message?.includes('not verified')) {
+        errorMessage = 'Please verify your email address before signing in. Check your inbox for the verification link.';
+      } else if (error.message?.includes('too many requests')) {
+        errorMessage = 'Too many login attempts. Please wait a few minutes and try again.';
+      }
+      
       toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive"
+        title: "Sign In Failed",
+        description: errorMessage,
+        variant: "destructive",
+        duration: 5000,
       });
     } finally {
       setLoading(false);

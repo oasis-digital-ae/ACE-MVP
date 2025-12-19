@@ -17,28 +17,80 @@
     -webkit-backdrop-filter: blur(12px);
   }
 
-  /* Professional trading custom styles */
+  /* Professional trading custom styles - Clean Minimalist */
   .trading-card {
-    @apply bg-gradient-card border border-gray-700/50 backdrop-blur-sm;
-    background: linear-gradient(145deg, rgba(37, 99, 235, 0.08) 0%, rgba(14, 165, 233, 0.04) 100%);
+    @apply border backdrop-blur-sm;
+    border-color: hsl(var(--border));
+    background: hsl(var(--card));
+    transition: all 0.15s ease;
   }
 
   .trading-card:hover {
-    @apply border-trading-primary/30 shadow-lg;
-    box-shadow: 0 10px 25px rgba(37, 99, 235, 0.1);
-    transition: all 0.3s ease;
+    border-color: hsl(var(--border) / 0.8);
   }
 
+  /* Professional price indicators - inspired by stock trading platforms */
   .price-positive {
-    @apply text-trading-success font-semibold;
+    @apply font-semibold;
+    color: #10B981; /* Emerald green for gains */
   }
 
   .price-negative {
-    @apply text-trading-danger font-semibold;
+    @apply font-semibold;
+    color: #EF4444; /* Red for losses */
   }
 
   .price-neutral {
-    @apply text-gray-400 font-semibold;
+    @apply font-medium;
+    color: hsl(var(--muted-foreground));
+  }
+
+  /* Stock trading table styles - Clean Professional Style */
+  .trading-table {
+    @apply w-full;
+  }
+
+  .trading-table thead {
+    @apply border-b;
+    border-color: hsl(var(--border));
+    background-color: transparent;
+  }
+
+  .trading-table thead th {
+    @apply text-left py-2.5 px-3 text-xs font-medium;
+    color: hsl(var(--muted-foreground));
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: normal;
+  }
+
+  .trading-table thead th button {
+    @apply w-full text-left flex items-center gap-1.5;
+    color: hsl(var(--muted-foreground));
+    font-weight: 500;
+  }
+
+  .trading-table thead th button:hover {
+    color: hsl(var(--foreground));
+  }
+
+  .trading-table tbody tr {
+    @apply border-b transition-colors;
+    border-color: hsl(var(--border) / 0.3);
+  }
+
+  .trading-table tbody tr:hover {
+    background-color: hsl(var(--secondary) / 0.2);
+  }
+
+  .trading-table tbody td {
+    @apply py-2.5 px-3 text-sm;
+    color: hsl(var(--foreground));
+  }
+
+  .trading-table tbody td.font-mono {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0;
   }
 
   .team-logo-container {
@@ -160,42 +212,43 @@
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    /* Professional trading platform dark mode - using #121212 base instead of pure black */
+    --background: 0 0% 7%; /* #121212 - dark gray instead of pure black */
+    --foreground: 0 0% 92%; /* #EAEAEA - off-white instead of pure white */
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 0 0% 9%; /* #171717 - slightly lighter than background */
+    --card-foreground: 0 0% 92%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 0 0% 9%;
+    --popover-foreground: 0 0% 92%;
 
     --primary: 217 91% 60%; /* Professional blue */
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 0 0% 12%; /* #1E1E1E - dark gray for secondary elements */
+    --secondary-foreground: 0 0% 92%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 0 0% 12%;
+    --muted-foreground: 0 0% 65%; /* #A6A6A6 - softer gray for muted text */
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 0 0% 12%;
+    --accent-foreground: 0 0% 92%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 72% 51%; /* #EF4444 - red for losses */
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
+    --border: 0 0% 18%; /* #2E2E2E - subtle borders */
+    --input: 0 0% 12%;
     --ring: 217 91% 60%; /* Professional blue ring */
 
-    --sidebar-background: 215 28% 17%;
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 217 91% 60%; /* Professional blue */
+    --sidebar-background: 0 0% 9%;
+    --sidebar-foreground: 0 0% 92%;
+    --sidebar-primary: 217 91% 60%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 215 25% 27%;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 215 25% 27%;
-    --sidebar-ring: 217 91% 60%; /* Professional blue */
+    --sidebar-accent: 0 0% 12%;
+    --sidebar-accent-foreground: 0 0% 92%;
+    --sidebar-border: 0 0% 18%;
+    --sidebar-ring: 217 91% 60%;
   }
 }
 

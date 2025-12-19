@@ -20,8 +20,10 @@ const PortfolioPage: React.FC = () => {
     currentQuantity: number;
   } | null>(null);
   const [isSelling, setIsSelling] = useState(false);
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { toast } = useToast();
+
+  // Get user profile for welcome message
 
   // Memoized KPI calculations
   const { totalInvested, totalMarketValue, totalProfitLoss } = useMemo(() => {
@@ -144,6 +146,13 @@ const PortfolioPage: React.FC = () => {
 
   return (
     <div className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
+      {/* Welcome Header */}
+      {profile?.full_name && (
+        <div className="mb-2">
+          <h1 className="text-2xl font-bold">Welcome, {profile.full_name}</h1>
+        </div>
+      )}
+      
       {/* Portfolio Overview Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Total Invested */}

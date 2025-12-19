@@ -70,10 +70,33 @@ export const sanitizeText = (input: string, maxLength: number = 1000): string =>
   }
 
   return input
-    // Remove control characters except newlines and tabs
+    // Remove control characters except newlines, tabs, and spaces
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-    // Remove excessive whitespace
-    .replace(/\s+/g, ' ')
+    // Normalize multiple spaces to single space (but preserve single spaces)
+    .replace(/[ \t]+/g, ' ')
+    // Trim and limit length
+    .trim()
+    .substring(0, maxLength);
+};
+
+/**
+ * Sanitizes name input (preserves spaces properly)
+ * @param input - Name string to sanitize
+ * @param maxLength - Maximum allowed length (default: 100)
+ * @returns Sanitized name with spaces preserved
+ */
+export const sanitizeName = (input: string, maxLength: number = 100): string => {
+  if (typeof input !== 'string') {
+    return '';
+  }
+
+  return input
+    // Remove control characters except spaces
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    // Remove HTML tags
+    .replace(/<[^>]*>/g, '')
+    // Normalize multiple spaces to single space (preserve single spaces)
+    .replace(/  +/g, ' ')
     // Trim and limit length
     .trim()
     .substring(0, maxLength);
@@ -246,7 +269,7 @@ export const sanitizeForDatabase = (input: string): string => {
  * @param type - Type of sanitization to apply
  * @returns Sanitized input
  */
-export const sanitizeInput = (input: string, type: 'html' | 'text' | 'email' | 'number' | 'url' | 'team' | 'database' = 'text'): string => {
+export const sanitizeInput = (input: string, type: 'html' | 'text' | 'email' | 'number' | 'url' | 'team' | 'database' | 'name' = 'text'): string => {
   switch (type) {
     case 'html':
       return sanitizeHtml(input);
@@ -260,6 +283,8 @@ export const sanitizeInput = (input: string, type: 'html' | 'text' | 'email' | '
       return sanitizeTeamName(input);
     case 'database':
       return sanitizeForDatabase(input);
+    case 'name':
+      return sanitizeName(input);
     case 'text':
     default:
       return sanitizeText(input);

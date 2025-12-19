@@ -60,3 +60,4 @@ WHERE tl.trigger_event_type = 'fixture'
   )
   AND tl.shares_outstanding_before > 0
   AND tl.shares_outstanding_after > 0;
+

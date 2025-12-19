@@ -3,7 +3,7 @@ import { useAppContext } from '../contexts/AppContext';
 import { Button } from '@/shared/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { Input } from '@/shared/components/ui/input';
-import { formatCurrency, formatPercent } from '@/shared/lib/formatters';
+import { formatCurrency, formatPercent, formatNumber } from '@/shared/lib/formatters';
 import { PurchaseConfirmationModal } from './PurchaseConfirmationModal';
 import ClickableTeamName from '@/shared/components/ClickableTeamName';
 import TeamLogo from '@/shared/components/TeamLogo';
@@ -13,7 +13,7 @@ import type { DatabaseFixture } from '@/shared/lib/database';
 import { FixtureSync } from './FixtureSync';
 import { TeamSync } from './TeamSync';
 import { useToast } from '@/shared/hooks/use-toast';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, TrendingUp, TrendingDown, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { useRealtimeMarket } from '@/shared/hooks/useRealtimeMarket';
 import { useRealtimeOrders } from '@/shared/hooks/useRealtimeOrders';
 import BuyWindowIndicator from '@/shared/components/BuyWindowIndicator';
@@ -35,6 +35,8 @@ export const ClubValuesPage: React.FC = () => {
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [purchasingClubId, setPurchasingClubId] = useState<string | null>(null);
   const [buyWindowStatuses, setBuyWindowStatuses] = useState<Map<string, any>>(new Map());
+  const [sortField, setSortField] = useState<'name' | 'price' | 'change' | 'marketCap'>('change');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   // Realtime subscriptions (for toast notifications)
   const { lastUpdate } = useRealtimeMarket();
@@ -134,6 +136,26 @@ export const ClubValuesPage: React.FC = () => {
       // Removed snapshot requirement - now counts all completed API fixtures
     ).length;
   }, [fixtures]);
+
+  // Format trading deadline in UAE time - compact format
+  const formatTradingDeadline = useCallback((nextCloseTime: Date | undefined): string | null => {
+    if (!nextCloseTime) return null;
+    
+    const datePart = nextCloseTime.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      timeZone: 'Asia/Dubai'
+    });
+    const timePart = nextCloseTime.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'Asia/Dubai'
+    });
+    
+    return `${datePart}, ${timePart}`;
+  }, []);
+
   // Function to get the latest ending value for a club from matches
   const getLatestClubValue = (clubName: string, launchValue: number): number => {
     // Find all matches where this club participated
@@ -240,143 +262,198 @@ export const ClubValuesPage: React.FC = () => {
   }, [confirmationData, purchaseClub, toast, isPurchasing, refreshWalletBalance, refreshData]);
 
   return (
-    <div className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
-      {/* Header Section */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="p-4 lg:p-6 space-y-6">
+      {/* Header Section - Minimalist */}
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-white gradient-text">Live Market</h1>
-          <p className="text-gray-400 mt-1 text-sm sm:text-base">Trade Premier League club shares in real-time</p>
+          <h1 className="text-2xl font-bold">Market</h1>
+          <p className="mt-0.5 text-sm" style={{ color: 'hsl(var(--muted-foreground))' }}>Premier League Clubs</p>
         </div>
-        <div className="flex items-center space-x-2 text-sm text-gray-400">
-          <div className="w-2 h-2 bg-trading-primary rounded-full animate-pulse"></div>
-          <span>Live Updates</span>
+        <div className="flex items-center gap-2 text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>
+          <div className="w-1.5 h-1.5 bg-[#10B981] rounded-full animate-pulse"></div>
+          <span>Live</span>
         </div>
       </div>
 
-      {/* Market Overview Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-        <Card className="trading-card">
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex-1 min-w-0">
-                <p className="text-gray-400 text-xs sm:text-sm font-medium truncate">Total Market Cap</p>
-                <p className="text-lg sm:text-xl font-bold text-white truncate">
-                  {formatCurrency(clubs.reduce((sum, club) => sum + Number(club.marketCap), 0))}
-                </p>
-              </div>
-              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-primary rounded-full flex items-center justify-center flex-shrink-0 ml-2">
-                <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                </svg>
-              </div>
-            </div>
+      {/* Market Overview Cards - Clean & Compact */}
+      <div className="grid grid-cols-3 gap-4">
+        <Card className="trading-card border-0 bg-secondary/30">
+          <CardContent className="p-4">
+            <p className="text-xs mb-2" style={{ color: 'hsl(var(--muted-foreground))' }}>Total Market Cap</p>
+            <p className="text-2xl font-bold">
+              {formatCurrency(clubs.reduce((sum, club) => sum + Number(club.marketCap), 0))}
+            </p>
           </CardContent>
         </Card>
 
-        <Card className="trading-card">
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex-1 min-w-0">
-                <p className="text-gray-400 text-xs sm:text-sm font-medium truncate">Active Clubs</p>
-                <p className="text-lg sm:text-xl font-bold text-white">{clubs.length}</p>
-              </div>
-              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-slate rounded-full flex items-center justify-center flex-shrink-0 ml-2">
-                <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-              </div>
-            </div>
+        <Card className="trading-card border-0 bg-secondary/30">
+          <CardContent className="p-4">
+            <p className="text-xs mb-2" style={{ color: 'hsl(var(--muted-foreground))' }}>Active Clubs</p>
+            <p className="text-2xl font-bold">{clubs.length}</p>
           </CardContent>
         </Card>
 
-        <Card className="trading-card">
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex-1 min-w-0">
-                <p className="text-gray-400 text-xs sm:text-sm font-medium truncate">Top Performer</p>
-                <p className="text-sm sm:text-lg font-bold text-white truncate">
-                  {clubs.length > 0 ? clubs.sort((a, b) => b.percentChange - a.percentChange)[0]?.name : 'N/A'}
-                </p>
-                <p className="text-xs sm:text-sm text-trading-success font-semibold">
-                  {clubs.length > 0 ? `+${clubs.sort((a, b) => b.percentChange - a.percentChange)[0]?.percentChange.toFixed(2)}%` : ''}
-                </p>
-              </div>
-              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-success rounded-full flex items-center justify-center flex-shrink-0 ml-2">
-                <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                </svg>
-              </div>
-            </div>
+        <Card className="trading-card border-0 bg-secondary/30">
+          <CardContent className="p-4">
+            <p className="text-xs mb-2" style={{ color: 'hsl(var(--muted-foreground))' }}>Top Performer</p>
+            <p className="text-base font-bold truncate">
+              {clubs.length > 0 ? clubs.sort((a, b) => b.percentChange - a.percentChange)[0]?.name : 'N/A'}
+            </p>
+            <p className="text-sm font-semibold price-positive mt-1">
+              {clubs.length > 0 ? `+${clubs.sort((a, b) => b.percentChange - a.percentChange)[0]?.percentChange.toFixed(2)}%` : ''}
+            </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Main Marketplace Table */}
-      <Card className="trading-card">
-        <CardHeader>
-          <CardTitle className="text-white text-xl flex items-center space-x-2">
-            <svg className="w-5 h-5 text-trading-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-            </svg>
-            <span>Club Rankings</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+      {/* Main Marketplace Table - Clean Professional Style */}
+      <Card className="trading-card border-0">
+        <CardContent className="p-0">
           {/* Desktop Table */}
           <div className="hidden lg:block overflow-x-auto">
-            <table className="w-full text-white">
+            <table className="trading-table">
               <thead>
-                <tr className="border-b border-gray-700/50">
-                  <th className="text-left p-4 font-semibold text-gray-300">#</th>
-                  <th className="text-left p-4 font-semibold text-gray-300">Club</th>
-                  <th className="text-center p-4 font-semibold text-gray-300">Games</th>
-                  <th className="text-right p-4 font-semibold text-gray-300">Launch</th>
-                  <th className="text-right p-4 font-semibold text-gray-300">Current</th>
-                  <th className="text-right p-4 font-semibold text-gray-300">P/L</th>
-                  <th className="text-right p-4 font-semibold text-gray-300">Change</th>
-                  <th className="text-center p-4 font-semibold text-gray-300">Action</th>
+                <tr>
+                  <th className="text-left w-10 px-3">#</th>
+                  <th className="text-left px-3">
+                    <button
+                      onClick={() => {
+                        if (sortField === 'name') {
+                          setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                        } else {
+                          setSortField('name');
+                          setSortDirection('asc');
+                        }
+                      }}
+                      className="flex items-center gap-1.5 hover:text-foreground transition-colors"
+                    >
+                      <span>Club</span>
+                      {sortField === 'name' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                      ) : (
+                        <ArrowUpDown className="h-3 w-3 opacity-20" />
+                      )}
+                    </button>
+                  </th>
+                  <th className="text-center px-3">Games</th>
+                  <th className="text-right px-3">
+                    <button
+                      onClick={() => {
+                        if (sortField === 'price') {
+                          setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                        } else {
+                          setSortField('price');
+                          setSortDirection('desc');
+                        }
+                      }}
+                      className="flex items-center gap-1.5 hover:text-foreground transition-colors ml-auto"
+                    >
+                      <span>Price</span>
+                      {sortField === 'price' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                      ) : (
+                        <ArrowUpDown className="h-3 w-3 opacity-20" />
+                      )}
+                    </button>
+                  </th>
+                  <th className="text-right px-3">
+                    <button
+                      onClick={() => {
+                        if (sortField === 'change') {
+                          setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                        } else {
+                          setSortField('change');
+                          setSortDirection('desc');
+                        }
+                      }}
+                      className="flex items-center gap-1.5 hover:text-foreground transition-colors ml-auto"
+                    >
+                      <span>24h</span>
+                      {sortField === 'change' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                      ) : (
+                        <ArrowUpDown className="h-3 w-3 opacity-20" />
+                      )}
+                    </button>
+                  </th>
+                  <th className="text-right px-3">
+                    <button
+                      onClick={() => {
+                        if (sortField === 'marketCap') {
+                          setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                        } else {
+                          setSortField('marketCap');
+                          setSortDirection('desc');
+                        }
+                      }}
+                      className="flex items-center gap-1.5 hover:text-foreground transition-colors ml-auto"
+                    >
+                      <span>Market Cap</span>
+                      {sortField === 'marketCap' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                      ) : (
+                        <ArrowUpDown className="h-3 w-3 opacity-20" />
+                      )}
+                    </button>
+                  </th>
+                  <th className="text-left px-3" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                    <span className="text-xs">Closes</span>
+                  </th>
+                  <th className="text-center px-3 w-24"></th>
                 </tr>
               </thead>
               <tbody>
-                {useMemo(() => clubs
-                  .map(club => {
-                    const launchPrice = Number(club.launchValue) || 20; // Use actual launch value from database, fallback to 20
-                    const currentValue = Number(club.currentValue) || 20; // Use actual current value from database, fallback to 20
-                    const profitLoss = currentValue - launchPrice;
-                    // Use the percentChange already calculated in convertTeamToClub, don't recalculate
-                    const percentChange = club.percentChange;
-                    const marketCap = Number(club.marketCap) || 100; // Use actual market cap from database, fallback to 100
-                    
-                    return {
-                      ...club,
-                      launchPrice,
-                      currentValue,
-                      profitLoss,
-                      percentChange,
-                      marketCap
-                    };
-                  })
-                  .sort((a, b) => b.percentChange - a.percentChange), [clubs]) // Sort by percentage gain descending
-                  .map((club, index) => (
+                {useMemo(() => {
+                  // Sort based on selected field
+                  let filtered = [...clubs].sort((a, b) => {
+                    switch (sortField) {
+                      case 'name':
+                        const aName = a.name.toLowerCase();
+                        const bName = b.name.toLowerCase();
+                        return sortDirection === 'asc' 
+                          ? aName.localeCompare(bName)
+                          : bName.localeCompare(aName);
+                      case 'price': {
+                        const aValue = a.currentValue;
+                        const bValue = b.currentValue;
+                        return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+                      }
+                      case 'change': {
+                        const aValue = a.percentChange;
+                        const bValue = b.percentChange;
+                        return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+                      }
+                      case 'marketCap': {
+                        const aValue = a.marketCap;
+                        const bValue = b.marketCap;
+                        return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+                      }
+                      default: {
+                        const aValue = a.percentChange;
+                        const bValue = b.percentChange;
+                        return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+                      }
+                    }
+                  });
+
+                  return filtered.map((club, index) => (
                     <React.Fragment key={club.id}>
-                      <tr className="border-b border-gray-700/30 hover:bg-gray-700/30 transition-colors duration-200 group">
-                        <td className="p-4 text-gray-400 font-semibold">{index + 1}</td>
-                        <td className="p-4 font-medium">
-                          <div className="flex items-center gap-3">
-                            <div className="team-logo-container">
-                              <TeamLogo 
-                                teamName={club.name} 
-                                externalId={club.externalId ? parseInt(club.externalId) : undefined}
-                                size="md" 
-                              />
-                            </div>
+                      <tr className="group">
+                        <td className="px-3 text-xs font-medium" style={{ color: 'hsl(var(--muted-foreground))' }}>{index + 1}</td>
+                        <td className="px-3">
+                          <div className="flex items-center gap-2">
+                            <TeamLogo 
+                              teamName={club.name} 
+                              externalId={club.externalId ? parseInt(club.externalId) : undefined}
+                              size="sm" 
+                            />
                             <button
                               onClick={() => handleTeamClick(club.id)}
-                              className="hover:text-trading-primary transition-colors duration-200 cursor-pointer text-left flex items-center gap-2 group-hover:text-trading-primary"
+                              className="hover:text-trading-primary transition-colors cursor-pointer flex items-center gap-1 font-medium"
                             >
-                              <span className="font-semibold">{club.name}</span>
+                              <span>{club.name}</span>
                               <ChevronDown 
-                                className={`h-4 w-4 transition-transform duration-280 ease-out ${
+                                className={`h-3 w-3 transition-transform ${
                                   selectedClub === club.id ? 'rotate-180' : ''
                                 }`}
                               />
@@ -384,33 +461,40 @@ export const ClubValuesPage: React.FC = () => {
                           </div>
                         </td>
                         <td 
-                          className="p-4 text-center text-trading-primary font-semibold cursor-pointer hover:text-trading-primary-light transition-colors duration-200"
+                          className="px-3 text-center text-xs font-medium cursor-pointer hover:text-trading-primary transition-colors"
                           onClick={() => handleTeamClick(club.id)}
+                          style={{ color: 'hsl(var(--muted-foreground))' }}
                         >
                           {getGamesPlayed(club.id)}
                         </td>
-                        <td className="p-4 text-right font-mono">{formatCurrency(club.launchValue)}</td>
-                        <td className="p-4 text-right font-mono font-semibold">{formatCurrency(club.currentValue)}</td>
-                        <td className={`p-4 text-right font-semibold ${club.profitLoss === 0 ? 'text-gray-400' : club.profitLoss > 0 ? 'price-positive' : 'price-negative'}`}>
-                          {club.profitLoss > 0 ? '+' : ''}{formatCurrency(club.profitLoss)}
-                        </td>
-                        <td className={`p-4 text-right font-semibold ${club.percentChange === 0 ? 'text-gray-400' : club.percentChange > 0 ? 'price-positive' : 'price-negative'}`}>
+                        <td className="px-3 text-right font-mono font-semibold">{formatCurrency(club.currentValue)}</td>
+                        <td className={`px-3 text-right font-semibold ${club.percentChange === 0 ? 'price-neutral' : club.percentChange > 0 ? 'price-positive' : 'price-negative'}`}>
                           {club.percentChange > 0 ? '+' : ''}{formatPercent(club.percentChange)}
                         </td>
-                        <td className="p-4 text-center">
-                          <div className="flex flex-col items-center gap-2">
-                            <Button
-                              onClick={() => handlePurchaseClick(club.id)}
-                              size="sm"
-                              disabled={isPurchasing || (buyWindowStatuses.has(club.id) && !buyWindowStatuses.get(club.id)?.isOpen)}
-                              className="bg-gradient-success hover:bg-gradient-success/80 text-white font-semibold px-4 py-2 rounded-lg transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-                              title={(buyWindowStatuses.has(club.id) && !buyWindowStatuses.get(club.id)?.isOpen) ? 'Trading window is closed' : 'Buy shares'}
-                            >
-                              {isPurchasing && purchasingClubId === club.id ? 'Processing...' : 
-                               (buyWindowStatuses.has(club.id) && !buyWindowStatuses.get(club.id)?.isOpen) ? '🔒 Closed' : 'Buy'}
-                            </Button>
-                            <BuyWindowIndicator teamId={parseInt(club.id)} compact={true} />
-                          </div>
+                        <td className="px-3 text-right font-mono text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                          {formatCurrency(club.marketCap)}
+                        </td>
+                        <td className="px-3 text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                          {(() => {
+                            const status = buyWindowStatuses.get(club.id);
+                            if (!status?.nextCloseTime) {
+                              return <span className="text-gray-500">—</span>;
+                            }
+                            const deadline = formatTradingDeadline(status.nextCloseTime);
+                            return <span className="font-mono">{deadline}</span>;
+                          })()}
+                        </td>
+                        <td className="px-3 text-center">
+                          <Button
+                            onClick={() => handlePurchaseClick(club.id)}
+                            size="sm"
+                            disabled={isPurchasing || (buyWindowStatuses.has(club.id) && !buyWindowStatuses.get(club.id)?.isOpen)}
+                            className="bg-[#10B981] hover:bg-[#059669] text-white font-medium px-3 py-1 text-xs rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                            title={(buyWindowStatuses.has(club.id) && !buyWindowStatuses.get(club.id)?.isOpen) ? 'Trading window is closed' : 'Buy shares'}
+                          >
+                            {isPurchasing && purchasingClubId === club.id ? '...' : 
+                             (buyWindowStatuses.has(club.id) && !buyWindowStatuses.get(club.id)?.isOpen) ? 'Closed' : 'Buy'}
+                          </Button>
                         </td>
                       </tr>
                       
@@ -428,7 +512,8 @@ export const ClubValuesPage: React.FC = () => {
                         </td>
                       </tr>
                     </React.Fragment>
-                  ))}
+                  ));
+                }, [clubs, sortField, sortDirection, selectedClub, getGamesPlayed, handleTeamClick, handlePurchaseClick, isPurchasing, purchasingClubId, buyWindowStatuses, formatTradingDeadline])}
 
               </tbody>
             </table>
@@ -483,6 +568,19 @@ export const ClubValuesPage: React.FC = () => {
                         <div className="text-xs text-gray-400">
                           {getGamesPlayed(club.id)} games played
                         </div>
+                        {(() => {
+                          const status = buyWindowStatuses.get(club.id);
+                          if (status?.nextCloseTime) {
+                            const deadline = formatTradingDeadline(status.nextCloseTime);
+                            return (
+                              <div className="text-xs mt-1 font-mono" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                                <span>Until {deadline}</span>
+                                <span className="text-[10px] text-gray-500 ml-1">(UAE)</span>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
                       </div>
                     </div>
                     <div className="flex flex-col gap-1">

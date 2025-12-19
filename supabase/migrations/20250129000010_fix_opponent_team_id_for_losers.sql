@@ -309,3 +309,4 @@ END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION process_match_result_atomic IS 'Fixed shares model: Price = market_cap / total_shares (1000). Uses snapshot values for accurate historical display. Sets event_date to fixture kickoff_at. Fixed opponent_team_id for losers.';
+

@@ -61,3 +61,4 @@ WHERE tl.trigger_event_type = 'fixture'
   AND tl.ledger_type IN ('match_win', 'match_loss', 'match_draw')
   AND tl.shares_outstanding_before > 0
   AND tl.shares_outstanding_after > 0;
+

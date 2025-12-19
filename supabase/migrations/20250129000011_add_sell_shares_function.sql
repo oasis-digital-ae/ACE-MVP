@@ -244,3 +244,4 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.process_share_sale_atomic IS 'Fixed shares model: Sales increase available_shares but do NOT change market_cap. Price = market_cap / total_shares (1000).';
+
