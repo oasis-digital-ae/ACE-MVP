@@ -214,9 +214,14 @@ export const footballApiService = {
     // Explicitly fetch 2025 season matches
     const url = `${FOOTBALL_API_BASE}/competitions/PL/matches?season=2025`;
     
+    const apiKey = (import.meta as any).env?.VITE_FOOTBALL_API_KEY;
+    if (!isProduction && !isNetlifyDev && !apiKey) {
+      throw new Error('Football API key is required but not configured. Set VITE_FOOTBALL_API_KEY environment variable.');
+    }
+    
     const response = await fetch(url, {
       headers: (isProduction || isNetlifyDev) ? {} : {
-        'X-Auth-Token': (import.meta as any).env?.VITE_FOOTBALL_API_KEY || '1550a2317c044eda8644d0367f1a0f22'
+        'X-Auth-Token': apiKey!
       }
     });
 
@@ -246,9 +251,14 @@ export const footballApiService = {
     // Explicitly fetch 2025 season teams
     const teamsEndpoint = `${FOOTBALL_API_BASE}/competitions/PL/teams?season=2025`;
     
+    const apiKey = (import.meta as any).env?.VITE_FOOTBALL_API_KEY;
+    if (!isProduction && !isNetlifyDev && !apiKey) {
+      throw new Error('Football API key is required but not configured. Set VITE_FOOTBALL_API_KEY environment variable.');
+    }
+    
     const response = await fetch(teamsEndpoint, {
       headers: (isProduction || isNetlifyDev) ? {} : {
-        'X-Auth-Token': (import.meta as any).env?.VITE_FOOTBALL_API_KEY || '1550a2317c044eda8644d0367f1a0f22'
+        'X-Auth-Token': apiKey!
       }
     });
 
@@ -270,7 +280,13 @@ export const footballApiService = {
         `${FOOTBALL_API_BASE}/competitions/PL/matches?season=${seasonParam}`,
         {
           headers: (isProduction || isNetlifyDev) ? {} : {
-            'X-Auth-Token': (import.meta as any).env?.VITE_FOOTBALL_API_KEY || '1550a2317c044eda8644d0367f1a0f22'
+            'X-Auth-Token': (() => {
+              const apiKey = (import.meta as any).env?.VITE_FOOTBALL_API_KEY;
+              if (!apiKey) {
+                throw new Error('Football API key is required but not configured. Set VITE_FOOTBALL_API_KEY environment variable.');
+              }
+              return apiKey;
+            })()
           }
         }
       );
@@ -461,7 +477,13 @@ export const footballApiService = {
           
           const response = await fetch(apiEndpoint, {
             headers: (isProduction || isNetlifyDev) ? {} : {
-              'X-Auth-Token': (import.meta as any).env?.VITE_FOOTBALL_API_KEY || '1550a2317c044eda8644d0367f1a0f22'
+              'X-Auth-Token': (() => {
+              const apiKey = (import.meta as any).env?.VITE_FOOTBALL_API_KEY;
+              if (!apiKey) {
+                throw new Error('Football API key is required but not configured. Set VITE_FOOTBALL_API_KEY environment variable.');
+              }
+              return apiKey;
+            })()
             }
           });
 

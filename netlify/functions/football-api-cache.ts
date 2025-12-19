@@ -1,6 +1,8 @@
 // Netlify Function for Football API Caching
 // Provides server-side caching that benefits ALL users
 
+import { rateLimiters } from './utils/rate-limiter';
+
 // Server-side cache (persists across requests)
 const serverCache = new Map<string, {
   data: any;
@@ -19,12 +21,60 @@ const CACHE_TTL = {
 const FOOTBALL_API_BASE = 'https://api.football-data.org/v4';
 const API_KEY = process.env.VITE_FOOTBALL_API_KEY;
 
+// Get allowed origins from environment or default to production domain
+const getAllowedOrigins = (): string[] => {
+  const origins = process.env.ALLOWED_ORIGINS;
+  if (origins) {
+    return origins.split(',').map(o => o.trim());
+  }
+  // Default to production domain and development
+  return [
+    'https://ace-mvp.netlify.app',
+    'https://*.netlify.app',
+    'http://localhost:5173',
+    'http://localhost:8888'
+  ];
+};
+
+const getAllowedOrigin = (origin: string | null): string | null => {
+  if (!origin) return null;
+  
+  const allowed = getAllowedOrigins();
+  
+  // Check exact match
+  if (allowed.includes(origin)) {
+    return origin;
+  }
+  
+  // Check wildcard patterns
+  for (const pattern of allowed) {
+    if (pattern.includes('*')) {
+      const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
+      if (regex.test(origin)) {
+        return origin;
+      }
+    }
+  }
+  
+  // Default: deny in production, allow localhost in development
+  const isDevelopment = process.env.NODE_ENV !== 'production';
+  if (isDevelopment && origin.includes('localhost')) {
+    return origin;
+  }
+  
+  return null;
+};
+
 export const handler = async (event: any, context: any) => {
-  // Enable CORS for all origins
+  const origin = event.headers.origin || event.headers.Origin;
+  const allowedOrigin = getAllowedOrigin(origin);
+  
+  // CORS headers - only allow specific origins
   const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Origin': allowedOrigin || 'null',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Max-Age': '3600',
   };
 
   // Handle preflight requests
@@ -33,6 +83,42 @@ export const handler = async (event: any, context: any) => {
       statusCode: 200,
       headers: corsHeaders,
       body: null,
+    };
+  }
+
+  // Rate limiting - apply moderate rate limiting
+  const rateLimit = rateLimiters.moderate(event);
+  if (!rateLimit.allowed) {
+    return {
+      statusCode: 429,
+      headers: {
+        ...corsHeaders,
+        'Retry-After': Math.ceil((rateLimit.resetTime - Date.now()) / 1000).toString(),
+        'X-RateLimit-Limit': '100',
+        'X-RateLimit-Remaining': '0',
+        'X-RateLimit-Reset': new Date(rateLimit.resetTime).toISOString(),
+      },
+      body: JSON.stringify({
+        error: 'Too many requests',
+        message: 'Rate limit exceeded. Please try again later.',
+        retryAfter: Math.ceil((rateLimit.resetTime - Date.now()) / 1000)
+      }),
+    };
+  }
+
+  // Validate API key
+  if (!API_KEY) {
+    console.error('Football API key not configured');
+    return {
+      statusCode: 500,
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        error: 'Server configuration error',
+        message: 'API key not configured'
+      }),
     };
   }
 
@@ -99,6 +185,9 @@ export const handler = async (event: any, context: any) => {
           'Content-Type': 'application/json',
           'X-Cache': 'HIT',
           'X-Cache-Key': cacheKey,
+          'X-RateLimit-Limit': '100',
+          'X-RateLimit-Remaining': rateLimit.remaining.toString(),
+          'X-RateLimit-Reset': new Date(rateLimit.resetTime).toISOString(),
         },
         body: JSON.stringify(cached.data),
       };
@@ -155,22 +244,6 @@ export const handler = async (event: any, context: any) => {
            }
 
            console.log(`Fetching from API: ${apiUrl}`);
-
-           // Validate API key
-           if (!API_KEY) {
-             console.error('Football API key not configured');
-             return {
-               statusCode: 500,
-               headers: {
-                 ...corsHeaders,
-                 'Content-Type': 'application/json',
-               },
-               body: JSON.stringify({ 
-                 error: 'Football API key not configured',
-                 details: 'VITE_FOOTBALL_API_KEY environment variable is missing'
-               }),
-             };
-           }
 
     const response = await fetch(apiUrl, {
       headers: {
