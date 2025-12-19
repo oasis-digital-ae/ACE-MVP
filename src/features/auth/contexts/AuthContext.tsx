@@ -48,76 +48,142 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const ensureProfile = async (authUser: User) => {
     try {
-      // Use upsert to handle existing profiles gracefully
-      const { error } = await supabase
-        .from('profiles')
-        .upsert(
-          { 
-            id: authUser.id, 
-            username: authUser.email ?? `user_${authUser.id.slice(0, 8)}` 
-          },
-          { 
-            onConflict: 'id',
-            ignoreDuplicates: false 
-          }
-        );
+      // Use atomic RPC function to ensure profile exists
+      const { error } = await supabase.rpc(
+        'create_or_update_profile_atomic',
+        {
+          p_user_id: authUser.id,
+          p_username: authUser.email ?? `user_${authUser.id.slice(0, 8)}`,
+          p_first_name: null,
+          p_last_name: null,
+          p_email: authUser.email || null,
+          p_birthday: null,
+          p_country: null,
+          p_phone: null
+        }
+      );
       
       if (error) {
-        // If it's a duplicate key error, that's actually fine - profile already exists
-        if (error.code === '23505') {
-          console.log('Profile already exists, continuing...');
-          return;
+        logger.warn('ensureProfile RPC failed:', error);
+        // Fallback to direct upsert if RPC fails
+        const { error: upsertError } = await supabase
+          .from('profiles')
+          .upsert(
+            { 
+              id: authUser.id, 
+              username: authUser.email ?? `user_${authUser.id.slice(0, 8)}` 
+            },
+            { 
+              onConflict: 'id',
+              ignoreDuplicates: false 
+            }
+          );
+        
+        if (upsertError && upsertError.code !== '23505') {
+          throw upsertError;
         }
-        throw error;
       }
     } catch (e) {
       // Log only; do not block auth flow
-      console.warn('ensureProfile failed:', e);
+      logger.warn('ensureProfile failed:', e);
     }
   };
 
   useEffect(() => {
+    let mounted = true;
+    let loadingTimeout: NodeJS.Timeout | null = null;
+
+    // Set a timeout to ensure loading always resolves (max 10 seconds)
+    loadingTimeout = setTimeout(() => {
+      if (mounted) {
+        logger.warn('Auth initialization timeout - forcing loading to false');
+        setLoading(false);
+      }
+    }, 10000);
+
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!mounted) return;
+      
       setUser(session?.user ?? null);
       if (session?.user) {
         // Ensure a profiles row exists to satisfy FKs
-        ensureProfile(session.user);
-        fetchProfile(session.user.id);
+        // Don't block on ensureProfile - it's not critical if it fails
+        ensureProfile(session.user).catch(err => {
+          logger.warn('ensureProfile error in getSession (non-blocking):', err);
+        });
+        
+        // Fetch profile - this is critical, but don't block forever
+        fetchProfile(session.user.id).catch(err => {
+          logger.warn('fetchProfile error in getSession (non-blocking):', err);
+          // Set defaults if fetch fails
+          setProfile(null);
+          setWalletBalance(0);
+        });
       } else {
         setWalletBalance(0);
       }
-      setLoading(false);
+      
+      if (loadingTimeout) {
+        clearTimeout(loadingTimeout);
+        loadingTimeout = null;
+      }
+      if (mounted) {
+        setLoading(false);
+      }
+    }).catch(err => {
+      logger.error('getSession error:', err);
+      if (loadingTimeout) {
+        clearTimeout(loadingTimeout);
+        loadingTimeout = null;
+      }
+      if (mounted) {
+        setLoading(false);
+      }
     });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!mounted) return;
+      
+      // Clear any existing timeout
+      if (loadingTimeout) {
+        clearTimeout(loadingTimeout);
+        loadingTimeout = null;
+      }
+      
       setUser(session?.user ?? null);
       if (session?.user) {
-        // Only ensure minimal profile if it doesn't exist - don't overwrite existing profiles
-        // This prevents race conditions during signup
-        const { data: existingProfile } = await supabase
-          .from('profiles')
-          .select('id, first_name, last_name, username')
-          .eq('id', session.user.id)
-          .maybeSingle();
+        // Simplified: Just fetch profile, don't do complex checks
+        // ensureProfile will check if profile exists before creating
+        ensureProfile(session.user).catch(err => {
+          logger.warn('ensureProfile error in onAuthStateChange (non-blocking):', err);
+        });
         
-        if (!existingProfile) {
-          // Only create minimal profile if it doesn't exist
-          await ensureProfile(session.user);
-        } else if (!existingProfile.first_name && !existingProfile.last_name && !existingProfile.username) {
-          // Profile exists but is empty - this shouldn't happen, but if it does, ensure username at least
-          await ensureProfile(session.user);
-        }
-        fetchProfile(session.user.id);
+        // Fetch profile - critical but non-blocking
+        fetchProfile(session.user.id).catch(err => {
+          logger.warn('fetchProfile error in onAuthStateChange (non-blocking):', err);
+          // Set defaults if fetch fails
+          setProfile(null);
+          setWalletBalance(0);
+        });
       } else {
         setProfile(null);
         setWalletBalance(0);
       }
-      setLoading(false);
+      
+      if (mounted) {
+        setLoading(false);
+      }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      if (loadingTimeout) {
+        clearTimeout(loadingTimeout);
+      }
+      subscription.unsubscribe();
+    };
   }, []);
 
   // Set up wallet balance updates (realtime with polling fallback)
@@ -176,29 +242,66 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user]);
 
 
-  const fetchProfile = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
+  const fetchProfile = async (userId: string, retries = 3): Promise<void> => {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        // First, verify we have a valid session
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user || session.user.id !== userId) {
+          logger.warn(`Session mismatch or missing for userId: ${userId}`);
+          if (attempt < retries) {
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Exponential backoff
+            continue;
+          }
+          throw new Error('No valid session found');
+        }
 
-      if (error) {
-        logger.error('Error fetching profile:', error);
-        throw error;
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (error) {
+          // If it's a permission error, try using RPC function as fallback
+          if (error.code === '42501' || error.message?.includes('permission') || error.message?.includes('policy')) {
+            logger.warn(`Profile fetch permission error (attempt ${attempt}/${retries}):`, error);
+            if (attempt < retries) {
+              await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+              continue;
+            }
+          }
+          logger.error('Error fetching profile:', error);
+          throw error;
+        }
+        
+        logger.debug('Profile fetched successfully:', { userId, isAdmin: data?.is_admin, hasData: !!data });
+        setProfile(data);
+        
+        // Fetch wallet balance - don't let errors block profile fetch
+        try {
+          const balance = await walletService.getBalance(userId);
+          setWalletBalance(balance);
+        } catch (balanceError) {
+          logger.warn('Error fetching wallet balance:', balanceError);
+          setWalletBalance(0);
+        }
+        
+        // Success - exit retry loop
+        return;
+      } catch (error: any) {
+        logger.error(`Error fetching profile (attempt ${attempt}/${retries}):`, error);
+        
+        if (attempt === retries) {
+          // Last attempt failed - set defaults and throw
+          setProfile(null);
+          setWalletBalance(0);
+          throw error;
+        }
+        
+        // Wait before retry with exponential backoff
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
       }
-      
-      logger.debug('Profile fetched:', { userId, isAdmin: data?.is_admin, hasData: !!data });
-      setProfile(data);
-      
-      // Fetch wallet balance
-      const balance = await walletService.getBalance(userId);
-      setWalletBalance(balance);
-    } catch (error) {
-      logger.error('Error fetching profile:', error);
-      setProfile(null);
-      setWalletBalance(0);
     }
   };
 

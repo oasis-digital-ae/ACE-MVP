@@ -32,16 +32,37 @@ export const DepositModal: React.FC<DepositModalProps> = ({ isOpen, onClose, onS
     setError(null);
 
     try {
+      // Verify session is valid
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        throw new Error('Session expired. Please log in again.');
+      }
+
+      console.log('Calling credit_wallet RPC with:', {
+        p_user_id: user.id,
+        p_amount_cents: 100000,
+        p_ref: 'test_credit_' + Date.now(),
+        p_currency: 'usd'
+      });
+
       // Credit $1000 directly using credit_wallet RPC
-      const { error: creditError } = await supabase.rpc('credit_wallet', {
+      const { data, error: creditError } = await supabase.rpc('credit_wallet', {
         p_user_id: user.id,
         p_amount_cents: 100000, // $1000 in cents
         p_ref: 'test_credit_' + Date.now(),
         p_currency: 'usd'
       });
 
+      console.log('credit_wallet RPC response:', { data, error: creditError });
+
       if (creditError) {
-        throw new Error(creditError.message || 'Failed to credit wallet');
+        console.error('credit_wallet error details:', {
+          message: creditError.message,
+          details: creditError.details,
+          hint: creditError.hint,
+          code: creditError.code
+        });
+        throw new Error(creditError.message || creditError.details || 'Failed to credit wallet');
       }
 
       // Refresh wallet balance
@@ -57,7 +78,20 @@ export const DepositModal: React.FC<DepositModalProps> = ({ isOpen, onClose, onS
       onClose();
     } catch (err: any) {
       console.error('Error crediting wallet:', err);
-      setError(err.message || 'Failed to credit wallet');
+      
+      // Provide more specific error messages
+      let errorMessage = 'Failed to credit wallet';
+      if (err.message) {
+        errorMessage = err.message;
+      } else if (err instanceof TypeError && err.message.includes('fetch')) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      } else if (err.code === '42501') {
+        errorMessage = 'Permission denied. Please contact support.';
+      } else if (err.code === 'PGRST301') {
+        errorMessage = 'Function not found. Please contact support.';
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
