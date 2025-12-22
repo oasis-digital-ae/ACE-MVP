@@ -75,3 +75,5 @@ COMMENT ON POLICY "profiles_update_own" ON public.profiles IS
 COMMENT ON POLICY "profiles_admin_update" ON public.profiles IS 
   'Admins can update any profile for administrative purposes.';
 
+
+

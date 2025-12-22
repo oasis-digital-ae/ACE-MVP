@@ -41,3 +41,5 @@ COMMENT ON COLUMN public.profiles.birthday IS 'User date of birth';
 COMMENT ON COLUMN public.profiles.country IS 'User country of residence';
 COMMENT ON COLUMN public.profiles.phone IS 'User telephone number';
 
+
+

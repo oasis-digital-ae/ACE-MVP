@@ -273,3 +273,5 @@ export const FinancialOverviewPanel: React.FC = () => {
     </div>
   );
 };
+
+

@@ -32,17 +32,17 @@
   /* Professional price indicators - inspired by stock trading platforms */
   .price-positive {
     @apply font-semibold;
-    color: #10B981; /* Emerald green for gains */
+    color: #10B981 !important; /* Emerald green for gains */
   }
 
   .price-negative {
     @apply font-semibold;
-    color: #EF4444; /* Red for losses */
+    color: #EF4444 !important; /* Red for losses */
   }
 
   .price-neutral {
     @apply font-medium;
-    color: hsl(var(--muted-foreground));
+    color: hsl(var(--muted-foreground)) !important;
   }
 
   /* Stock trading table styles - Clean Professional Style */
@@ -84,7 +84,7 @@
   }
 
   .trading-table tbody td {
-    @apply py-2.5 px-3 text-sm;
+    @apply py-1 px-3 text-sm;
     color: hsl(var(--foreground));
   }
 

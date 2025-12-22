@@ -165,3 +165,5 @@ COMMENT ON FUNCTION public.prevent_profile_field_updates() IS
 
 COMMENT ON FUNCTION public.credit_wallet(uuid, bigint, text, text) IS 
   'Credits user wallet atomically with row locking. Sets session variable to allow trigger bypass. Idempotent if ref is provided.';
+
+

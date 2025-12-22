@@ -73,3 +73,5 @@ fetchProfile(session.user.id).catch(err => {
 4. Test with existing user login
 5. Test with profile fetch failures
 6. Monitor console logs for retry attempts
+
+

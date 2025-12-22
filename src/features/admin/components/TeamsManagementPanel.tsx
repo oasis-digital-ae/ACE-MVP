@@ -302,27 +302,27 @@ export const TeamsManagementPanel: React.FC = () => {
                       Team <SortIcon field="name" />
                     </Button>
                   </TableHead>
-                  <TableHead>
+                  <TableHead className="text-center">
                     <Button variant="ghost" onClick={() => handleSort('market_cap')} className="h-auto p-0 font-medium">
                       Market Cap <SortIcon field="market_cap" />
                     </Button>
                   </TableHead>
-                  <TableHead>
+                  <TableHead className="text-center">
                     <Button variant="ghost" onClick={() => handleSort('share_price')} className="h-auto p-0 font-medium">
                       Share Price <SortIcon field="share_price" />
                     </Button>
                   </TableHead>
-                  <TableHead>
+                  <TableHead className="text-center">
                     <Button variant="ghost" onClick={() => handleSort('available_shares')} className="h-auto p-0 font-medium">
                       Available <SortIcon field="available_shares" />
                     </Button>
                   </TableHead>
-                  <TableHead>
+                  <TableHead className="text-center">
                     <Button variant="ghost" onClick={() => handleSort('total_invested')} className="h-auto p-0 font-medium">
                       Total Invested <SortIcon field="total_invested" />
                     </Button>
                   </TableHead>
-                  <TableHead>
+                  <TableHead className="text-center">
                     <Button variant="ghost" onClick={() => handleSort('price_change_24h')} className="h-auto p-0 font-medium">
                       24h Change <SortIcon field="price_change_24h" />
                     </Button>
@@ -342,26 +342,26 @@ export const TeamsManagementPanel: React.FC = () => {
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <div className="font-medium">{formatCurrency(team.market_cap)}</div>
+                    <TableCell className="text-center">
+                      <div className="font-medium font-mono">{formatCurrency(team.market_cap)}</div>
                     </TableCell>
-                    <TableCell>
-                      <div className="font-medium">{formatCurrency(team.share_price)}</div>
+                    <TableCell className="text-center">
+                      <div className="font-medium font-mono">{formatCurrency(team.share_price)}</div>
                     </TableCell>
-                    <TableCell>
-                      <div className="font-medium">{team.available_shares} / {team.total_shares}</div>
+                    <TableCell className="text-center">
+                      <div className="font-medium font-mono">{team.available_shares} / {team.total_shares}</div>
                     </TableCell>
-                    <TableCell>
-                      <div className="font-medium">{formatCurrency(team.total_invested)}</div>
+                    <TableCell className="text-center">
+                      <div className="font-medium font-mono">{formatCurrency(team.total_invested)}</div>
                     </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
+                    <TableCell className="text-center">
+                      <div className="flex items-center justify-center gap-1">
                         {team.price_change_24h >= 0 ? (
                           <TrendingUp className="h-4 w-4 text-green-600" />
                         ) : (
                           <TrendingDown className="h-4 w-4 text-red-600" />
                         )}
-                        <span className={team.price_change_24h >= 0 ? 'text-green-600' : 'text-red-600'}>
+                        <span className={`font-mono ${team.price_change_24h >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                           {team.price_change_24h >= 0 ? '+' : ''}{formatCurrency(team.price_change_24h)} 
                           ({team.price_change_percent_24h >= 0 ? '+' : ''}{team.price_change_percent_24h.toFixed(2)}%)
                         </span>
@@ -611,3 +611,5 @@ export const TeamsManagementPanel: React.FC = () => {
     </>
   );
 };
+
+

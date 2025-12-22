@@ -41,3 +41,5 @@ COMMENT ON POLICY "profiles_select_own" ON public.profiles IS
 COMMENT ON POLICY "profiles_admin_select" ON public.profiles IS 
   'Admins can view all profiles. Uses helper function to avoid circular dependency.';
 
+
+

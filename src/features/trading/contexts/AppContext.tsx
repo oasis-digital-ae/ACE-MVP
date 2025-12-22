@@ -170,7 +170,7 @@ const AppProviderInner: React.FC<{ children: React.ReactNode }> = ({ children })
       // Load user transactions from orders table
       const convertedTransactions: Transaction[] = [];
       
-      // Get individual transactions from orders table (not positions)
+      // Get individual transactions from orders table (not positions) - include both BUY and SELL
       const { data: userOrders, error: ordersError } = await supabase
         .from('orders')
         .select(`
@@ -179,7 +179,7 @@ const AppProviderInner: React.FC<{ children: React.ReactNode }> = ({ children })
         `)
         .eq('user_id', user.id)
         .eq('status', 'FILLED')
-        .eq('order_type', 'BUY')
+        .in('order_type', ['BUY', 'SELL'])
         .order('executed_at', { ascending: false });
 
       if (ordersError) {
@@ -198,7 +198,8 @@ const AppProviderInner: React.FC<{ children: React.ReactNode }> = ({ children })
             units: order.quantity,
             pricePerUnit: order.price_per_share,
             totalValue: order.total_amount,
-            date: new Date(order.executed_at || order.created_at).toLocaleDateString()
+            date: new Date(order.executed_at || order.created_at).toLocaleDateString(),
+            orderType: order.order_type as 'BUY' | 'SELL'
           });
         });
         logger.db('Converted orders to transactions', { count: convertedTransactions.length });

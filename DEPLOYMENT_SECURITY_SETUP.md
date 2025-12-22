@@ -75,3 +75,5 @@ FOOTBALL_API_KEY=your_football_api_key_here
 - Ensure `VITE_FOOTBALL_API_KEY` is set in Netlify
 - Check function logs for API key errors
 - Verify API key is valid and not expired
+
+

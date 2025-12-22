@@ -1,45 +1,7 @@
--- Fix incorrect opponent_team_id for loser entries
--- The logic was backwards - when home wins, loser (away) should have opponent = home (winner)
--- But the code was setting opponent = away team
+-- Fix Market Cap Conservation Issue
+-- Ensure total market cap always equals exactly $100,000 (20 teams × $5,000 initial)
+-- This fixes floating point precision errors and ensures no money is created/destroyed
 
--- First, fix the existing incorrect entries
-UPDATE total_ledger tl
-SET 
-  opponent_team_id = CASE 
-    WHEN f.result = 'home_win' AND tl.team_id = f.away_team_id THEN f.home_team_id  -- Away team lost, opponent is home team
-    WHEN f.result = 'home_win' AND tl.team_id = f.home_team_id THEN f.away_team_id  -- Home team won, opponent is away team
-    WHEN f.result = 'away_win' AND tl.team_id = f.home_team_id THEN f.away_team_id  -- Home team lost, opponent is away team
-    WHEN f.result = 'away_win' AND tl.team_id = f.away_team_id THEN f.home_team_id  -- Away team won, opponent is home team
-    WHEN f.result = 'draw' AND tl.team_id = f.home_team_id THEN f.away_team_id
-    WHEN f.result = 'draw' AND tl.team_id = f.away_team_id THEN f.home_team_id
-    ELSE tl.opponent_team_id
-  END,
-  opponent_team_name = (
-    SELECT name FROM teams WHERE id = CASE 
-      WHEN f.result = 'home_win' AND tl.team_id = f.away_team_id THEN f.home_team_id
-      WHEN f.result = 'home_win' AND tl.team_id = f.home_team_id THEN f.away_team_id
-      WHEN f.result = 'away_win' AND tl.team_id = f.home_team_id THEN f.away_team_id
-      WHEN f.result = 'away_win' AND tl.team_id = f.away_team_id THEN f.home_team_id
-      WHEN f.result = 'draw' AND tl.team_id = f.home_team_id THEN f.away_team_id
-      WHEN f.result = 'draw' AND tl.team_id = f.away_team_id THEN f.home_team_id
-      ELSE tl.opponent_team_id
-    END
-  )
-FROM fixtures f
-WHERE tl.trigger_event_type = 'fixture'
-  AND tl.trigger_event_id = f.id
-  AND tl.ledger_type IN ('match_win', 'match_loss', 'match_draw')
-  AND tl.opponent_team_id != CASE 
-    WHEN f.result = 'home_win' AND tl.team_id = f.away_team_id THEN f.home_team_id
-    WHEN f.result = 'home_win' AND tl.team_id = f.home_team_id THEN f.away_team_id
-    WHEN f.result = 'away_win' AND tl.team_id = f.home_team_id THEN f.away_team_id
-    WHEN f.result = 'away_win' AND tl.team_id = f.away_team_id THEN f.home_team_id
-    WHEN f.result = 'draw' AND tl.team_id = f.home_team_id THEN f.away_team_id
-    WHEN f.result = 'draw' AND tl.team_id = f.away_team_id THEN f.home_team_id
-    ELSE tl.opponent_team_id
-  END;
-
--- Now fix the function to use correct logic
 CREATE OR REPLACE FUNCTION process_match_result_atomic(p_fixture_id INTEGER)
 RETURNS JSON AS $$
 DECLARE
@@ -66,6 +28,12 @@ DECLARE
   v_away_entry_exists BOOLEAN;
   v_winner_current_cap NUMERIC;
   v_loser_current_cap NUMERIC;
+  v_total_market_cap NUMERIC;
+  v_target_total NUMERIC := 100000.00; -- Target total: 20 teams × $5,000
+  v_normalization_factor NUMERIC;
+  v_actual_transfer NUMERIC;
+  v_winner_new_cap NUMERIC;
+  v_loser_new_cap NUMERIC;
 BEGIN
   
   -- Get fixture with snapshot market cap data
@@ -95,21 +63,21 @@ BEGIN
   IF v_fixture.result = 'home_win' THEN
     v_winner_team_id := v_fixture.home_team_id;
     v_loser_team_id := v_fixture.away_team_id;
-    v_transfer_amount := v_away_snapshot_cap * 0.10;
+    -- Round transfer amount to 2 decimal places to avoid precision issues
+    v_transfer_amount := ROUND(v_away_snapshot_cap * 0.10, 2);
     v_is_home_winner := TRUE;
-    v_opponent_team_id := v_fixture.away_team_id;  -- For winner (home), opponent is away
+    v_opponent_team_id := v_fixture.away_team_id;
     v_match_score := COALESCE(v_fixture.home_score, 0) || '-' || COALESCE(v_fixture.away_score, 0);
-    -- Use snapshot values for before_cap (for accurate display)
     v_winner_before_cap := v_home_snapshot_cap;
     v_loser_before_cap := v_away_snapshot_cap;
   ELSIF v_fixture.result = 'away_win' THEN
     v_winner_team_id := v_fixture.away_team_id;
     v_loser_team_id := v_fixture.home_team_id;
-    v_transfer_amount := v_home_snapshot_cap * 0.10;
+    -- Round transfer amount to 2 decimal places to avoid precision issues
+    v_transfer_amount := ROUND(v_home_snapshot_cap * 0.10, 2);
     v_is_home_winner := FALSE;
-    v_opponent_team_id := v_fixture.home_team_id;  -- For winner (away), opponent is home
+    v_opponent_team_id := v_fixture.home_team_id;
     v_match_score := COALESCE(v_fixture.home_score, 0) || '-' || COALESCE(v_fixture.away_score, 0);
-    -- Use snapshot values for before_cap (for accurate display)
     v_winner_before_cap := v_away_snapshot_cap;
     v_loser_before_cap := v_home_snapshot_cap;
   ELSE
@@ -142,7 +110,7 @@ BEGIN
     
     -- Log draw for home team (only if doesn't exist)
     IF NOT v_home_entry_exists THEN
-      v_winner_price_before := CASE WHEN v_total_shares > 0 THEN v_home_snapshot_cap / v_total_shares ELSE 20.00 END;
+      v_winner_price_before := CASE WHEN v_total_shares > 0 THEN ROUND(v_home_snapshot_cap / v_total_shares, 2) ELSE 20.00 END;
       
       INSERT INTO total_ledger (
         team_id, ledger_type, event_date, opponent_team_id, is_home_match,
@@ -151,7 +119,7 @@ BEGIN
         trigger_event_type, trigger_event_id, event_description, created_by
       ) VALUES (
         v_fixture.home_team_id, 'match_draw', v_fixture.kickoff_at, v_fixture.away_team_id, TRUE,
-        v_home_snapshot_cap, v_home_snapshot_cap,
+        ROUND(v_home_snapshot_cap, 2), ROUND(v_home_snapshot_cap, 2),
         v_total_shares, v_total_shares,
         v_winner_price_before, v_winner_price_before, 0,
         'draw', v_match_score,
@@ -161,7 +129,7 @@ BEGIN
     
     -- Log draw for away team (only if doesn't exist)
     IF NOT v_away_entry_exists THEN
-      v_winner_price_before := CASE WHEN v_total_shares > 0 THEN v_away_snapshot_cap / v_total_shares ELSE 20.00 END;
+      v_winner_price_before := CASE WHEN v_total_shares > 0 THEN ROUND(v_away_snapshot_cap / v_total_shares, 2) ELSE 20.00 END;
       
       INSERT INTO total_ledger (
         team_id, ledger_type, event_date, opponent_team_id, is_home_match,
@@ -170,7 +138,7 @@ BEGIN
         trigger_event_type, trigger_event_id, event_description, created_by
       ) VALUES (
         v_fixture.away_team_id, 'match_draw', v_fixture.kickoff_at, v_fixture.home_team_id, FALSE,
-        v_away_snapshot_cap, v_away_snapshot_cap,
+        ROUND(v_away_snapshot_cap, 2), ROUND(v_away_snapshot_cap, 2),
         v_total_shares, v_total_shares,
         v_winner_price_before, v_winner_price_before, 0,
         'draw', v_match_score,
@@ -189,16 +157,23 @@ BEGIN
   v_total_shares := COALESCE(v_total_shares, 1000);
   
   -- Calculate prices and after values using snapshot values (for accurate display)
-  v_winner_price_before := CASE WHEN v_total_shares > 0 THEN v_winner_before_cap / v_total_shares ELSE 20.00 END;
-  v_loser_price_before := CASE WHEN v_total_shares > 0 THEN v_loser_before_cap / v_total_shares ELSE 20.00 END;
+  v_winner_price_before := CASE WHEN v_total_shares > 0 THEN ROUND(v_winner_before_cap / v_total_shares, 2) ELSE 20.00 END;
+  v_loser_price_before := CASE WHEN v_total_shares > 0 THEN ROUND(v_loser_before_cap / v_total_shares, 2) ELSE 20.00 END;
   
-  -- Calculate after values based on snapshot + transfer
-  v_winner_after_cap := v_winner_before_cap + v_transfer_amount;
-  v_loser_after_cap := v_loser_before_cap - v_transfer_amount;
+  -- Calculate after values based on snapshot + transfer (rounded)
+  v_winner_after_cap := ROUND(v_winner_before_cap + v_transfer_amount, 2);
+  v_loser_after_cap := ROUND(v_loser_before_cap - v_transfer_amount, 2);
+  
+  -- Ensure loser doesn't go below minimum ($10)
+  IF v_loser_after_cap < 10 THEN
+    v_loser_after_cap := 10.00;
+    -- Adjust winner's gain to maintain total conservation
+    v_winner_after_cap := ROUND(v_winner_before_cap + (v_loser_before_cap - 10.00), 2);
+  END IF;
   
   -- Calculate new prices using total_shares (fixed denominator)
-  v_winner_price_after := CASE WHEN v_total_shares > 0 THEN v_winner_after_cap / v_total_shares ELSE 20.00 END;
-  v_loser_price_after := CASE WHEN v_total_shares > 0 THEN GREATEST(v_loser_after_cap, 10) / v_total_shares ELSE 20.00 END;
+  v_winner_price_after := CASE WHEN v_total_shares > 0 THEN ROUND(v_winner_after_cap / v_total_shares, 2) ELSE 20.00 END;
+  v_loser_price_after := CASE WHEN v_total_shares > 0 THEN ROUND(v_loser_after_cap / v_total_shares, 2) ELSE 20.00 END;
   
   -- Get CURRENT market caps for updating teams table (to maintain consistency)
   SELECT market_cap INTO v_winner_current_cap FROM teams WHERE id = v_winner_team_id FOR UPDATE;
@@ -224,18 +199,50 @@ BEGIN
     RETURN json_build_object('success', true, 'transfer_amount', v_transfer_amount, 'message', 'Match result already processed');
   END IF;
   
+  -- Calculate the actual transfer amount based on current caps (to maintain consistency)
+  -- This ensures we're working with the actual current state, not snapshots
+  -- Calculate transfer from current caps (not snapshots) to maintain consistency
+  IF v_fixture.result = 'home_win' THEN
+    v_actual_transfer := ROUND(v_loser_current_cap * 0.10, 2);
+  ELSE
+    v_actual_transfer := ROUND(v_winner_current_cap * 0.10, 2);
+  END IF;
+  
+  v_winner_new_cap := ROUND(v_winner_current_cap + v_actual_transfer, 2);
+  v_loser_new_cap := ROUND(v_loser_current_cap - v_actual_transfer, 2);
+  
+  -- Ensure loser doesn't go below minimum ($10)
+  IF v_loser_new_cap < 10 THEN
+    v_loser_new_cap := 10.00;
+    -- Adjust winner's gain to maintain total conservation
+    v_actual_transfer := ROUND(v_loser_current_cap - 10.00, 2);
+    v_winner_new_cap := ROUND(v_winner_current_cap + v_actual_transfer, 2);
+  END IF;
+  
   -- Update teams atomically (only if entries don't exist)
-  -- Use current cap + transfer amount to maintain consistency with other transactions
   IF NOT v_home_entry_exists AND NOT v_away_entry_exists THEN
     UPDATE teams SET
-      market_cap = v_winner_current_cap + v_transfer_amount,
+      market_cap = v_winner_new_cap,
       updated_at = NOW()
     WHERE id = v_winner_team_id;
     
     UPDATE teams SET
-      market_cap = GREATEST(v_loser_current_cap - v_transfer_amount, 10),
+      market_cap = v_loser_new_cap,
       updated_at = NOW()
     WHERE id = v_loser_team_id;
+    
+    -- Normalize total market cap to exactly $100,000
+    SELECT SUM(market_cap) INTO v_total_market_cap FROM teams;
+    
+    IF ABS(v_total_market_cap - v_target_total) > 0.01 THEN
+      -- Calculate normalization factor
+      v_normalization_factor := v_target_total / v_total_market_cap;
+      
+      -- Apply normalization to all teams proportionally
+      UPDATE teams SET
+        market_cap = ROUND(market_cap * v_normalization_factor, 2),
+        updated_at = NOW();
+    END IF;
   END IF;
   
   -- Record transfer in transfers_ledger (only if entries don't exist)
@@ -249,7 +256,6 @@ BEGIN
   
   -- Log WINNER to total_ledger (only if doesn't exist)
   -- Use snapshot-based values for accurate historical display
-  -- Include event_date set to kickoff_at
   IF NOT EXISTS(
     SELECT 1 FROM total_ledger 
     WHERE trigger_event_id = p_fixture_id 
@@ -263,16 +269,13 @@ BEGIN
       trigger_event_type, trigger_event_id, event_description, created_by
     ) VALUES (
       v_winner_team_id, 'match_win', v_fixture.kickoff_at, v_transfer_amount, v_opponent_team_id, v_opponent_team_name, v_is_home_winner,
-      v_winner_before_cap, v_winner_after_cap, v_total_shares, v_total_shares,
-      v_winner_price_before, v_winner_price_after, v_winner_price_after - v_winner_price_before, 'win', v_match_score,
+      ROUND(v_winner_before_cap, 2), ROUND(v_winner_after_cap, 2), v_total_shares, v_total_shares,
+      v_winner_price_before, v_winner_price_after, ROUND(v_winner_price_after - v_winner_price_before, 2), 'win', v_match_score,
       'fixture', p_fixture_id, 'Match win: Gained ' || v_transfer_amount::text || ' from ' || v_opponent_team_name, 'system'
     ) ON CONFLICT DO NOTHING;
   END IF;
   
   -- Log LOSER to total_ledger (only if doesn't exist)
-  -- Use snapshot-based values for accurate historical display
-  -- Include event_date set to kickoff_at
-  -- FIXED: Loser's opponent should be the winner, not the other way around
   IF NOT EXISTS(
     SELECT 1 FROM total_ledger 
     WHERE trigger_event_id = p_fixture_id 
@@ -286,11 +289,11 @@ BEGIN
       trigger_event_type, trigger_event_id, event_description, created_by
     ) VALUES (
       v_loser_team_id, 'match_loss', v_fixture.kickoff_at, v_transfer_amount, 
-      v_winner_team_id,  -- FIXED: Loser's opponent is the winner
-      (SELECT name FROM teams WHERE id = v_winner_team_id),  -- FIXED: Get winner's name
+      v_winner_team_id,
+      (SELECT name FROM teams WHERE id = v_winner_team_id),
       NOT v_is_home_winner,
-      v_loser_before_cap, GREATEST(v_loser_after_cap, 10), v_total_shares, v_total_shares,
-      v_loser_price_before, v_loser_price_after, v_loser_price_after - v_loser_price_before, 'loss', v_match_score,
+      ROUND(v_loser_before_cap, 2), ROUND(v_loser_after_cap, 2), v_total_shares, v_total_shares,
+      v_loser_price_before, v_loser_price_after, ROUND(v_loser_price_after - v_loser_price_before, 2), 'loss', v_match_score,
       'fixture', p_fixture_id, 'Match loss: Lost ' || v_transfer_amount::text || ' to opponent', 'system'
     ) ON CONFLICT DO NOTHING;
   END IF;
@@ -308,7 +311,29 @@ EXCEPTION
 END;
 $$ LANGUAGE plpgsql;
 
-COMMENT ON FUNCTION process_match_result_atomic IS 'Fixed shares model: Price = market_cap / total_shares (1000). Uses snapshot values for accurate historical display. Sets event_date to fixture kickoff_at. Fixed opponent_team_id for losers.';
+COMMENT ON FUNCTION process_match_result_atomic IS 'Fixed shares model: Price = market_cap / total_shares (1000). Ensures total market cap always equals exactly $100,000 through normalization. Uses ROUND() to prevent floating point precision errors.';
 
+-- Also create a function to normalize existing market caps
+CREATE OR REPLACE FUNCTION normalize_market_caps()
+RETURNS void AS $$
+DECLARE
+  v_total_market_cap NUMERIC;
+  v_target_total NUMERIC := 100000.00;
+  v_normalization_factor NUMERIC;
+BEGIN
+  SELECT SUM(market_cap) INTO v_total_market_cap FROM teams;
+  
+  IF v_total_market_cap != v_target_total AND v_total_market_cap > 0 THEN
+    v_normalization_factor := v_target_total / v_total_market_cap;
+    
+    UPDATE teams SET
+      market_cap = ROUND(market_cap * v_normalization_factor, 2),
+      updated_at = NOW();
+    
+    RAISE NOTICE 'Normalized market caps: Total was %, normalized to %', v_total_market_cap, v_target_total;
+  END IF;
+END;
+$$ LANGUAGE plpgsql;
 
+COMMENT ON FUNCTION normalize_market_caps IS 'Normalizes all team market caps so total equals exactly $100,000. Use this to fix any accumulated floating point errors.';
 

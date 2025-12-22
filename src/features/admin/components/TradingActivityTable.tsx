@@ -388,17 +388,17 @@ export const TradingActivityTable: React.FC = () => {
                         Type <SortIcon field="order_type" />
                       </Button>
                     </TableHead>
-                    <TableHead>
+                    <TableHead className="text-center">
                       <Button variant="ghost" onClick={() => handleSort('quantity')} className="h-auto p-0 font-medium">
                         Shares <SortIcon field="quantity" />
                       </Button>
                     </TableHead>
-                    <TableHead>
+                    <TableHead className="text-center">
                       <Button variant="ghost" onClick={() => handleSort('price_per_share')} className="h-auto p-0 font-medium">
                         Price <SortIcon field="price_per_share" />
                       </Button>
                     </TableHead>
-                    <TableHead>
+                    <TableHead className="text-center">
                       <Button variant="ghost" onClick={() => handleSort('total_amount')} className="h-auto p-0 font-medium">
                         Total <SortIcon field="total_amount" />
                       </Button>
@@ -427,14 +427,14 @@ export const TradingActivityTable: React.FC = () => {
                       <TableCell>
                         {getOrderTypeBadge(trade.order_type)}
                       </TableCell>
-                      <TableCell>
-                        <p className="font-medium">{trade.quantity}</p>
+                      <TableCell className="text-center">
+                        <p className="font-medium font-mono">{trade.quantity}</p>
                       </TableCell>
-                      <TableCell>
-                        <p className="font-medium">{formatCurrency(trade.price_per_share)}</p>
+                      <TableCell className="text-center">
+                        <p className="font-medium font-mono">{formatCurrency(trade.price_per_share)}</p>
                       </TableCell>
-                      <TableCell>
-                        <p className="font-semibold">{formatCurrency(trade.total_amount)}</p>
+                      <TableCell className="text-center">
+                        <p className="font-semibold font-mono">{formatCurrency(trade.total_amount)}</p>
                         {trade.market_cap_before !== undefined && trade.market_cap_after !== undefined && (
                           (() => {
                             const marketCapChange = Math.abs((trade.market_cap_after || 0) - (trade.market_cap_before || 0));
@@ -442,7 +442,7 @@ export const TradingActivityTable: React.FC = () => {
                             
                             if (hasMarketCapChange) {
                               return (
-                                <p className="text-xs text-muted-foreground">
+                                <p className="text-xs text-muted-foreground font-mono">
                                   MC: {formatCurrency(trade.market_cap_before || 0)} → {formatCurrency(trade.market_cap_after || 0)}
                                 </p>
                               );
@@ -476,3 +476,5 @@ export const TradingActivityTable: React.FC = () => {
     </div>
   );
 };
+
+

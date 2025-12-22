@@ -44,4 +44,5 @@ export interface Club {
     pricePerUnit: number;
     totalValue: number;
     date: string;
+    orderType: 'BUY' | 'SELL';
   }

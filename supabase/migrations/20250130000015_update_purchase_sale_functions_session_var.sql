@@ -212,3 +212,5 @@ $$;
 -- Update process_share_sale_atomic similarly
 -- (Keeping the existing structure, just adding session variable at start and clearing at end)
 -- Note: The sale function already exists, so we'll update it to add the session variable
+
+

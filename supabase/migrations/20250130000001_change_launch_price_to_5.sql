@@ -67,3 +67,5 @@ END $$;
 COMMENT ON COLUMN teams.launch_price IS 'Launch price per share: $5.00 (Fixed Shares Model: 1000 shares total)';
 COMMENT ON COLUMN teams.initial_market_cap IS 'Initial market cap: $5,000 ($5/share × 1000 shares)';
 
+
+

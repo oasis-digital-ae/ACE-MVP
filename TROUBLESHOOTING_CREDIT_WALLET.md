@@ -83,3 +83,5 @@ The DepositModal now includes:
 3. Check Network tab for request details
 4. Verify environment variables are set correctly
 5. Test RPC call directly in browser console
+
+

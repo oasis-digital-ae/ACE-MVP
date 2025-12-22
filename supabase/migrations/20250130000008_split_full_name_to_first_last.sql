@@ -38,3 +38,5 @@ WHERE full_name IS NOT NULL AND (first_name IS NULL OR last_name IS NULL);
 
 COMMENT ON COLUMN public.profiles.first_name IS 'User first name';
 COMMENT ON COLUMN public.profiles.last_name IS 'User last name';
+
+

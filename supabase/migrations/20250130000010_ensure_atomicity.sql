@@ -230,3 +230,5 @@ COMMENT ON FUNCTION public.process_share_sale_atomic IS
   'Atomic share sale. Uses FOR UPDATE locks on teams, positions, and profiles. All operations in single transaction.';
 COMMENT ON FUNCTION public.process_match_result_atomic IS 
   'Atomic match result processing. Uses FOR UPDATE locks on teams. Idempotent - checks for existing entries.';
+
+

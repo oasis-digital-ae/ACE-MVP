@@ -115,3 +115,5 @@ ALLOWED_ORIGINS=https://ace-mvp.netlify.app,https://*.netlify.app
 - CORS defaults allow localhost for development. Remove in production if not needed
 - Validation functions are available but not yet integrated into all RPC functions
 - Security event logging is available but needs to be called explicitly
+
+

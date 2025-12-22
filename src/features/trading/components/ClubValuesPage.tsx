@@ -13,12 +13,13 @@ import type { DatabaseFixture } from '@/shared/lib/database';
 import { FixtureSync } from './FixtureSync';
 import { TeamSync } from './TeamSync';
 import { useToast } from '@/shared/hooks/use-toast';
-import { ChevronDown, ChevronUp, TrendingUp, TrendingDown, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { ChevronDown, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { useRealtimeMarket } from '@/shared/hooks/useRealtimeMarket';
 import { useRealtimeOrders } from '@/shared/hooks/useRealtimeOrders';
 import BuyWindowIndicator from '@/shared/components/BuyWindowIndicator';
 import { buyWindowService } from '@/shared/lib/buy-window.service';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
+import { supabase } from '@/shared/lib/supabase';
 
 export const ClubValuesPage: React.FC = () => {
   const { clubs, matches, purchaseClub, user, refreshData } = useAppContext();
@@ -37,6 +38,7 @@ export const ClubValuesPage: React.FC = () => {
   const [buyWindowStatuses, setBuyWindowStatuses] = useState<Map<string, any>>(new Map());
   const [sortField, setSortField] = useState<'name' | 'price' | 'change' | 'marketCap'>('change');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [matchdayChanges, setMatchdayChanges] = useState<Map<string, { change: number; percentChange: number }>>(new Map());
 
   // Realtime subscriptions (for toast notifications)
   const { lastUpdate } = useRealtimeMarket();
@@ -46,8 +48,16 @@ export const ClubValuesPage: React.FC = () => {
   // Don't reload every time clubs change (that causes excessive DB calls)
   useEffect(() => {
     loadFixtures();
+    loadMatchdayChanges();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only load once on mount
+
+  // Reload matchday changes when clubs change
+  useEffect(() => {
+    if (clubs.length > 0) {
+      loadMatchdayChanges();
+    }
+  }, [clubs.length]); // Only reload when clubs count changes
 
   // Show toast when market updates
   useEffect(() => {
@@ -78,6 +88,82 @@ export const ClubValuesPage: React.FC = () => {
       setFixtures(fixturesData);
     } catch (error) {
       console.error('Error loading fixtures:', error);
+    }
+  };
+
+  const loadMatchdayChanges = async () => {
+    try {
+      if (clubs.length === 0) return;
+
+      const teamIds = clubs.map(c => parseInt(c.id));
+      const changesMap = new Map<string, { change: number; percentChange: number }>();
+
+      // Get match results for all teams
+      const { data: ledgerData, error } = await supabase
+        .from('total_ledger')
+        .select('team_id, share_price_before, share_price_after, event_date')
+        .in('team_id', teamIds)
+        .in('ledger_type', ['match_win', 'match_loss', 'match_draw'])
+        .order('event_date', { ascending: false });
+
+      if (error) {
+        console.error('Error loading matchday changes:', error);
+        return;
+      }
+
+      // Group by team_id and get last two matches
+      const teamMatches = new Map<number, Array<{ before: number; after: number; date: string }>>();
+      
+      (ledgerData || []).forEach(entry => {
+        const teamId = entry.team_id;
+        if (!teamMatches.has(teamId)) {
+          teamMatches.set(teamId, []);
+        }
+        const matches = teamMatches.get(teamId)!;
+        
+        // Only add if we have both before and after prices
+        if (entry.share_price_before && entry.share_price_after) {
+          matches.push({
+            before: Number(entry.share_price_before),
+            after: Number(entry.share_price_after),
+            date: entry.event_date
+          });
+        }
+      });
+
+      // Calculate change between last two matchdays for each team
+      teamMatches.forEach((matches, teamId) => {
+        if (matches.length >= 2) {
+          // Get last two matches (most recent first)
+          const lastMatch = matches[0];
+          const previousMatch = matches[1];
+          
+          // Price after previous match is the price before last match
+          const priceAfterPreviousMatch = lastMatch.before;
+          const priceAfterLastMatch = lastMatch.after;
+          
+          const change = priceAfterLastMatch - priceAfterPreviousMatch;
+          const percentChange = priceAfterPreviousMatch > 0 
+            ? (change / priceAfterPreviousMatch) * 100 
+            : 0;
+          
+          changesMap.set(teamId.toString(), { change, percentChange });
+        } else if (matches.length === 1) {
+          // Only one match, compare to launch price
+          const match = matches[0];
+          const club = clubs.find(c => parseInt(c.id) === teamId);
+          if (club) {
+            const launchPrice = club.launchValue;
+            const change = match.after - launchPrice;
+            const percentChange = launchPrice > 0 ? (change / launchPrice) * 100 : 0;
+            changesMap.set(teamId.toString(), { change, percentChange });
+          }
+        }
+      });
+
+      setMatchdayChanges(changesMap);
+    } catch (error) {
+      console.error('Error calculating matchday changes:', error);
     }
   };
 
@@ -266,44 +352,12 @@ export const ClubValuesPage: React.FC = () => {
       {/* Header Section - Minimalist */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Market</h1>
-          <p className="mt-0.5 text-sm" style={{ color: 'hsl(var(--muted-foreground))' }}>Premier League Clubs</p>
+          <h1 className="text-2xl font-bold">The Premier League</h1>
         </div>
         <div className="flex items-center gap-2 text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>
           <div className="w-1.5 h-1.5 bg-[#10B981] rounded-full animate-pulse"></div>
           <span>Live</span>
         </div>
-      </div>
-
-      {/* Market Overview Cards - Clean & Compact */}
-      <div className="grid grid-cols-3 gap-4">
-        <Card className="trading-card border-0 bg-secondary/30">
-          <CardContent className="p-4">
-            <p className="text-xs mb-2" style={{ color: 'hsl(var(--muted-foreground))' }}>Total Market Cap</p>
-            <p className="text-2xl font-bold">
-              {formatCurrency(clubs.reduce((sum, club) => sum + Number(club.marketCap), 0))}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="trading-card border-0 bg-secondary/30">
-          <CardContent className="p-4">
-            <p className="text-xs mb-2" style={{ color: 'hsl(var(--muted-foreground))' }}>Active Clubs</p>
-            <p className="text-2xl font-bold">{clubs.length}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="trading-card border-0 bg-secondary/30">
-          <CardContent className="p-4">
-            <p className="text-xs mb-2" style={{ color: 'hsl(var(--muted-foreground))' }}>Top Performer</p>
-            <p className="text-base font-bold truncate">
-              {clubs.length > 0 ? clubs.sort((a, b) => b.percentChange - a.percentChange)[0]?.name : 'N/A'}
-            </p>
-            <p className="text-sm font-semibold price-positive mt-1">
-              {clubs.length > 0 ? `+${clubs.sort((a, b) => b.percentChange - a.percentChange)[0]?.percentChange.toFixed(2)}%` : ''}
-            </p>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Main Marketplace Table - Clean Professional Style */}
@@ -336,7 +390,7 @@ export const ClubValuesPage: React.FC = () => {
                     </button>
                   </th>
                   <th className="text-center px-3">Games</th>
-                  <th className="text-right px-3">
+                  <th className="text-center px-3">
                     <button
                       onClick={() => {
                         if (sortField === 'price') {
@@ -346,7 +400,7 @@ export const ClubValuesPage: React.FC = () => {
                           setSortDirection('desc');
                         }
                       }}
-                      className="flex items-center gap-1.5 hover:text-foreground transition-colors ml-auto"
+                      className="flex items-center justify-center gap-1.5 hover:text-foreground transition-colors mx-auto"
                     >
                       <span>Price</span>
                       {sortField === 'price' ? (
@@ -356,7 +410,7 @@ export const ClubValuesPage: React.FC = () => {
                       )}
                     </button>
                   </th>
-                  <th className="text-right px-3">
+                  <th className="text-center px-3">
                     <button
                       onClick={() => {
                         if (sortField === 'change') {
@@ -366,9 +420,9 @@ export const ClubValuesPage: React.FC = () => {
                           setSortDirection('desc');
                         }
                       }}
-                      className="flex items-center gap-1.5 hover:text-foreground transition-colors ml-auto"
+                      className="flex items-center justify-center gap-1.5 hover:text-foreground transition-colors mx-auto"
                     >
-                      <span>24h</span>
+                      <span>Gain/Loss</span>
                       {sortField === 'change' ? (
                         sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
                       ) : (
@@ -376,7 +430,7 @@ export const ClubValuesPage: React.FC = () => {
                       )}
                     </button>
                   </th>
-                  <th className="text-right px-3">
+                  <th className="text-center px-3">
                     <button
                       onClick={() => {
                         if (sortField === 'marketCap') {
@@ -386,7 +440,7 @@ export const ClubValuesPage: React.FC = () => {
                           setSortDirection('desc');
                         }
                       }}
-                      className="flex items-center gap-1.5 hover:text-foreground transition-colors ml-auto"
+                      className="flex items-center justify-center gap-1.5 hover:text-foreground transition-colors mx-auto"
                     >
                       <span>Market Cap</span>
                       {sortField === 'marketCap' ? (
@@ -396,8 +450,8 @@ export const ClubValuesPage: React.FC = () => {
                       )}
                     </button>
                   </th>
-                  <th className="text-left px-3" style={{ color: 'hsl(var(--muted-foreground))' }}>
-                    <span className="text-xs">Closes</span>
+                  <th className="text-center px-3" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                    <span className="text-xs inline-block" style={{ paddingLeft: '2rem' }}>Closes (UAE time)</span>
                   </th>
                   <th className="text-center px-3 w-24"></th>
                 </tr>
@@ -467,21 +521,21 @@ export const ClubValuesPage: React.FC = () => {
                         >
                           {getGamesPlayed(club.id)}
                         </td>
-                        <td className="px-3 text-right font-mono font-semibold">{formatCurrency(club.currentValue)}</td>
-                        <td className={`px-3 text-right font-semibold ${club.percentChange === 0 ? 'price-neutral' : club.percentChange > 0 ? 'price-positive' : 'price-negative'}`}>
+                        <td className="px-3 text-center font-mono font-semibold">{formatCurrency(club.currentValue)}</td>
+                        <td className={`px-3 text-center ${club.percentChange === 0 ? 'price-neutral' : club.percentChange > 0 ? 'price-positive' : 'price-negative'}`}>
                           {club.percentChange > 0 ? '+' : ''}{formatPercent(club.percentChange)}
                         </td>
-                        <td className="px-3 text-right font-mono text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                        <td className="px-3 text-center font-mono text-xs" style={{ color: 'hsl(var(--foreground))' }}>
                           {formatCurrency(club.marketCap)}
                         </td>
-                        <td className="px-3 text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                        <td className="px-3 text-center text-xs" style={{ color: '#C9A961' }}>
                           {(() => {
                             const status = buyWindowStatuses.get(club.id);
                             if (!status?.nextCloseTime) {
                               return <span className="text-gray-500">—</span>;
                             }
                             const deadline = formatTradingDeadline(status.nextCloseTime);
-                            return <span className="font-mono">{deadline}</span>;
+                            return <span className="font-mono" style={{ color: '#C9A961' }}>{deadline}</span>;
                           })()}
                         </td>
                         <td className="px-3 text-center">

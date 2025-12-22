@@ -45,6 +45,7 @@ export interface Transaction {
   pricePerUnit: number;
   totalValue: number;
   date: string;
+  orderType: 'BUY' | 'SELL';
 }
 
 export const PREMIER_LEAGUE_CLUBS = [

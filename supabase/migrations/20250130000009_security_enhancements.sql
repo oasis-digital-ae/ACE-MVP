@@ -175,3 +175,5 @@ COMMENT ON FUNCTION public.log_security_event(text, uuid, jsonb) IS
   'Logs security events to audit_log. Used for monitoring suspicious activity.';
 
 GRANT EXECUTE ON FUNCTION public.log_security_event(text, uuid, jsonb) TO authenticated, anon;
+
+

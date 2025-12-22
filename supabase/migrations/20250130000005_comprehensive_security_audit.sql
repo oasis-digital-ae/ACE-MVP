@@ -119,3 +119,5 @@ COMMENT ON POLICY wallet_tx_select_own ON public.wallet_transactions IS
 COMMENT ON POLICY profiles_select_own ON public.profiles IS 
   'Users can view their own profile. Admins can view all profiles. Prevents email enumeration.';
 
+
+

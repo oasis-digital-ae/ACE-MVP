@@ -153,3 +153,5 @@ COMMENT ON FUNCTION public.prevent_profile_field_updates() IS
 
 COMMENT ON FUNCTION public.credit_wallet(uuid, bigint, text, text) IS 
   'Credits user wallet atomically with row locking. Optimized for performance - removed slow IF EXISTS checks. Uses NOWAIT to fail fast on locks.';
+
+

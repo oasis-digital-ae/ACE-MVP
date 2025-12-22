@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent } from '@/shared/components/ui/card';
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
@@ -6,11 +6,26 @@ import { fixturesService } from '@/shared/lib/database';
 import type { DatabaseFixtureWithTeams } from '@/shared/lib/database';
 import ClickableTeamName from '@/shared/components/ClickableTeamName';
 import TeamLogo from '@/shared/components/TeamLogo';
+import { useAppContext } from '@/features/trading/contexts/AppContext';
+import { PurchaseConfirmationModal } from './PurchaseConfirmationModal';
+import { useToast } from '@/shared/hooks/use-toast';
+import { useAuth } from '@/features/auth/contexts/AuthContext';
 
 const MatchResultsPage: React.FC = () => {
+  const { clubs, purchaseClub, refreshData } = useAppContext();
+  const { toast } = useToast();
+  const { refreshWalletBalance } = useAuth();
   const [fixtures, setFixtures] = useState<DatabaseFixtureWithTeams[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'finished' | 'upcoming'>('all');
+  const [confirmationData, setConfirmationData] = useState<{
+    clubId: string;
+    clubName: string;
+    externalId?: number;
+    pricePerShare: number;
+  } | null>(null);
+  const [isPurchasing, setIsPurchasing] = useState(false);
+  const [purchasingClubId, setPurchasingClubId] = useState<string | null>(null);
 
   useEffect(() => {
     loadFixtures();
@@ -138,6 +153,77 @@ const MatchResultsPage: React.FC = () => {
       });
     }
   };
+
+  const handlePurchaseClick = useCallback((teamId: number, teamName: string, externalId?: number) => {
+    // Prevent multiple clicks while a purchase is in progress
+    if (isPurchasing) return;
+    
+    const club = clubs.find(c => c.id === teamId.toString());
+    if (!club) {
+      toast({
+        title: "Team not found",
+        description: "Unable to find team information. Please try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    const pricePerShare = club.currentValue; // Use actual current value (NAV)
+    
+    setConfirmationData({
+      clubId: teamId.toString(),
+      clubName: teamName,
+      externalId,
+      pricePerShare
+    });
+  }, [clubs, isPurchasing, toast]);
+
+  const confirmPurchase = useCallback(async (shares: number) => {
+    if (!confirmationData || isPurchasing) return;
+    
+    setIsPurchasing(true);
+    setPurchasingClubId(confirmationData.clubId);
+    
+    try {
+      await purchaseClub(confirmationData.clubId, shares);
+      setConfirmationData(null);
+      
+      // Immediately refresh wallet balance
+      refreshWalletBalance();
+      
+      // Refresh all data (portfolio, clubs, etc.)
+      await refreshData();
+      
+      // Double-check wallet balance after a short delay (for webhook updates)
+      setTimeout(() => {
+        refreshWalletBalance();
+        refreshData();
+      }, 1500);
+      
+      // Success toast is shown in AppContext.purchaseClub
+    } catch (error: any) {
+      console.error('Purchase failed:', error);
+      
+      // Extract user-friendly error message
+      let errorMessage = 'An unknown error occurred';
+      if (error?.message) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      // Show error toast with clear message
+      toast({
+        title: "Purchase Failed",
+        description: errorMessage,
+        variant: "destructive",
+        duration: 5000,
+      });
+    } finally {
+      setIsPurchasing(false);
+      setPurchasingClubId(null);
+    }
+  }, [confirmationData, purchaseClub, toast, isPurchasing, refreshWalletBalance, refreshData]);
 
   if (loading) {
     return (
@@ -276,9 +362,24 @@ const MatchResultsPage: React.FC = () => {
                           <div className="flex-1 flex items-center justify-center gap-4">
                             {/* Home Team */}
                             <div className="flex items-center gap-2 flex-1 justify-end">
+                              {fixture.home_team_id && (
+                                <Button
+                                  onClick={() => handlePurchaseClick(
+                                    fixture.home_team_id,
+                                    fixture.home_team?.name || 'Home Team',
+                                    fixture.home_team?.external_id ? parseInt(fixture.home_team.external_id) : undefined
+                                  )}
+                                  size="sm"
+                                  disabled={isPurchasing || purchasingClubId === fixture.home_team_id.toString()}
+                                  className="bg-[#10B981] hover:bg-[#059669] text-white font-medium px-2 py-0.5 text-xs rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed h-6"
+                                  title="Buy shares"
+                                >
+                                  {isPurchasing && purchasingClubId === fixture.home_team_id.toString() ? '...' : 'Buy'}
+                                </Button>
+                              )}
                               <ClickableTeamName
                                 teamName={fixture.home_team?.name || 'Home Team'}
-                                teamId={fixture.home_team?.id}
+                                teamId={fixture.home_team_id}
                                 externalId={fixture.home_team?.external_id ? parseInt(fixture.home_team.external_id) : undefined}
                                 className="text-sm font-medium text-white hover:text-trading-primary transition-colors text-right"
                               />
@@ -323,10 +424,25 @@ const MatchResultsPage: React.FC = () => {
                               />
                               <ClickableTeamName
                                 teamName={fixture.away_team?.name || 'Away Team'}
-                                teamId={fixture.away_team?.id}
+                                teamId={fixture.away_team_id}
                                 externalId={fixture.away_team?.external_id ? parseInt(fixture.away_team.external_id) : undefined}
                                 className="text-sm font-medium text-white hover:text-trading-primary transition-colors text-left"
                               />
+                              {fixture.away_team_id && (
+                                <Button
+                                  onClick={() => handlePurchaseClick(
+                                    fixture.away_team_id,
+                                    fixture.away_team?.name || 'Away Team',
+                                    fixture.away_team?.external_id ? parseInt(fixture.away_team.external_id) : undefined
+                                  )}
+                                  size="sm"
+                                  disabled={isPurchasing || purchasingClubId === fixture.away_team_id.toString()}
+                                  className="bg-[#10B981] hover:bg-[#059669] text-white font-medium px-2 py-0.5 text-xs rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed h-6"
+                                  title="Buy shares"
+                                >
+                                  {isPurchasing && purchasingClubId === fixture.away_team_id.toString() ? '...' : 'Buy'}
+                                </Button>
+                              )}
                             </div>
                           </div>
 
@@ -348,6 +464,18 @@ const MatchResultsPage: React.FC = () => {
           ))}
         </div>
       )}
+
+      {/* Purchase Confirmation Modal */}
+      <PurchaseConfirmationModal
+        isOpen={confirmationData !== null}
+        onClose={() => setConfirmationData(null)}
+        onConfirm={confirmPurchase}
+        clubName={confirmationData?.clubName || ''}
+        clubId={confirmationData?.clubId}
+        externalId={confirmationData?.externalId}
+        pricePerShare={confirmationData?.pricePerShare || 0}
+        isProcessing={isPurchasing}
+      />
     </div>
   );
 };

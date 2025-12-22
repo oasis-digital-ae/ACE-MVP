@@ -309,27 +309,27 @@ export const UsersManagementPanel: React.FC = () => {
                       User <SortIcon field="username" />
                     </Button>
                   </TableHead>
-                  <TableHead>
+                  <TableHead className="text-center">
                     <Button variant="ghost" onClick={() => handleSort('wallet_balance')} className="h-auto p-0 font-medium">
                       Wallet <SortIcon field="wallet_balance" />
                     </Button>
                   </TableHead>
-                  <TableHead>
+                  <TableHead className="text-center">
                     <Button variant="ghost" onClick={() => handleSort('total_invested')} className="h-auto p-0 font-medium">
                       Invested <SortIcon field="total_invested" />
                     </Button>
                   </TableHead>
-                  <TableHead>
+                  <TableHead className="text-center">
                     <Button variant="ghost" onClick={() => handleSort('portfolio_value')} className="h-auto p-0 font-medium">
                       Portfolio Value <SortIcon field="portfolio_value" />
                     </Button>
                   </TableHead>
-                  <TableHead>
+                  <TableHead className="text-center">
                     <Button variant="ghost" onClick={() => handleSort('profit_loss')} className="h-auto p-0 font-medium">
                       P&L <SortIcon field="profit_loss" />
                     </Button>
                   </TableHead>
-                  <TableHead>
+                  <TableHead className="text-center">
                     <Button variant="ghost" onClick={() => handleSort('positions_count')} className="h-auto p-0 font-medium">
                       Positions <SortIcon field="positions_count" />
                     </Button>
@@ -358,28 +358,28 @@ export const UsersManagementPanel: React.FC = () => {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <div className="font-medium">{formatCurrency(user.wallet_balance)}</div>
+                    <TableCell className="text-center">
+                      <div className="font-medium font-mono">{formatCurrency(user.wallet_balance)}</div>
                     </TableCell>
-                    <TableCell>
-                      <div className="font-medium">{formatCurrency(user.total_invested)}</div>
+                    <TableCell className="text-center">
+                      <div className="font-medium font-mono">{formatCurrency(user.total_invested)}</div>
                     </TableCell>
-                    <TableCell>
-                      <div className="font-medium">{formatCurrency(user.portfolio_value)}</div>
+                    <TableCell className="text-center">
+                      <div className="font-medium font-mono">{formatCurrency(user.portfolio_value)}</div>
                     </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
+                    <TableCell className="text-center">
+                      <div className="flex items-center justify-center gap-1">
                         {user.profit_loss >= 0 ? (
                           <TrendingUp className="h-4 w-4 text-green-600" />
                         ) : (
                           <TrendingDown className="h-4 w-4 text-red-600" />
                         )}
-                        <span className={user.profit_loss >= 0 ? 'text-green-600' : 'text-red-600'}>
-                          {formatCurrency(user.profit_loss)}
+                        <span className={`font-mono ${user.profit_loss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {user.profit_loss >= 0 ? '+' : ''}{formatCurrency(user.profit_loss)}
                         </span>
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-center">
                       <Badge variant="secondary">{user.positions_count}</Badge>
                     </TableCell>
                     <TableCell>
@@ -534,32 +534,60 @@ export const UsersManagementPanel: React.FC = () => {
               </TabsContent>
 
               <TabsContent value="positions" className="space-y-4 mt-4">
-                <div className="space-y-2">
-                  {selectedUser.positions.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No positions</p>
-                  ) : (
-                    selectedUser.positions.map((pos, index) => (
-                      <Card key={index}>
-                        <CardContent className="p-4">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="font-medium">{pos.team_name}</p>
-                              <p className="text-sm text-muted-foreground">
-                                {pos.quantity} shares @ {formatCurrency(pos.current_value / pos.quantity)}
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-medium">{formatCurrency(pos.current_value)}</p>
-                              <p className={`text-sm ${pos.profit_loss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {selectedUser.positions.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No positions</p>
+                ) : (
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Team</TableHead>
+                          <TableHead className="text-center">Quantity</TableHead>
+                          <TableHead className="text-center">Price/Share</TableHead>
+                          <TableHead className="text-center">% Change</TableHead>
+                          <TableHead className="text-center">Total Value</TableHead>
+                          <TableHead className="text-center">P&L</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedUser.positions.map((pos, index) => {
+                          const pricePerShare = pos.quantity > 0 ? pos.current_value / pos.quantity : 0;
+                          const investedPerShare = pos.quantity > 0 ? pos.total_invested / pos.quantity : 0;
+                          const percentChange = investedPerShare > 0 
+                            ? ((pricePerShare - investedPerShare) / investedPerShare) * 100 
+                            : 0;
+                          
+                          return (
+                            <TableRow key={index}>
+                              <TableCell>
+                                <p className="font-medium">{pos.team_name}</p>
+                              </TableCell>
+                              <TableCell className="text-center font-mono">
+                                {pos.quantity}
+                              </TableCell>
+                              <TableCell className="text-center font-mono">
+                                {formatCurrency(pricePerShare)}
+                              </TableCell>
+                              <TableCell className={`text-center font-mono ${
+                                percentChange >= 0 ? 'text-green-600' : 'text-red-600'
+                              }`}>
+                                {percentChange >= 0 ? '+' : ''}{percentChange.toFixed(2)}%
+                              </TableCell>
+                              <TableCell className="text-center font-mono font-semibold">
+                                {formatCurrency(pos.current_value)}
+                              </TableCell>
+                              <TableCell className={`text-center font-mono font-semibold ${
+                                pos.profit_loss >= 0 ? 'text-green-600' : 'text-red-600'
+                              }`}>
                                 {pos.profit_loss >= 0 ? '+' : ''}{formatCurrency(pos.profit_loss)}
-                              </p>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))
-                  )}
-                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
               </TabsContent>
 
               <TabsContent value="orders" className="space-y-4 mt-4">
@@ -603,3 +631,5 @@ export const UsersManagementPanel: React.FC = () => {
     </>
   );
 };
+
+

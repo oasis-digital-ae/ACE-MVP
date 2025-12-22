@@ -49,6 +49,7 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({
             <thead className="sticky top-0 bg-gray-800">
               <tr className="border-b border-gray-600">
                 <th className="text-left p-2">Date</th>
+                <th className="text-center p-2">Type</th>
                 <th className="text-right p-2">Units</th>
                 <th className="text-right p-2">Price/Unit</th>
                 <th className="text-right p-2">Total</th>
@@ -58,6 +59,15 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({
               {transactions.map((transaction) => (
                 <tr key={transaction.id} className="border-b border-gray-700">
                   <td className="p-2">{transaction.date}</td>
+                  <td className="p-2 text-center">
+                    <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                      transaction.orderType === 'BUY' 
+                        ? 'bg-green-900/30 text-green-400' 
+                        : 'bg-red-900/30 text-red-400'
+                    }`}>
+                      {transaction.orderType === 'BUY' ? 'Buy' : 'Sell'}
+                    </span>
+                  </td>
                   <td className="p-2 text-right">{formatNumber(transaction.units)}</td>
                   <td className="p-2 text-right">{formatCurrency(transaction.pricePerUnit)}</td>
                   <td className="p-2 text-right">{formatCurrency(transaction.totalValue)}</td>

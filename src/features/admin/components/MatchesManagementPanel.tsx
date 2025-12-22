@@ -355,13 +355,13 @@ export const MatchesManagementPanel: React.FC = () => {
                     </Button>
                   </TableHead>
                   <TableHead>Away Team</TableHead>
-                  <TableHead>Score</TableHead>
-                  <TableHead>
+                  <TableHead className="text-center">Score</TableHead>
+                  <TableHead className="text-center">
                     <Button variant="ghost" onClick={() => handleSort('status')} className="h-auto p-0 font-medium">
                       Status <SortIcon field="status" />
                     </Button>
                   </TableHead>
-                  <TableHead>
+                  <TableHead className="text-center">
                     <Button variant="ghost" onClick={() => handleSort('result')} className="h-auto p-0 font-medium">
                       Result <SortIcon field="result" />
                     </Button>
@@ -400,9 +400,9 @@ export const MatchesManagementPanel: React.FC = () => {
                         <span className="font-medium">{fixture.away_team?.name || 'Away'}</span>
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-center">
                       {fixture.status === 'applied' && fixture.home_score !== null ? (
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center justify-center gap-2">
                           <span className={`font-bold ${
                             fixture.result === 'home_win' ? 'text-green-400' : 'text-gray-400'
                           }`}>
@@ -419,10 +419,10 @@ export const MatchesManagementPanel: React.FC = () => {
                         <span className="text-muted-foreground">—</span>
                       )}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-center">
                       {getStatusBadge(fixture.status)}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-center">
                       {fixture.result && fixture.result !== 'pending' ? (
                         <Badge variant={
                           fixture.result === 'home_win' ? 'default' :
@@ -453,3 +453,5 @@ export const MatchesManagementPanel: React.FC = () => {
     </div>
   );
 };
+
+
