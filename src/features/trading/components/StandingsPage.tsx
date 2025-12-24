@@ -48,10 +48,10 @@ const StandingsPage: React.FC = () => {
   };
 
   const getPositionBadge = (position: number) => {
-    if (position <= 4) return <Badge className="bg-yellow-100 text-yellow-800 text-[10px] py-0 px-1.5 h-4 leading-4">Champions League</Badge>;
-    if (position === 5) return <Badge className="bg-blue-100 text-blue-800 text-[10px] py-0 px-1.5 h-4 leading-4">Europa League</Badge>;
-    if (position === 6) return <Badge className="bg-purple-100 text-purple-800 text-[10px] py-0 px-1.5 h-4 leading-4">Conference League</Badge>;
-    if (position >= 18) return <Badge variant="destructive" className="text-[10px] py-0 px-1.5 h-4 leading-4">Relegation Zone</Badge>;
+    if (position <= 4) return <Badge className="bg-yellow-100 text-yellow-800 text-[10px] py-0 px-1.5 h-4 leading-4 flex items-center justify-center">Champions League</Badge>;
+    if (position === 5) return <Badge className="bg-blue-100 text-blue-800 text-[10px] py-0 px-1.5 h-4 leading-4 flex items-center justify-center">Europa League</Badge>;
+    if (position === 6) return <Badge className="bg-purple-100 text-purple-800 text-[10px] py-0 px-1.5 h-4 leading-4 flex items-center justify-center">Conference League</Badge>;
+    if (position >= 18) return <Badge variant="destructive" className="text-[10px] py-0 px-1.5 h-4 leading-4 flex items-center justify-center">Relegation Zone</Badge>;
     return null;
   };
 
@@ -161,8 +161,10 @@ const StandingsPage: React.FC = () => {
                       {formatGoalDifference(standing.goalDifference)}
                     </td>
                     <td className="px-3 text-xs font-semibold" style={{ textAlign: 'center' }}>{standing.points}</td>
-                    <td className="px-3" style={{ textAlign: 'center' }}>
-                      {getPositionBadge(standing.position)}
+                    <td className="px-3" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
+                      <div className="flex items-center justify-center">
+                        {getPositionBadge(standing.position)}
+                      </div>
                     </td>
                   </tr>
                 ))}
