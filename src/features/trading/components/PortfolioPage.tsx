@@ -147,7 +147,7 @@ const PortfolioPage: React.FC = () => {
     }, [user, toast]);
 
   return (
-    <div className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
+    <div className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6 w-full max-w-full overflow-x-hidden">
       {/* Welcome Header */}
       {profile && (profile.first_name || profile.full_name) && (
         <div className="mb-2">
@@ -248,8 +248,8 @@ const PortfolioPage: React.FC = () => {
               <p className="text-gray-500 text-sm">Start building your portfolio by buying club shares!</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="trading-table">
+            <div className="overflow-x-auto w-full max-w-full">
+              <table className="trading-table w-full">
                 <thead>
                   <tr>
                     <th className="text-left px-3">Club</th>

@@ -1,5 +1,11 @@
 import React, { useState } from 'react';
 import { Button } from '@/shared/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/shared/components/ui/tooltip';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
 import { DepositModal } from '@/features/trading/components/DepositModal';
 import { formatCurrency } from '@/shared/lib/formatters';
@@ -52,78 +58,89 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
   };
 
   return (
-    <nav className="bg-gradient-primary border-b border-trading-primary/20 backdrop-blur-md sticky top-0 z-50">
+    <nav className="bg-gradient-primary border-b border-trading-primary/20 backdrop-blur-md sticky top-0 z-50 w-full">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16 gap-6">
+        <div className="flex items-center h-16 gap-2 md:gap-3">
           {/* Logo and Brand */}
-          <div className="flex items-center space-x-3 flex-shrink-0">
-            <div className="flex items-center justify-center w-10 h-10 bg-trading-primary rounded-full primary-glow flex-shrink-0">
-              <Trophy className="w-6 h-6 text-white" />
+          <div className="flex items-center space-x-2 flex-shrink-0">
+            <div className="flex items-center justify-center w-9 h-9 lg:w-10 lg:h-10 bg-trading-primary rounded-full primary-glow flex-shrink-0">
+              <Trophy className="w-5 h-5 lg:w-6 lg:h-6 text-white" />
             </div>
-            <h1 className="text-xl font-bold text-white whitespace-nowrap">
-              Arena Club Exchange (ACE)
+            <h1 className="text-base lg:text-lg xl:text-xl font-bold text-white whitespace-nowrap">
+              <span className="hidden lg:inline">Arena Club Exchange (ACE)</span>
+              <span className="lg:hidden">ACE</span>
             </h1>
           </div>
 
-          {/* Desktop Navigation - Centered */}
-          <div className="hidden md:flex items-center space-x-1 flex-1 justify-center max-w-2xl mx-auto">
-            {pages.map((page) => {
-              const Icon = page.icon;
-              const isActive = currentPage === page.id;
-              
-              return (
-                <Button
-                  key={page.id}
-                  variant="ghost"
-                  onClick={() => onPageChange(page.id)}
-                  className={`
-                    flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-200
-                    ${isActive 
-                      ? 'bg-trading-primary text-white border border-trading-primary shadow-lg' 
-                      : 'text-gray-300 hover:text-white hover:bg-white/10'
-                    }
-                  `}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span className="font-medium">{page.label}</span>
-                </Button>
-              );
-            })}
+          {/* Desktop Navigation - Horizontal Scrollable */}
+          <div className="hidden md:flex items-center flex-1 justify-center min-w-0 px-2">
+            <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide max-w-full">
+              <TooltipProvider>
+                {pages.map((page) => {
+                  const Icon = page.icon;
+                  const isActive = currentPage === page.id;
+                  
+                  return (
+                    <Tooltip key={page.id}>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          onClick={() => onPageChange(page.id)}
+                          className={`
+                            flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200 flex-shrink-0
+                            ${isActive 
+                              ? 'bg-trading-primary text-white border border-trading-primary shadow-lg' 
+                              : 'text-gray-300 hover:text-white hover:bg-white/10'
+                            }
+                          `}
+                        >
+                          <Icon className="w-4 h-4 flex-shrink-0" />
+                          <span className="font-medium whitespace-nowrap text-sm hidden lg:inline">{page.label}</span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="lg:hidden">
+                        <p>{page.label}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  );
+                })}
+              </TooltipProvider>
+            </div>
           </div>
 
-          {/* User Menu - Improved spacing */}
-          <div className="flex items-center space-x-2 flex-shrink-0">
+          {/* User Menu */}
+          <div className="flex items-center space-x-1 lg:space-x-2 flex-shrink-0 ml-auto">
             {profile && (
               <>
-                <div className="hidden md:flex items-center space-x-2 text-gray-300">
-                  <div className="flex items-center space-x-1.5 px-2.5 py-1.5 bg-gray-700/50 rounded-lg border border-gray-600">
-                    <Wallet className="w-4 h-4 text-trading-primary flex-shrink-0" />
-                    <span className="text-sm font-semibold whitespace-nowrap">{formatCurrency(walletBalance)}</span>
+                <div className="hidden lg:flex items-center space-x-1.5 text-gray-300">
+                  <div className="flex items-center space-x-1 px-2 py-1 bg-gray-700/50 rounded-lg border border-gray-600 flex-shrink-0">
+                    <Wallet className="w-3.5 h-3.5 text-trading-primary flex-shrink-0" />
+                    <span className="text-xs lg:text-sm font-semibold whitespace-nowrap">{formatCurrency(walletBalance)}</span>
                   </div>
-                  <div className="hidden md:flex items-center space-x-1.5 px-2">
-                    <User className="w-4 h-4 flex-shrink-0" />
-                    <span className="text-sm font-medium whitespace-nowrap truncate max-w-[120px]">
+                  <div className="hidden xl:flex items-center space-x-1 px-1.5 flex-shrink-0">
+                    <User className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span className="text-xs lg:text-sm font-medium whitespace-nowrap truncate max-w-[100px]">
                       {profile.first_name || (profile.full_name ? profile.full_name.split(' ')[0] : 'User')}
                     </span>
                   </div>
                 </div>
                 <Button
                   onClick={() => setDepositModalOpen(true)}
-                  className="hidden sm:flex items-center space-x-1.5 bg-trading-primary hover:bg-trading-primary/80 text-white px-3 py-1.5 flex-shrink-0"
+                  className="hidden sm:flex items-center space-x-1 bg-trading-primary hover:bg-trading-primary/80 text-white px-1.5 lg:px-2.5 py-1 flex-shrink-0"
                   size="sm"
                 >
-                  <Wallet className="w-3.5 h-3.5" />
-                  <span className="text-sm">Deposit</span>
+                  <Wallet className="w-3 h-3 lg:w-3.5 lg:h-3.5 flex-shrink-0" />
+                  <span className="text-xs lg:text-sm whitespace-nowrap hidden xl:inline">Deposit</span>
                 </Button>
               </>
             )}
             <Button 
               variant="ghost" 
               onClick={handleSignOut} 
-              className="text-gray-300 hover:text-white hover:bg-white/10 p-2 flex-shrink-0"
+              className="text-gray-300 hover:text-white hover:bg-white/10 p-1.5 lg:p-2 flex-shrink-0"
               title="Sign Out"
             >
-              <LogOut className="w-4 h-4" />
+              <LogOut className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
             </Button>
           </div>
         </div>

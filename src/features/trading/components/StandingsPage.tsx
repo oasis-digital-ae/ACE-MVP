@@ -88,7 +88,7 @@ const StandingsPage: React.FC = () => {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 lg:p-6 space-y-6 w-full max-w-full overflow-x-hidden">
       <div>
         <h1 className="text-3xl font-bold text-white">Premier League Standings</h1>
         <p className="text-gray-400 mt-1">Season 2025-26</p>
@@ -102,8 +102,8 @@ const StandingsPage: React.FC = () => {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="trading-table">
+          <div className="overflow-x-auto w-full max-w-full">
+            <table className="trading-table w-full">
               <thead>
                 <tr>
                   <th className="w-12 px-3" style={{ textAlign: 'left' }}>Pos</th>

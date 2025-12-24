@@ -227,7 +227,7 @@ const MatchResultsPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="p-4 lg:p-6">
+      <div className="p-4 lg:p-6 w-full max-w-full overflow-x-hidden">
         <Card className="trading-card">
           <CardContent className="p-8 text-center">
             <p className="text-gray-400">Loading fixtures...</p>
@@ -238,7 +238,7 @@ const MatchResultsPage: React.FC = () => {
   }
 
   return (
-    <div className="p-4 lg:p-6 space-y-6">
+    <div className="p-4 lg:p-6 space-y-6 w-full max-w-full overflow-x-hidden">
       {/* Header Section */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>

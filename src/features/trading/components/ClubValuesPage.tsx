@@ -351,7 +351,7 @@ export const ClubValuesPage: React.FC = () => {
   }, [confirmationData, purchaseClub, toast, isPurchasing, refreshWalletBalance, refreshData]);
 
   return (
-    <div className="p-4 lg:p-6 space-y-6">
+    <div className="p-4 lg:p-6 space-y-6 w-full max-w-full overflow-x-hidden">
       {/* Header Section - Minimalist */}
       <div className="flex items-center justify-between">
         <div>
@@ -367,8 +367,8 @@ export const ClubValuesPage: React.FC = () => {
       <Card className="trading-card border-0">
         <CardContent className="p-0">
           {/* Desktop Table */}
-          <div className="hidden lg:block overflow-x-auto">
-            <table className="trading-table">
+          <div className="hidden lg:block overflow-x-auto w-full max-w-full">
+            <table className="trading-table w-full">
               <thead>
                 <tr>
                   <th className="text-left w-10 px-3">#</th>
