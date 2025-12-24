@@ -48,10 +48,10 @@ const StandingsPage: React.FC = () => {
   };
 
   const getPositionBadge = (position: number) => {
-    if (position <= 4) return <Badge className="bg-yellow-100 text-yellow-800">Champions League</Badge>;
-    if (position === 5) return <Badge className="bg-blue-100 text-blue-800">Europa League</Badge>;
-    if (position === 6) return <Badge className="bg-purple-100 text-purple-800">Conference League</Badge>;
-    if (position >= 18) return <Badge variant="destructive">Relegation Zone</Badge>;
+    if (position <= 4) return <Badge className="bg-yellow-100 text-yellow-800 text-[10px] py-0 px-1.5 h-4 leading-4">Champions League</Badge>;
+    if (position === 5) return <Badge className="bg-blue-100 text-blue-800 text-[10px] py-0 px-1.5 h-4 leading-4">Europa League</Badge>;
+    if (position === 6) return <Badge className="bg-purple-100 text-purple-800 text-[10px] py-0 px-1.5 h-4 leading-4">Conference League</Badge>;
+    if (position >= 18) return <Badge variant="destructive" className="text-[10px] py-0 px-1.5 h-4 leading-4">Relegation Zone</Badge>;
     return null;
   };
 
@@ -106,8 +106,8 @@ const StandingsPage: React.FC = () => {
             <table className="trading-table">
               <thead>
                 <tr>
-                  <th className="w-12 px-3">Pos</th>
-                  <th className="min-w-[200px] px-3">Team</th>
+                  <th className="w-12 px-3 text-left">Pos</th>
+                  <th className="min-w-[200px] px-3 text-left">Team</th>
                   <th className="w-16 text-center px-3">P</th>
                   <th className="w-16 text-center px-3">W</th>
                   <th className="w-16 text-center px-3">D</th>
@@ -116,7 +116,7 @@ const StandingsPage: React.FC = () => {
                   <th className="w-16 text-center px-3">GA</th>
                   <th className="w-16 text-center px-3">GD</th>
                   <th className="w-16 text-center px-3">Pts</th>
-                  <th className="w-32 px-3">Status</th>
+                  <th className="w-32 text-center px-3">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -128,18 +128,18 @@ const StandingsPage: React.FC = () => {
                       standing.position >= 18 ? 'bg-red-900/20' : ''
                     }`}
                   >
-                    <td className="px-3 font-medium">
+                    <td className="px-3 text-xs font-medium" style={{ color: 'hsl(var(--muted-foreground))' }}>
                       <div className="flex items-center gap-2">
                         {getPositionIcon(standing.position)}
                         {standing.position}
                       </div>
                     </td>
                     <td className="px-3">
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
                         <img 
                           src={standing.team.crest} 
                           alt={standing.team.name}
-                          className="w-6 h-6 object-contain"
+                          className="w-5 h-5 object-contain"
                           onError={(e) => {
                             (e.target as HTMLImageElement).style.display = 'none';
                           }}
@@ -147,21 +147,21 @@ const StandingsPage: React.FC = () => {
                         <ClickableTeamName
                           teamName={standing.team.name}
                           teamId={standing.team.id}
-                          className="font-medium hover:text-blue-400"
+                          className="font-medium hover:text-trading-primary transition-colors"
                         />
                       </div>
                     </td>
-                    <td className="px-3 text-center">{standing.playedGames}</td>
-                    <td className="px-3 text-center text-green-400 font-medium">{standing.won}</td>
-                    <td className="px-3 text-center text-yellow-400">{standing.draw}</td>
-                    <td className="px-3 text-center text-red-400">{standing.lost}</td>
-                    <td className="px-3 text-center">{standing.goalsFor}</td>
-                    <td className="px-3 text-center">{standing.goalsAgainst}</td>
-                    <td className="px-3 text-center font-mono">
+                    <td className="px-3 text-center text-xs">{standing.playedGames}</td>
+                    <td className="px-3 text-center text-xs text-green-400 font-medium">{standing.won}</td>
+                    <td className="px-3 text-center text-xs text-yellow-400">{standing.draw}</td>
+                    <td className="px-3 text-center text-xs text-red-400">{standing.lost}</td>
+                    <td className="px-3 text-center text-xs">{standing.goalsFor}</td>
+                    <td className="px-3 text-center text-xs">{standing.goalsAgainst}</td>
+                    <td className="px-3 text-center text-xs font-mono">
                       {formatGoalDifference(standing.goalDifference)}
                     </td>
-                    <td className="px-3 text-center font-bold text-lg">{standing.points}</td>
-                    <td className="px-3">
+                    <td className="px-3 text-center text-xs font-semibold">{standing.points}</td>
+                    <td className="px-3 text-center">
                       {getPositionBadge(standing.position)}
                     </td>
                   </tr>
