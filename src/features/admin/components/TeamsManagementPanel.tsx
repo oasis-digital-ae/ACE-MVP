@@ -27,8 +27,9 @@ import { teamsAdminService, type TeamWithMetrics, type TeamPerformance } from '@
 import { formatCurrency } from '@/shared/lib/formatters';
 import { useToast } from '@/shared/hooks/use-toast';
 import TeamLogo from '@/shared/components/TeamLogo';
+import { footballIntegrationService } from '@/shared/lib/football-api';
 
-type SortField = 'name' | 'market_cap' | 'share_price' | 'available_shares' | 'total_invested' | 'price_change_24h';
+type SortField = 'name' | 'market_cap' | 'share_price' | 'available_shares' | 'total_invested' | 'lifetime_change';
 type SortDirection = 'asc' | 'desc';
 
 export const TeamsManagementPanel: React.FC = () => {
@@ -44,22 +45,51 @@ export const TeamsManagementPanel: React.FC = () => {
   const [editMarketCap, setEditMarketCap] = useState('');
   const [editReason, setEditReason] = useState('');
   const [updating, setUpdating] = useState(false);
+  const [syncingTeams, setSyncingTeams] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const { toast } = useToast();
 
   const loadTeams = async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       const teamsList = await teamsAdminService.getAllTeamsWithMetrics();
       setTeams(teamsList);
-    } catch (error) {
+      if (teamsList.length === 0) {
+        setLoadError('No teams found in database. Click "Sync Teams" to load teams from the API.');
+      }
+    } catch (error: any) {
       console.error('Error loading teams:', error);
+      const errorMessage = error?.message || 'Failed to load teams';
+      setLoadError(errorMessage);
       toast({
         title: 'Error',
-        description: 'Failed to load teams',
+        description: errorMessage,
         variant: 'destructive'
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSyncTeams = async () => {
+    setSyncingTeams(true);
+    try {
+      await footballIntegrationService.syncPremierLeagueTeams();
+      toast({
+        title: 'Success',
+        description: 'Teams synced successfully from API'
+      });
+      await loadTeams();
+    } catch (error: any) {
+      console.error('Error syncing teams:', error);
+      toast({
+        title: 'Error',
+        description: error?.message || 'Failed to sync teams from API',
+        variant: 'destructive'
+      });
+    } finally {
+      setSyncingTeams(false);
     }
   };
 
@@ -172,9 +202,9 @@ export const TeamsManagementPanel: React.FC = () => {
           aValue = a.total_invested;
           bValue = b.total_invested;
           break;
-        case 'price_change_24h':
-          aValue = a.price_change_24h;
-          bValue = b.price_change_24h;
+        case 'lifetime_change':
+          aValue = a.lifetime_change;
+          bValue = b.lifetime_change;
           break;
         default:
           return 0;
@@ -196,8 +226,8 @@ export const TeamsManagementPanel: React.FC = () => {
       'Available Shares',
       'Total Shares',
       'Total Invested',
-      '24h Change',
-      '24h Change %'
+      'Lifetime Change',
+      'Lifetime Change %'
     ];
 
     const csvData = filteredAndSortedTeams.map(team => [
@@ -207,8 +237,8 @@ export const TeamsManagementPanel: React.FC = () => {
       team.available_shares,
       team.total_shares,
       team.total_invested,
-      team.price_change_24h,
-      team.price_change_percent_24h.toFixed(2) + '%'
+      team.lifetime_change,
+      team.lifetime_change_percent.toFixed(2) + '%'
     ]);
 
     const csvContent = [
@@ -267,11 +297,24 @@ export const TeamsManagementPanel: React.FC = () => {
               <Badge variant="secondary">{filteredAndSortedTeams.length} teams</Badge>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={loadTeams}>
-                <RefreshCw className="h-4 w-4 mr-2" />
+              <Button 
+                variant="default" 
+                size="sm" 
+                onClick={handleSyncTeams}
+                disabled={syncingTeams}
+              >
+                {syncingTeams ? (
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                )}
+                {syncingTeams ? 'Syncing...' : 'Sync Teams'}
+              </Button>
+              <Button variant="outline" size="sm" onClick={loadTeams} disabled={loading}>
+                <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                 Refresh
               </Button>
-              <Button variant="outline" size="sm" onClick={handleExportCSV}>
+              <Button variant="outline" size="sm" onClick={handleExportCSV} disabled={teams.length === 0}>
                 <Download className="h-4 w-4 mr-2" />
                 Export CSV
               </Button>
@@ -323,8 +366,8 @@ export const TeamsManagementPanel: React.FC = () => {
                     </Button>
                   </TableHead>
                   <TableHead className="text-center">
-                    <Button variant="ghost" onClick={() => handleSort('price_change_24h')} className="h-auto p-0 font-medium">
-                      24h Change <SortIcon field="price_change_24h" />
+                    <Button variant="ghost" onClick={() => handleSort('lifetime_change')} className="h-auto p-0 font-medium">
+                      Lifetime Change <SortIcon field="lifetime_change" />
                     </Button>
                   </TableHead>
                   <TableHead>Actions</TableHead>
@@ -356,14 +399,14 @@ export const TeamsManagementPanel: React.FC = () => {
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-1">
-                        {team.price_change_24h >= 0 ? (
+                        {team.lifetime_change >= 0 ? (
                           <TrendingUp className="h-4 w-4 text-green-600" />
                         ) : (
                           <TrendingDown className="h-4 w-4 text-red-600" />
                         )}
-                        <span className={`font-mono ${team.price_change_24h >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {team.price_change_24h >= 0 ? '+' : ''}{formatCurrency(team.price_change_24h)} 
-                          ({team.price_change_percent_24h >= 0 ? '+' : ''}{team.price_change_percent_24h.toFixed(2)}%)
+                        <span className={`font-mono ${team.lifetime_change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {team.lifetime_change >= 0 ? '+' : ''}{formatCurrency(team.lifetime_change)} 
+                          ({team.lifetime_change_percent >= 0 ? '+' : ''}{team.lifetime_change_percent.toFixed(2)}%)
                         </span>
                       </div>
                     </TableCell>
@@ -384,8 +427,46 @@ export const TeamsManagementPanel: React.FC = () => {
           </div>
 
           {filteredAndSortedTeams.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              {searchTerm ? 'No teams found matching your search.' : 'No teams found.'}
+            <div className="text-center py-8 space-y-4">
+              {loadError ? (
+                <>
+                  <AlertCircle className="h-12 w-12 mx-auto text-destructive mb-4" />
+                  <p className="text-muted-foreground mb-2">{loadError}</p>
+                  <Button onClick={handleSyncTeams} disabled={syncingTeams}>
+                    {syncingTeams ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Syncing Teams...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Sync Teams from API
+                      </>
+                    )}
+                  </Button>
+                </>
+              ) : searchTerm ? (
+                <p className="text-muted-foreground">No teams found matching your search.</p>
+              ) : (
+                <>
+                  <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground mb-2">No teams found in database.</p>
+                  <Button onClick={handleSyncTeams} disabled={syncingTeams}>
+                    {syncingTeams ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Syncing Teams...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Sync Teams from API
+                      </>
+                    )}
+                  </Button>
+                </>
+              )}
             </div>
           )}
         </CardContent>
@@ -611,6 +692,7 @@ export const TeamsManagementPanel: React.FC = () => {
     </>
   );
 };
+
 
 
 

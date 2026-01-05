@@ -271,11 +271,13 @@ export const adminService = {
       }
 
       if (filters.minAmount) {
-        query = query.gte('total_amount', filters.minAmount);
+        // Convert dollars to cents for database query (database stores as BIGINT cents)
+        query = query.gte('total_amount', Math.round(filters.minAmount * 100));
       }
 
       if (filters.maxAmount) {
-        query = query.lte('total_amount', filters.maxAmount);
+        // Convert dollars to cents for database query (database stores as BIGINT cents)
+        query = query.lte('total_amount', Math.round(filters.maxAmount * 100));
       }
 
       if (filters.status && filters.status !== 'ALL') {
@@ -291,7 +293,12 @@ export const adminService = {
       return (data || []).map(order => ({
         ...order,
         username: order.profiles?.username || 'Unknown',
-        teamName: order.teams?.name || 'Unknown'
+        teamName: order.teams?.name || 'Unknown',
+        // Convert cents to dollars: total_amount, price_per_share, and market_cap fields are BIGINT (cents)
+        total_amount: Number(order.total_amount || 0) / 100,
+        price_per_share: Number(order.price_per_share || 0) / 100,
+        market_cap_before: order.market_cap_before ? Number(order.market_cap_before) / 100 : undefined,
+        market_cap_after: order.market_cap_after ? Number(order.market_cap_after) / 100 : undefined
       }));
     } catch (error) {
       logger.error('Error fetching trade history:', error);

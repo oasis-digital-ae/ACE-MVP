@@ -281,52 +281,54 @@ export const AuditLogViewer: React.FC = () => {
         </div>
 
         {/* Audit Logs Table */}
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Timestamp</TableHead>
-                <TableHead>User</TableHead>
-                <TableHead>Action</TableHead>
-                <TableHead>Table</TableHead>
-                <TableHead>Details</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredLogs.map((log) => (
-                <TableRow key={log.id}>
-                  <TableCell>
-                    <div className="text-sm">
-                      {new Date(log.created_at).toLocaleDateString()}
-                      <br />
-                      <span className="text-muted-foreground">
-                        {new Date(log.created_at).toLocaleTimeString()}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center space-x-2">
-                      {getActionIcon(log.action)}
-                      <span className="text-sm font-medium">
-                        {log.profiles?.username || 'System'}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {getActionBadge(log.action)}
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-sm font-mono">{log.table_name}</span>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm max-w-md">
-                      {formatDetails(log.new_values)}
-                    </div>
-                  </TableCell>
+        <div className="rounded-md border overflow-hidden">
+          <div className="max-h-[600px] overflow-y-auto">
+            <Table>
+              <TableHeader className="sticky top-0 bg-background z-10">
+                <TableRow>
+                  <TableHead>Timestamp</TableHead>
+                  <TableHead>User</TableHead>
+                  <TableHead>Action</TableHead>
+                  <TableHead>Table</TableHead>
+                  <TableHead>Details</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filteredLogs.map((log) => (
+                  <TableRow key={log.id}>
+                    <TableCell>
+                      <div className="text-sm">
+                        {new Date(log.created_at).toLocaleDateString()}
+                        <br />
+                        <span className="text-muted-foreground">
+                          {new Date(log.created_at).toLocaleTimeString()}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center space-x-2">
+                        {getActionIcon(log.action)}
+                        <span className="text-sm font-medium">
+                          {log.profiles?.username || 'System'}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {getActionBadge(log.action)}
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm font-mono">{log.table_name}</span>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm max-w-md">
+                        {formatDetails(log.new_values)}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </div>
 
         {filteredLogs.length === 0 && (

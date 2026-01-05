@@ -417,7 +417,7 @@ export const UsersManagementPanel: React.FC = () => {
 
       {/* User Detail Modal */}
       <Dialog open={isDetailModalOpen} onOpenChange={setIsDetailModalOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="!max-w-[95vw] sm:!max-w-4xl md:!max-w-5xl lg:!max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Users className="h-5 w-5" />
@@ -541,53 +541,65 @@ export const UsersManagementPanel: React.FC = () => {
                 {selectedUser.positions.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No positions</p>
                 ) : (
-                  <div className="rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Team</TableHead>
-                          <TableHead className="text-center">Quantity</TableHead>
-                          <TableHead className="text-center">Price/Share</TableHead>
-                          <TableHead className="text-center">% Change</TableHead>
-                          <TableHead className="text-center">Total Value</TableHead>
-                          <TableHead className="text-center">P&L</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {selectedUser.positions.map((pos, index) => {
-                          const pricePerShare = pos.quantity > 0 ? pos.current_value / pos.quantity : 0;
-                          const investedPerShare = calculateAverageCost(pos.total_invested, pos.quantity);
-                          const percentChange = calculatePercentChange(pricePerShare, investedPerShare);
-                          
-                          return (
-                            <TableRow key={index}>
-                              <TableCell>
-                                <p className="font-medium">{pos.team_name}</p>
-                              </TableCell>
-                              <TableCell className="text-center font-mono">
-                                {pos.quantity}
-                              </TableCell>
-                              <TableCell className="text-center font-mono">
-                                {formatCurrency(pricePerShare)}
-                              </TableCell>
-                              <TableCell className={`text-center font-mono ${
-                                percentChange >= 0 ? 'text-green-600' : 'text-red-600'
-                              }`}>
-                                {percentChange >= 0 ? '+' : ''}{percentChange.toFixed(2)}%
-                              </TableCell>
-                              <TableCell className="text-center font-mono font-semibold">
-                                {formatCurrency(pos.current_value)}
-                              </TableCell>
-                              <TableCell className={`text-center font-mono font-semibold ${
-                                pos.profit_loss >= 0 ? 'text-green-600' : 'text-red-600'
-                              }`}>
-                                {pos.profit_loss >= 0 ? '+' : ''}{formatCurrency(pos.profit_loss)}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
+                  <div className="rounded-md border overflow-hidden w-full">
+                    <div className="w-full overflow-x-visible">
+                      <table className="w-full caption-bottom text-sm table-fixed">
+                        <colgroup>
+                          <col className="w-[25%]" />
+                          <col className="w-[12%]" />
+                          <col className="w-[15%]" />
+                          <col className="w-[13%]" />
+                          <col className="w-[17%]" />
+                          <col className="w-[18%]" />
+                        </colgroup>
+                        <thead className="[&_tr]:border-b">
+                          <tr className="border-b transition-colors hover:bg-muted/50">
+                            <th className="h-12 px-2 sm:px-3 md:px-4 text-left align-middle font-medium text-muted-foreground">Team</th>
+                            <th className="h-12 px-2 sm:px-3 md:px-4 text-center align-middle font-medium text-muted-foreground">Quantity</th>
+                            <th className="h-12 px-2 sm:px-3 md:px-4 text-center align-middle font-medium text-muted-foreground">Price/Share</th>
+                            <th className="h-12 px-2 sm:px-3 md:px-4 text-center align-middle font-medium text-muted-foreground">% Change</th>
+                            <th className="h-12 px-2 sm:px-3 md:px-4 text-center align-middle font-medium text-muted-foreground">Total Value</th>
+                            <th className="h-12 px-2 sm:px-3 md:px-4 text-center align-middle font-medium text-muted-foreground">P&L</th>
+                          </tr>
+                        </thead>
+                        <tbody className="[&_tr:last-child]:border-0">
+                          {selectedUser.positions.map((pos, index) => {
+                            // Use price_per_share from service (calculated from market cap / total shares)
+                            // This ensures consistency: quantity * price_per_share = current_value
+                            const pricePerShare = pos.price_per_share || (pos.quantity > 0 ? pos.current_value / pos.quantity : 0);
+                            const investedPerShare = calculateAverageCost(pos.total_invested, pos.quantity);
+                            const percentChange = calculatePercentChange(pricePerShare, investedPerShare);
+                            
+                            return (
+                              <tr key={index} className="border-b transition-colors hover:bg-muted/50">
+                                <td className="p-2 sm:p-3 md:p-4 align-middle">
+                                  <p className="font-medium truncate">{pos.team_name}</p>
+                                </td>
+                                <td className="p-2 sm:p-3 md:p-4 text-center font-mono align-middle text-sm">
+                                  {pos.quantity}
+                                </td>
+                                <td className="p-2 sm:p-3 md:p-4 text-center font-mono align-middle text-sm">
+                                  {formatCurrency(pricePerShare)}
+                                </td>
+                                <td className={`p-2 sm:p-3 md:p-4 text-center font-mono align-middle text-sm ${
+                                  percentChange >= 0 ? 'text-green-600' : 'text-red-600'
+                                }`}>
+                                  {percentChange >= 0 ? '+' : ''}{percentChange.toFixed(2)}%
+                                </td>
+                                <td className="p-2 sm:p-3 md:p-4 text-center font-mono font-semibold align-middle text-sm">
+                                  {formatCurrency(pos.current_value)}
+                                </td>
+                                <td className={`p-2 sm:p-3 md:p-4 text-center font-mono font-semibold align-middle text-sm ${
+                                  pos.profit_loss >= 0 ? 'text-green-600' : 'text-red-600'
+                                }`}>
+                                  {pos.profit_loss >= 0 ? '+' : ''}{formatCurrency(pos.profit_loss)}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
               </TabsContent>
@@ -633,6 +645,7 @@ export const UsersManagementPanel: React.FC = () => {
     </>
   );
 };
+
 
 
 

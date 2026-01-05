@@ -1,6 +1,7 @@
 // Teams admin service for team management
 import { supabase } from '../supabase';
 import { logger } from '../logger';
+import { calculateSharePrice, calculateProfitLoss, calculatePercentChange } from '../utils/calculations';
 
 export interface TeamWithMetrics {
   id: number;
@@ -13,8 +14,8 @@ export interface TeamWithMetrics {
   available_shares: number;
   total_shares: number;
   total_invested: number;
-  price_change_24h: number;
-  price_change_percent_24h: number;
+  lifetime_change: number;
+  lifetime_change_percent: number;
 }
 
 export interface TeamPerformance {
@@ -67,31 +68,10 @@ export const teamsAdminService = {
       if (positionsError) throw positionsError;
 
       const teamInvestments = new Map<number, number>();
+      // Convert cents to dollars: total_invested is now BIGINT (cents)
       (positions || []).forEach(pos => {
         const current = teamInvestments.get(pos.team_id) || 0;
-        teamInvestments.set(pos.team_id, current + Number(pos.total_invested));
-      });
-
-      // Get market cap history for 24h price change calculation
-      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      const { data: ledgerData, error: ledgerError } = await supabase
-        .from('total_ledger')
-        .select('team_id, market_cap_before, market_cap_after, event_date')
-        .gte('event_date', oneDayAgo)
-        .in('ledger_type', ['match_win', 'match_loss', 'match_draw']);
-
-      if (ledgerError) throw ledgerError;
-
-      // Calculate 24h price change per team
-      const teamPriceChanges = new Map<number, { before: number; after: number }>();
-      (ledgerData || []).forEach(entry => {
-        const existing = teamPriceChanges.get(entry.team_id);
-        if (!existing || new Date(entry.event_date) > new Date(existing.before ? existing.before.toString() : '1970-01-01')) {
-          teamPriceChanges.set(entry.team_id, {
-            before: Number(entry.market_cap_before),
-            after: Number(entry.market_cap_after)
-          });
-        }
+        teamInvestments.set(pos.team_id, current + (Number(pos.total_invested || 0) / 100));
       });
 
       // Build team metrics
@@ -99,20 +79,14 @@ export const teamsAdminService = {
       const teamsWithMetrics: TeamWithMetrics[] = (teams || []).map(team => {
         const totalShares = team.total_shares || 1000;
         const marketCapDollars = Number(team.market_cap || 0) / 100;
-        const sharePrice = totalShares > 0 ? marketCapDollars / totalShares : 0;
+        const launchPriceDollars = Number(team.launch_price || 0) / 100;
+        // Use centralized calculation function (same as Portfolio page) - rounds to 2 decimals
+        const sharePrice = calculateSharePrice(marketCapDollars, totalShares, launchPriceDollars);
         const totalInvested = teamInvestments.get(team.id) || 0;
         
-        const priceChange = teamPriceChanges.get(team.id);
-        let priceChange24h = 0;
-        let priceChangePercent24h = 0;
-        
-        if (priceChange) {
-          // Convert cents to dollars: market_cap values are now BIGINT (cents)
-          const beforePrice = (Number(priceChange.before || 0) / 100) / totalShares;
-          const afterPrice = (Number(priceChange.after || 0) / 100) / totalShares;
-          priceChange24h = afterPrice - beforePrice;
-          priceChangePercent24h = beforePrice > 0 ? (priceChange24h / beforePrice) * 100 : 0;
-        }
+        // Calculate lifetime change (current price vs launch price) - always meaningful
+        const lifetimeChange = calculateProfitLoss(sharePrice, launchPriceDollars);
+        const lifetimeChangePercent = calculatePercentChange(sharePrice, launchPriceDollars);
 
         return {
           id: team.id,
@@ -125,8 +99,8 @@ export const teamsAdminService = {
           available_shares: team.available_shares || 1000,
           total_shares: totalShares,
           total_invested: totalInvested,
-          price_change_24h: priceChange24h,
-          price_change_percent_24h: priceChangePercent24h
+          lifetime_change: lifetimeChange,
+          lifetime_change_percent: lifetimeChangePercent
         };
       });
 
@@ -152,20 +126,22 @@ export const teamsAdminService = {
       if (teamError) throw teamError;
       if (!team) throw new Error('Team not found');
 
-      const oldMarketCap = Number(team.market_cap);
+      // Convert cents to dollars: market_cap is stored as BIGINT (cents)
+      const oldMarketCapDollars = Number(team.market_cap || 0) / 100;
 
-      // Update market cap
+      // Update market cap - convert dollars to cents (database stores as BIGINT cents)
+      const newMarketCapCents = Math.round(newMarketCap * 100);
       const { error: updateError } = await supabase
         .from('teams')
         .update({
-          market_cap: newMarketCap,
+          market_cap: newMarketCapCents,
           updated_at: new Date().toISOString()
         })
         .eq('id', teamId);
 
       if (updateError) throw updateError;
 
-      // Log to audit trail
+      // Log to audit trail (store values in dollars for readability)
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         await supabase.from('audit_log').insert({
@@ -175,7 +151,7 @@ export const teamsAdminService = {
           record_id: teamId,
           new_values: {
             team_name: team.name,
-            old_market_cap: oldMarketCap,
+            old_market_cap: oldMarketCapDollars,
             new_market_cap: newMarketCap,
             reason: reason,
             adjusted_by: user.id
@@ -183,7 +159,7 @@ export const teamsAdminService = {
         });
       }
 
-      logger.info(`Market cap updated for team ${teamId}: ${oldMarketCap} -> ${newMarketCap}`);
+      logger.info(`Market cap updated for team ${teamId}: ${oldMarketCapDollars} -> ${newMarketCap}`);
     } catch (error) {
       logger.error('Error updating team market cap:', error);
       throw error;
@@ -304,17 +280,19 @@ export const teamsAdminService = {
       });
 
       // Build top holders
+      // Convert cents to dollars: market_cap and total_invested are now BIGINT (cents)
       const topHolders = (positions || []).map(pos => {
         const team = pos.teams as any;
         const totalShares = team.total_shares || 1000;
-        const sharePrice = totalShares > 0 ? team.market_cap / totalShares : 0;
+        const marketCapDollars = Number(team.market_cap || 0) / 100;
+        const sharePrice = totalShares > 0 ? marketCapDollars / totalShares : 0;
         const currentValue = Number(pos.quantity) * sharePrice;
 
         return {
           user_id: pos.user_id,
           username: (pos.profiles as any)?.username || 'Unknown',
           quantity: Number(pos.quantity),
-          total_invested: Number(pos.total_invested),
+          total_invested: Number(pos.total_invested || 0) / 100, // Convert cents to dollars
           current_value: currentValue
         };
       });

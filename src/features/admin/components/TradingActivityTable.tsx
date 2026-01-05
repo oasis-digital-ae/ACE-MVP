@@ -70,17 +70,18 @@ export const TradingActivityTable: React.FC = () => {
       const buyTrades = tradesAll.filter(t => t.order_type === 'BUY');
       const sellTrades = tradesAll.filter(t => t.order_type === 'SELL');
 
+      // total_amount is now in dollars (converted in getTradeHistory)
       setStats({
-        totalVolume24h: trades24h.reduce((sum, t) => sum + Number(t.total_amount), 0),
-        totalVolume7d: trades7d.reduce((sum, t) => sum + Number(t.total_amount), 0),
-        totalVolume30d: trades30d.reduce((sum, t) => sum + Number(t.total_amount), 0),
-        totalVolumeAll: tradesAll.reduce((sum, t) => sum + Number(t.total_amount), 0),
+        totalVolume24h: trades24h.reduce((sum, t) => sum + Number(t.total_amount || 0), 0),
+        totalVolume7d: trades7d.reduce((sum, t) => sum + Number(t.total_amount || 0), 0),
+        totalVolume30d: trades30d.reduce((sum, t) => sum + Number(t.total_amount || 0), 0),
+        totalVolumeAll: tradesAll.reduce((sum, t) => sum + Number(t.total_amount || 0), 0),
         buyCount: buyTrades.length,
         sellCount: sellTrades.length,
-        buyVolume: buyTrades.reduce((sum, t) => sum + Number(t.total_amount), 0),
-        sellVolume: sellTrades.reduce((sum, t) => sum + Number(t.total_amount), 0),
+        buyVolume: buyTrades.reduce((sum, t) => sum + Number(t.total_amount || 0), 0),
+        sellVolume: sellTrades.reduce((sum, t) => sum + Number(t.total_amount || 0), 0),
         averageTradeSize: tradesAll.length > 0 
-          ? tradesAll.reduce((sum, t) => sum + Number(t.total_amount), 0) / tradesAll.length 
+          ? tradesAll.reduce((sum, t) => sum + Number(t.total_amount || 0), 0) / tradesAll.length 
           : 0
       });
     } catch (error) {
@@ -476,6 +477,7 @@ export const TradingActivityTable: React.FC = () => {
     </div>
   );
 };
+
 
 
 

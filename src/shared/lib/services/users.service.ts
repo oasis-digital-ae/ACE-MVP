@@ -1,6 +1,7 @@
 // Users service for admin user management
 import { supabase } from '../supabase';
 import { logger } from '../logger';
+import { calculateSharePrice, calculateTotalValue, calculateProfitLoss, calculateAverageCost } from '../utils/calculations';
 
 export interface UserListItem {
   id: string;
@@ -28,6 +29,7 @@ export interface UserDetails extends UserListItem {
     total_invested: number;
     current_value: number;
     profit_loss: number;
+    price_per_share: number; // Current share price (market cap / total shares)
   }>;
   orders: Array<{
     id: number;
@@ -236,15 +238,21 @@ export const usersService = {
       let portfolioValue = 0;
       let profitLoss = 0;
 
+      
       // Convert cents to dollars: market_cap, total_invested, price_per_share, total_amount, wallet_balance are now BIGINT (cents)
       const positionsList = (positions || []).map(pos => {
         const team = pos.teams as any;
         const totalShares = team.total_shares || 1000;
         const marketCapDollars = Number(team.market_cap || 0) / 100;
-        const sharePrice = totalShares > 0 ? marketCapDollars / totalShares : 0;
-        const currentValue = Number(pos.quantity) * sharePrice;
+        // Use centralized calculation function (same as Portfolio page) - rounds to 2 decimals
+        const sharePrice = calculateSharePrice(marketCapDollars, totalShares, 20.00);
+        // Use centralized calculation function (same as Portfolio page) - rounds to 2 decimals
+        const currentValue = calculateTotalValue(sharePrice, pos.quantity);
         const totalInvestedDollars = Number(pos.total_invested || 0) / 100;
-        const pl = currentValue - totalInvestedDollars;
+        // Calculate average cost using centralized function
+        const avgCost = calculateAverageCost(totalInvestedDollars, pos.quantity);
+        // Use centralized calculation function (same as Portfolio page) - rounds to 2 decimals
+        const pl = calculateProfitLoss(sharePrice, avgCost) * pos.quantity;
 
         totalInvested += totalInvestedDollars;
         portfolioValue += currentValue;
@@ -256,7 +264,8 @@ export const usersService = {
           quantity: Number(pos.quantity),
           total_invested: totalInvestedDollars,
           current_value: currentValue,
-          profit_loss: pl
+          profit_loss: pl,
+          price_per_share: sharePrice // Include share price to avoid recalculation rounding issues
         };
       });
 
