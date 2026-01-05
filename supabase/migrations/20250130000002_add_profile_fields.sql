@@ -45,3 +45,4 @@ COMMENT ON COLUMN public.profiles.phone IS 'User telephone number';
 
 
 
+

@@ -20,3 +20,4 @@ COMMENT ON CONSTRAINT orders_shares_outstanding_check ON orders IS
   'Validates shares_outstanding changes: BUY decreases (after <= before), SELL increases (after >= before)';
 
 
+

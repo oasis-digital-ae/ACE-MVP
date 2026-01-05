@@ -342,3 +342,4 @@ $$ LANGUAGE plpgsql;
 COMMENT ON FUNCTION process_match_result_atomic IS 'Fixed: Calculates price_impact from 4-decimal prices before rounding. Uses 4-decimal precision internally for transfer calculations, rounds to 2 decimals for storage. Enforces perfect conservation.';
 
 
+

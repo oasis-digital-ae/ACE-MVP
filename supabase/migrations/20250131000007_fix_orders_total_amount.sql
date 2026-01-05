@@ -9,3 +9,4 @@ WHERE ABS(total_amount - (ROUND(ROUND(price_per_share, 2) * quantity, 2))) > 0.0
 COMMENT ON TABLE orders IS 'total_amount is calculated as ROUND(price_per_share, 2) * quantity to ensure exact matching with positions.total_invested';
 
 
+

@@ -77,3 +77,4 @@ END $$;
 COMMENT ON FUNCTION process_match_result_atomic IS 'After reset: All teams at $5,000 market cap ($5/share). Total market cap = $100,000. All trading data cleared. Ready for fresh testing.';
 
 
+

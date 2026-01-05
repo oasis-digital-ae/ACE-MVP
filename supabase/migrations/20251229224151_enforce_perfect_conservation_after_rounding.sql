@@ -274,3 +274,4 @@ $$ LANGUAGE plpgsql;
 COMMENT ON FUNCTION process_match_result_atomic IS 'CRITICAL: Enforces perfect conservation at 2-decimal precision AFTER rounding. Calculates price_impact from 4-decimal prices before rounding. Zero drift guaranteed.';
 
 
+

@@ -438,3 +438,4 @@ COMMENT ON FUNCTION process_share_purchase_atomic IS 'All monetary values are ro
 COMMENT ON FUNCTION process_share_sale_atomic IS 'All monetary values are rounded to 2 decimal places to prevent money leakage. total_invested, wallet_balance, and all amounts are stored with exactly 2 decimals.';
 
 
+

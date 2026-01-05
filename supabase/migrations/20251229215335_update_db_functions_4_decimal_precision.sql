@@ -781,3 +781,4 @@ COMMENT ON FUNCTION process_share_sale_atomic IS 'Uses 4-decimal precision inter
 COMMENT ON FUNCTION process_match_result_atomic IS 'Uses 4-decimal precision internally for transfer calculations, rounds to 2 decimals for storage. Enforces perfect conservation.';
 
 
+

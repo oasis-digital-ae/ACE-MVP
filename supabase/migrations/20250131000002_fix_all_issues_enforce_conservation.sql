@@ -334,3 +334,4 @@ $$ LANGUAGE plpgsql;
 COMMENT ON FUNCTION process_match_result_atomic IS 'Fixed shares model: Price = market_cap / total_shares (1000). Enforces PERFECT conservation: winner_after + loser_after = winner_before + loser_before exactly. Any rounding drift is eliminated by adjusting winner cap. Total market cap always equals $100,000. No normalization needed. Race conditions prevented by locking rows before idempotency check.';
 
 
+

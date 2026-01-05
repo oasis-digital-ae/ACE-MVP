@@ -461,3 +461,4 @@ COMMENT ON FUNCTION process_share_purchase_atomic IS 'CRITICAL: total_invested =
 COMMENT ON FUNCTION process_share_sale_atomic IS 'CRITICAL: total_amount = ROUND(price_per_share, 2) * shares. Ensures exact price matching.';
 
 
+

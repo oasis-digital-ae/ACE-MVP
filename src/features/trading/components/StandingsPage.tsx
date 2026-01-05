@@ -88,21 +88,22 @@ const StandingsPage: React.FC = () => {
   }
 
   return (
-    <div className="p-4 lg:p-6 space-y-6 w-full max-w-full overflow-x-hidden">
-      <div>
-        <h1 className="text-3xl font-bold text-white">Premier League Standings</h1>
-        <p className="text-gray-400 mt-1">Season 2025-26</p>
+    <div className="md:p-4 lg:p-6 space-y-3 sm:space-y-4 md:space-y-6 w-full max-w-full overflow-x-hidden">
+      <div className="px-3 md:px-0">
+        <h1 className="text-lg sm:text-xl md:text-3xl font-bold text-white">Premier League Standings</h1>
+        <p className="text-gray-400 mt-1 text-sm md:text-base">Season 2025-26</p>
       </div>
 
-      <Card>
-        <CardHeader>
+      <Card className="md:rounded-lg">
+        <CardHeader className="hidden md:block">
           <CardTitle className="flex items-center gap-2">
             <Trophy className="h-5 w-5" />
             League Table
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto w-full max-w-full">
+          {/* Desktop Table */}
+          <div className="hidden md:block overflow-x-auto w-full max-w-full">
             <table className="trading-table w-full">
               <thead>
                 <tr>
@@ -170,30 +171,46 @@ const StandingsPage: React.FC = () => {
             </table>
           </div>
 
-          {/* Mobile Card Layout */}
-          <div className="md:hidden space-y-2 p-3">
-            {standings.map((standing, index) => {
-              const positionChange = getPositionChange(standing.position, standing.previousPosition);
-              
-              return (
+          {/* Mobile Table Layout - Compact Premier League Style */}
+          <div className="md:hidden -mx-3 sm:-mx-4">
+            {/* Mobile Table Header */}
+            <div className="sticky top-0 z-10 bg-gray-900/95 backdrop-blur-sm border-b border-gray-700/50">
+              <div className="grid grid-cols-[35px_minmax(0,1fr)_28px_28px_28px_40px_32px] gap-1.5 px-3 py-2 text-[10px] font-semibold text-gray-400 items-center">
+                <div className="text-center">Pos</div>
+                <div className="text-left">Team</div>
+                <div className="text-center">P</div>
+                <div className="text-center">W</div>
+                <div className="text-center">D</div>
+                <div className="text-center">GD</div>
+                <div className="text-center">Pts</div>
+              </div>
+            </div>
+
+            {/* Mobile Table Rows */}
+            <div className="space-y-0">
+              {standings.map((standing) => (
                 <div
                   key={standing.team.id}
-                  className={`bg-gray-800/40 rounded-lg p-3 border ${
-                    standing.position <= 4 ? 'border-yellow-500/30 bg-yellow-900/10' :
-                    standing.position >= 18 ? 'border-red-500/30 bg-red-900/10' : 
-                    'border-gray-700/30'
-                  } touch-manipulation`}
+                  className={`border-b border-gray-700/30 last:border-b-0 ${
+                    standing.position <= 4 ? 'bg-yellow-900/10' :
+                    standing.position >= 18 ? 'bg-red-900/10' : ''
+                  }`}
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        {getPositionIcon(standing.position)}
-                        <span className="text-xs font-semibold text-gray-400 w-6">{standing.position}</span>
+                  <div className="grid grid-cols-[35px_minmax(0,1fr)_28px_28px_28px_40px_32px] gap-1.5 px-3 py-2 items-center active:bg-gray-700/30 transition-colors touch-manipulation">
+                    {/* Position */}
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {getPositionIcon(standing.position)}
+                      <div className="text-center text-[11px] font-medium text-gray-300">
+                        {standing.position}
                       </div>
+                    </div>
+                    
+                    {/* Team */}
+                    <div className="flex items-center gap-1 min-w-0 flex-1">
                       <img 
                         src={standing.team.crest} 
                         alt={standing.team.name}
-                        className="w-5 h-5 object-contain flex-shrink-0"
+                        className="w-4 h-4 object-contain flex-shrink-0"
                         onError={(e) => {
                           (e.target as HTMLImageElement).style.display = 'none';
                         }}
@@ -201,57 +218,41 @@ const StandingsPage: React.FC = () => {
                       <ClickableTeamName
                         teamName={standing.team.name}
                         teamId={standing.team.id}
-                        className="font-medium text-sm text-white hover:text-trading-primary transition-colors truncate"
+                        className="text-[11px] font-medium text-white hover:text-trading-primary transition-colors truncate"
                       />
                     </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <div className="text-right">
-                        <div className="text-base font-bold text-white">{standing.points}</div>
-                        <div className="text-[9px] text-gray-500">pts</div>
-                      </div>
-                      {getPositionBadge(standing.position)}
+                    
+                    {/* Played */}
+                    <div className="text-center text-[11px] font-medium text-gray-400 flex-shrink-0">
+                      {standing.playedGames}
                     </div>
-                  </div>
-                  
-                  {/* Stats Grid */}
-                  <div className="grid grid-cols-4 gap-2 pt-2 border-t border-gray-700/20">
-                    <div className="text-center">
-                      <div className="text-[9px] text-gray-500 mb-0.5">P</div>
-                      <div className="text-xs font-semibold text-white">{standing.playedGames}</div>
+                    
+                    {/* Won */}
+                    <div className="text-center text-[11px] font-semibold text-green-400 flex-shrink-0">
+                      {standing.won}
                     </div>
-                    <div className="text-center">
-                      <div className="text-[9px] text-gray-500 mb-0.5">W</div>
-                      <div className="text-xs font-semibold text-green-400">{standing.won}</div>
+                    
+                    {/* Draw */}
+                    <div className="text-center text-[11px] font-semibold text-yellow-400 flex-shrink-0">
+                      {standing.draw}
                     </div>
-                    <div className="text-center">
-                      <div className="text-[9px] text-gray-500 mb-0.5">D</div>
-                      <div className="text-xs font-semibold text-yellow-400">{standing.draw}</div>
+                    
+                    {/* Goal Difference */}
+                    <div className={`text-center text-[11px] font-mono font-semibold flex-shrink-0 ${
+                      standing.goalDifference > 0 ? 'text-green-400' : 
+                      standing.goalDifference < 0 ? 'text-red-400' : 'text-gray-400'
+                    }`}>
+                      {formatGoalDifference(standing.goalDifference)}
                     </div>
-                    <div className="text-center">
-                      <div className="text-[9px] text-gray-500 mb-0.5">L</div>
-                      <div className="text-xs font-semibold text-red-400">{standing.lost}</div>
-                    </div>
-                  </div>
-                  
-                  {/* Goals */}
-                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-700/20 mt-2">
-                    <div>
-                      <div className="text-[9px] text-gray-500 mb-0.5">Goals For</div>
-                      <div className="text-xs font-semibold text-white">{standing.goalsFor}</div>
-                    </div>
-                    <div>
-                      <div className="text-[9px] text-gray-500 mb-0.5">Goal Diff</div>
-                      <div className={`text-xs font-semibold font-mono ${
-                        standing.goalDifference > 0 ? 'text-green-400' : 
-                        standing.goalDifference < 0 ? 'text-red-400' : 'text-gray-400'
-                      }`}>
-                        {formatGoalDifference(standing.goalDifference)}
-                      </div>
+                    
+                    {/* Points */}
+                    <div className="text-center text-[11px] font-bold text-white flex-shrink-0">
+                      {standing.points}
                     </div>
                   </div>
                 </div>
-              );
-            })}
+              ))}
+            </div>
           </div>
         </CardContent>
       </Card>

@@ -12,6 +12,8 @@ import {
   calculatePercentChange,
   calculatePortfolioPercentage
 } from '@/shared/lib/utils/calculations';
+import TeamLogo from '@/shared/components/TeamLogo';
+import ClickableTeamName from '@/shared/components/ClickableTeamName';
 
 const PortfolioPage: React.FC = () => {
   const { portfolio, getTransactionsByClub, sellClub, clubs } = useContext(AppContext);
@@ -149,10 +151,10 @@ const PortfolioPage: React.FC = () => {
     }, [user, toast]);
 
   return (
-    <div className="p-3 sm:p-4 lg:p-6 space-y-3 sm:space-y-4 lg:space-y-6 w-full max-w-full overflow-x-hidden">
+    <div className="md:p-3 md:sm:p-4 lg:p-6 space-y-3 sm:space-y-4 md:space-y-6 w-full max-w-full overflow-x-hidden">
       {/* Welcome Header - Mobile Optimized */}
       {profile && (profile.first_name || profile.full_name) && (
-        <div className="mb-1 sm:mb-2">
+        <div className="mb-1 sm:mb-2 px-3 md:px-0">
           <h1 className="text-lg sm:text-xl md:text-2xl font-bold">Welcome, {profile.first_name || (profile.full_name ? profile.full_name.split(' ')[0] : 'User')}</h1>
         </div>
       )}
@@ -229,8 +231,8 @@ const PortfolioPage: React.FC = () => {
       </div>
 
       {/* Holdings Table */}
-      <Card className="trading-card">
-        <CardHeader>
+      <Card className="trading-card md:rounded-lg">
+        <CardHeader className="hidden md:block">
           <CardTitle className="text-white text-xl flex items-center space-x-2">
             <svg className="w-5 h-5 text-trading-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -238,9 +240,9 @@ const PortfolioPage: React.FC = () => {
             <span>Holdings</span>
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {portfolio.length === 0 ? (
-            <div className="text-center py-12">
+            <div className="text-center py-12 px-3">
               <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
                 <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
@@ -273,68 +275,87 @@ const PortfolioPage: React.FC = () => {
                 </table>
               </div>
 
-              {/* Mobile Card Layout - Optimized */}
-              <div className="md:hidden space-y-2.5">
-                {portfolio.map((item) => {
-                  const percentChange = calculatePercentChange(item.currentPrice, item.purchasePrice);
-                  const portfolioPercent = calculatePortfolioPercentage(item.totalValue, totalMarketValue);
-                  const profitLoss = item.totalValue - (item.purchasePrice * item.units);
-                  
-                  return (
-                    <div
-                      key={item.clubId}
-                      onClick={() => handleClubClick(item.clubId, item.clubName)}
-                      className="bg-gray-800/40 rounded-lg p-3 border border-gray-700/30 active:bg-gray-700/50 transition-colors touch-manipulation"
-                    >
-                      <div className="flex items-start justify-between mb-2.5">
-                        <div className="flex-1 min-w-0">
-                          <h3 className="text-white font-semibold text-sm mb-1 truncate">{item.clubName}</h3>
-                          <div className="flex items-center gap-2 text-[10px] text-gray-500">
-                            <span>{item.units} units</span>
-                            <span>•</span>
-                            <span>{portfolioPercent.toFixed(1)}%</span>
-                          </div>
-                        </div>
-                        <Button
-                          onClick={(e) => handleSellClick(e, item)}
-                          size="sm"
-                          className="bg-red-600 hover:bg-red-700 text-white text-[11px] px-3 py-2 min-h-[44px] touch-manipulation"
-                        >
-                          Sell
-                        </Button>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-2 mb-2.5">
-                        <div className="bg-gray-700/20 rounded p-2">
-                          <div className="text-[9px] text-gray-500 mb-0.5 uppercase tracking-wide">Avg Price</div>
-                          <div className="text-white font-mono font-semibold text-xs">{formatCurrency(item.purchasePrice)}</div>
-                        </div>
-                        <div className="bg-gray-700/20 rounded p-2">
-                          <div className="text-[9px] text-gray-500 mb-0.5 uppercase tracking-wide">Current</div>
-                          <div className="text-white font-mono font-semibold text-xs">{formatCurrency(item.currentPrice)}</div>
-                        </div>
-                      </div>
-                      
-                      <div className="pt-2.5 border-t border-gray-700/20">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-[9px] text-gray-500 mb-0.5 uppercase tracking-wide">Total Value</div>
-                            <div className="text-white font-bold text-base sm:text-lg">{formatCurrency(item.totalValue)}</div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-[9px] text-gray-500 mb-0.5 uppercase tracking-wide">P&L</div>
-                            <div className={`font-bold text-sm sm:text-base ${profitLoss === 0 ? 'text-gray-400' : profitLoss > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                              {profitLoss > 0 ? '+' : ''}{formatCurrency(profitLoss)}
+              {/* Mobile Table Layout - Compact Premier League Style */}
+              <div className="md:hidden -mx-3 sm:-mx-4">
+                {/* Mobile Table Header */}
+                <div className="sticky top-0 z-10 bg-gray-900/95 backdrop-blur-sm border-b border-gray-700/50">
+                  <div className="grid grid-cols-[1fr_40px_55px_50px_70px_45px] gap-1.5 px-3 py-2 text-[10px] font-semibold text-gray-400 items-center">
+                    <div className="text-left">Team</div>
+                    <div className="text-center">Units</div>
+                    <div className="text-center">Price</div>
+                    <div className="text-center">%</div>
+                    <div className="text-center">Value</div>
+                    <div className="text-center">Sell</div>
+                  </div>
+                </div>
+
+                {/* Mobile Table Rows */}
+                <div className="space-y-0">
+                  {portfolio.map((item) => {
+                    const percentChange = calculatePercentChange(item.currentPrice, item.purchasePrice);
+                    const profitLoss = item.totalValue - (item.purchasePrice * item.units);
+                    const club = clubs.find(c => c.id === item.clubId);
+                    
+                    return (
+                      <div
+                        key={item.clubId}
+                        className="border-b border-gray-700/30 last:border-b-0"
+                      >
+                        <div className="grid grid-cols-[1fr_40px_55px_50px_70px_45px] gap-1.5 px-3 py-2 items-center active:bg-gray-700/30 transition-colors touch-manipulation">
+                          {/* Team */}
+                          <div className="flex items-center gap-1 min-w-0 flex-1">
+                            <div className="flex-shrink-0">
+                              <TeamLogo 
+                                teamName={item.clubName} 
+                                externalId={club?.externalId ? parseInt(club.externalId) : undefined}
+                                size="sm" 
+                              />
                             </div>
-                            <div className={`text-[10px] font-medium ${percentChange === 0 ? 'text-gray-500' : percentChange > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                              {percentChange > 0 ? '+' : ''}{percentChange.toFixed(1)}%
-                            </div>
+                            <button
+                              onClick={() => handleClubClick(item.clubId, item.clubName)}
+                              className="flex items-center min-w-0 flex-1 hover:text-trading-primary transition-colors text-left"
+                            >
+                              <span className="text-[11px] font-medium text-white truncate block">{item.clubName}</span>
+                            </button>
+                          </div>
+                          
+                          {/* Units */}
+                          <div className="text-center text-[11px] font-medium text-gray-400 flex-shrink-0">
+                            {formatNumber(item.units)}
+                          </div>
+                          
+                          {/* Current Price */}
+                          <div className="text-center font-mono font-semibold text-[11px] text-white flex-shrink-0 whitespace-nowrap">
+                            {formatCurrency(item.currentPrice)}
+                          </div>
+                          
+                          {/* % Change */}
+                          <div className={`text-center text-[11px] font-semibold flex-shrink-0 ${
+                            percentChange === 0 ? 'text-gray-400' : percentChange > 0 ? 'text-green-400' : 'text-red-400'
+                          }`}>
+                            {percentChange > 0 ? '+' : ''}{percentChange.toFixed(1)}%
+                          </div>
+                          
+                          {/* Total Value */}
+                          <div className="text-center font-mono font-semibold text-[11px] text-white flex-shrink-0 whitespace-nowrap">
+                            {formatCurrency(item.totalValue)}
+                          </div>
+                          
+                          {/* Sell Button */}
+                          <div className="flex justify-center flex-shrink-0">
+                            <Button
+                              onClick={(e) => handleSellClick(e, item)}
+                              size="sm"
+                              className="bg-red-600 hover:bg-red-700 text-white font-medium px-1.5 py-0.5 text-[8px] rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation h-[18px] w-auto min-w-[32px] flex items-center justify-center"
+                            >
+                              Sell
+                            </Button>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             </>
           )}

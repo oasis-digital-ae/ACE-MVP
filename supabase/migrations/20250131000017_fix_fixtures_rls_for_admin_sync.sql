@@ -20,3 +20,4 @@ COMMENT ON POLICY fixtures_admin_insert ON public.fixtures IS
   'Admins can insert fixtures (needed for sync operations that use UPSERT)';
 
 
+

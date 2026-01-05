@@ -246,6 +246,36 @@ export const ClubValuesPage: React.FC = () => {
     return `${datePart}, ${timePart}`;
   }, []);
 
+  // Get team short name for mobile display
+  const getTeamShortName = useCallback((teamName: string): string => {
+    // Map of team names to their short forms (like Premier League official app)
+    const teamShortNames: Record<string, string> = {
+      'Arsenal FC': 'Arsenal',
+      'Aston Villa FC': 'Aston Villa',
+      'AFC Bournemouth': 'Bournemouth',
+      'Brentford FC': 'Brentford',
+      'Brighton & Hove Albion FC': 'Brighton',
+      'Burnley FC': 'Burnley',
+      'Chelsea FC': 'Chelsea',
+      'Crystal Palace FC': 'Crystal Palace',
+      'Everton FC': 'Everton',
+      'Fulham FC': 'Fulham',
+      'Leeds United FC': 'Leeds',
+      'Liverpool FC': 'Liverpool',
+      'Manchester City FC': 'Man City',
+      'Manchester United FC': 'Man Utd',
+      'Newcastle United FC': 'Newcastle',
+      'Nottingham Forest FC': 'Nott\'m Forest',
+      'Sunderland AFC': 'Sunderland',
+      'Tottenham Hotspur FC': 'Spurs',
+      'West Ham United FC': 'West Ham',
+      'Wolverhampton Wanderers FC': 'Wolves'
+    };
+
+    // Return short name if found, otherwise return original name
+    return teamShortNames[teamName] || teamName.replace(/\s+FC$|\s+AFC$/, '');
+  }, []);
+
   // Function to get the latest ending value for a club from matches
   const getLatestClubValue = (clubName: string, launchValue: number): number => {
     // Find all matches where this club participated
@@ -352,9 +382,9 @@ export const ClubValuesPage: React.FC = () => {
   }, [confirmationData, purchaseClub, toast, isPurchasing, refreshWalletBalance, refreshData]);
 
   return (
-    <div className="p-3 sm:p-4 md:p-5 lg:p-6 space-y-3 sm:space-y-4 md:space-y-6 w-full max-w-full overflow-x-hidden">
+    <div className="md:p-3 md:sm:p-4 md:p-5 lg:p-6 space-y-3 sm:space-y-4 md:space-y-6 w-full max-w-full overflow-x-hidden">
       {/* Header Section - Mobile Optimized */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between px-3 md:px-0">
         <div>
           <h1 className="text-lg sm:text-xl md:text-2xl font-bold">The Premier League</h1>
         </div>
@@ -365,7 +395,7 @@ export const ClubValuesPage: React.FC = () => {
       </div>
 
       {/* Main Marketplace Table - Clean Professional Style */}
-      <Card className="trading-card border-0">
+      <Card className="trading-card border-0 md:rounded-lg">
         <CardContent className="p-0">
           {/* Desktop/Tablet Table */}
           <div className="hidden md:block overflow-x-auto w-full max-w-full">
@@ -577,125 +607,203 @@ export const ClubValuesPage: React.FC = () => {
             </table>
           </div>
 
-          {/* Mobile Card Layout - Optimized */}
-          <div className="md:hidden space-y-2.5">
-            {useMemo(() => clubs
-              .map(club => {
-                const launchPrice = roundForDisplay(toDecimal(club.launchValue || 20));
-                const currentValue = roundForDisplay(toDecimal(club.currentValue || 20));
-                const profitLoss = roundForDisplay(toDecimal(currentValue).minus(launchPrice));
-                const percentChange = club.percentChange;
-                const marketCap = roundForDisplay(toDecimal(club.marketCap || 100));
-                
-                return {
-                  ...club,
-                  launchPrice,
-                  currentValue,
-                  profitLoss,
-                  percentChange,
-                  marketCap
-                };
-              })
-              .sort((a, b) => b.percentChange - a.percentChange), [clubs])
-              .map((club, index) => (
-                <div key={club.id} className="bg-gray-800/40 rounded-lg p-3 border border-gray-700/30 active:bg-gray-700/50 transition-colors touch-manipulation">
-                  <div className="flex items-start justify-between mb-2.5">
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <div className="team-logo-container flex-shrink-0">
-                        <TeamLogo 
-                          teamName={club.name} 
-                          externalId={club.externalId ? parseInt(club.externalId) : undefined}
-                          size="sm" 
-                        />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 mb-0.5">
-                          <span className="text-gray-500 text-[10px] font-medium flex-shrink-0">#{index + 1}</span>
-                          <button
-                            onClick={() => handleTeamClick(club.id)}
-                            className="hover:text-trading-primary transition-colors duration-200 cursor-pointer text-left flex items-center gap-1 min-w-0"
-                          >
-                            <span className="font-semibold text-white text-xs sm:text-sm truncate">{club.name}</span>
-                            <ChevronDown 
-                              className={`h-3 w-3 transition-transform duration-200 ease-out flex-shrink-0 ${
-                                selectedClub === club.id ? 'rotate-180' : ''
-                              }`}
-                            />
-                          </button>
-                        </div>
-                        <div className="text-[10px] text-gray-500 mb-0.5">
-                          {getGamesPlayed(club.id)} games
-                        </div>
-                        {(() => {
-                          const status = buyWindowStatuses.get(club.id);
-                          if (status?.nextCloseTime) {
-                            const deadline = formatTradingDeadline(status.nextCloseTime);
-                            return (
-                              <div className="text-[9px] font-mono text-gray-500 truncate">
-                                Until {deadline}
-                              </div>
-                            );
-                          }
-                          return null;
-                        })()}
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-1.5 flex-shrink-0 ml-2">
-                      <Button
-                        onClick={() => handlePurchaseClick(club.id)}
-                        size="sm"
-                        disabled={isPurchasing || (buyWindowStatuses.has(club.id) && !buyWindowStatuses.get(club.id)?.isOpen)}
-                        className="bg-[#10B981] hover:bg-[#059669] text-white font-semibold px-3 py-2 text-[11px] rounded-md disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation min-h-[44px]"
-                        title={(buyWindowStatuses.has(club.id) && !buyWindowStatuses.get(club.id)?.isOpen) ? 'Trading window is closed' : 'Buy shares'}
-                      >
-                        {isPurchasing && purchasingClubId === club.id ? '...' : 
-                         (buyWindowStatuses.has(club.id) && !buyWindowStatuses.get(club.id)?.isOpen) ? 'Closed' : 'Buy'}
-                      </Button>
-                      <BuyWindowIndicator teamId={parseInt(club.id)} compact={true} showCountdown={false} />
-                    </div>
-                  </div>
-                  
-                  {/* Main Price Display - Compact */}
-                  <div className="mb-2.5 p-2.5 rounded-lg bg-gray-700/20 border border-gray-600/20">
-                    <div className="text-center">
-                      <div className="text-[9px] text-gray-500 mb-0.5 uppercase tracking-wide">Share Price</div>
-                      <div className="text-xl sm:text-2xl font-bold text-white mb-0.5">{formatCurrency(club.currentValue)}</div>
-                      <div className={`text-xs font-semibold ${club.percentChange === 0 ? 'text-gray-500' : club.percentChange > 0 ? 'price-positive' : 'price-negative'}`}>
-                        {club.percentChange > 0 ? '+' : ''}{formatPercent(club.percentChange)}
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Secondary Info - Compact Grid */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="bg-gray-700/15 rounded p-2">
-                      <div className="text-gray-500 text-[9px] uppercase tracking-wide mb-0.5">Launch</div>
-                      <div className="text-white font-mono font-semibold text-xs">{formatCurrency(club.launchValue)}</div>
-                    </div>
-                    <div className="bg-gray-700/15 rounded p-2">
-                      <div className="text-gray-500 text-[9px] uppercase tracking-wide mb-0.5">Market Cap</div>
-                      <div className="text-white font-mono font-semibold text-xs">{formatCurrency(club.marketCap)}</div>
-                    </div>
-                  </div>
-                  
-                  {/* Slide-down panel for team details */}
-                  <div className="slide-down-panel" data-open={selectedClub === club.id}>
-                    <div className="slide-down-panel-inner">
-                      <div className="slide-down-panel-content">
-                        <TeamDetailsSlideDown
-                          isOpen={selectedClub === club.id}
-                          teamId={parseInt(club.id)}
-                          teamName={club.name}
-                          userId={user?.id}
-                          fixtures={fixtures}
-                          teams={memoizedTeams}
-                          launchPrice={club.launchValue}
-                        />
-                      </div>
-                    </div>
-                  </div>
+          {/* Mobile Table Layout - Premier League Style Compact Design */}
+          <div className="md:hidden -mx-3 sm:-mx-4">
+            {/* Mobile Table Header */}
+            <div className="sticky top-0 z-10 bg-gray-900/95 backdrop-blur-sm border-b border-gray-700/50">
+              <div className="grid grid-cols-[28px_minmax(0,1fr)_32px_65px_50px] gap-1.5 px-3 py-2 text-[10px] font-semibold text-gray-400 items-center">
+                  <div className="text-center">#</div>
+                  <button
+                    onClick={() => {
+                      if (sortField === 'name') {
+                        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                      } else {
+                        setSortField('name');
+                        setSortDirection('asc');
+                      }
+                    }}
+                    className="flex items-center gap-1 hover:text-white transition-colors text-left"
+                  >
+                    <span>Team</span>
+                    {sortField === 'name' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="h-2.5 w-2.5" /> : <ArrowDown className="h-2.5 w-2.5" />
+                    ) : (
+                      <ArrowUpDown className="h-2.5 w-2.5 opacity-20" />
+                    )}
+                  </button>
+                  <div className="text-center">Pl</div>
+                  <button
+                    onClick={() => {
+                      if (sortField === 'price') {
+                        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                      } else {
+                        setSortField('price');
+                        setSortDirection('desc');
+                      }
+                    }}
+                    className="flex items-center justify-center gap-1 hover:text-white transition-colors w-full"
+                  >
+                    <span>Price</span>
+                    {sortField === 'price' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="h-2.5 w-2.5" /> : <ArrowDown className="h-2.5 w-2.5" />
+                    ) : (
+                      <ArrowUpDown className="h-2.5 w-2.5 opacity-20" />
+                    )}
+                  </button>
+                  <div className="text-center">Buy</div>
                 </div>
-              ))}
+              </div>
+
+              {/* Mobile Table Rows */}
+              <div className="space-y-0">
+                {useMemo(() => {
+                  // Sort based on selected field (same logic as desktop)
+                  let filtered = [...clubs].sort((a, b) => {
+                    switch (sortField) {
+                      case 'name':
+                        const aName = a.name.toLowerCase();
+                        const bName = b.name.toLowerCase();
+                        return sortDirection === 'asc' 
+                          ? aName.localeCompare(bName)
+                          : bName.localeCompare(aName);
+                      case 'price': {
+                        const aValue = a.currentValue;
+                        const bValue = b.currentValue;
+                        return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+                      }
+                      case 'change': {
+                        const aValue = a.percentChange;
+                        const bValue = b.percentChange;
+                        return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+                      }
+                      case 'marketCap': {
+                        const aValue = a.marketCap;
+                        const bValue = b.marketCap;
+                        return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+                      }
+                      default: {
+                        const aValue = a.percentChange;
+                        const bValue = b.percentChange;
+                        return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+                      }
+                    }
+                  });
+
+                  return filtered.map((club, index) => {
+                    return (
+                      <React.Fragment key={club.id}>
+                        <div className="border-b border-gray-700/30 last:border-b-0">
+                          <div className="grid grid-cols-[28px_minmax(0,1fr)_32px_65px_50px] gap-1.5 px-3 py-2 items-center active:bg-gray-700/30 transition-colors touch-manipulation">
+                            {/* Rank */}
+                            <div className="text-center text-[11px] font-medium text-gray-400 flex-shrink-0">
+                              {index + 1}
+                            </div>
+                            
+                            {/* Team */}
+                            <div className="flex items-center gap-1 min-w-0 flex-1">
+                              <div className="flex-shrink-0">
+                                <TeamLogo 
+                                  teamName={club.name} 
+                                  externalId={club.externalId ? parseInt(club.externalId) : undefined}
+                                  size="sm" 
+                                />
+                              </div>
+                              <button
+                                onClick={() => handleTeamClick(club.id)}
+                                className="flex items-center gap-0.5 min-w-0 flex-1 hover:text-trading-primary transition-colors text-left"
+                              >
+                                <span className="text-[11px] font-medium text-white truncate block">{club.name}</span>
+                                <ChevronDown 
+                                  className={`h-2.5 w-2.5 transition-transform flex-shrink-0 text-gray-400 ${
+                                    selectedClub === club.id ? 'rotate-180' : ''
+                                  }`}
+                                />
+                              </button>
+                            </div>
+                            
+                            {/* Games Played */}
+                            <div className="text-center text-[11px] font-medium text-gray-400 flex-shrink-0">
+                              {getGamesPlayed(club.id)}
+                            </div>
+                            
+                            {/* Price */}
+                            <div className="text-center font-mono font-semibold text-[11px] text-white flex-shrink-0 whitespace-nowrap">
+                              {formatCurrency(club.currentValue)}
+                            </div>
+                            
+                            {/* Buy Button */}
+                            <div className="flex justify-center flex-shrink-0">
+                              <Button
+                                onClick={() => handlePurchaseClick(club.id)}
+                                size="sm"
+                                disabled={isPurchasing || (buyWindowStatuses.has(club.id) && !buyWindowStatuses.get(club.id)?.isOpen)}
+                                className="bg-[#10B981] hover:bg-[#059669] text-white font-medium px-1.5 py-0.5 text-[8px] rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation h-[20px] w-auto min-w-[32px] flex items-center justify-center"
+                                title={(buyWindowStatuses.has(club.id) && !buyWindowStatuses.get(club.id)?.isOpen) ? 'Trading window is closed' : 'Buy shares'}
+                              >
+                                {isPurchasing && purchasingClubId === club.id ? '...' : 
+                                 (buyWindowStatuses.has(club.id) && !buyWindowStatuses.get(club.id)?.isOpen) ? 'Closed' : 'Buy'}
+                              </Button>
+                            </div>
+                          </div>
+                        
+                        {/* Slide-down panel for team details */}
+                        <div className="slide-down-panel" data-open={selectedClub === club.id}>
+                          <div className="slide-down-panel-inner">
+                            <div className="slide-down-panel-content">
+                              {/* Mobile Summary Stats */}
+                              <div className="md:hidden border-b border-gray-700/30 pb-3 mb-3">
+                                <div className="grid grid-cols-3 gap-2 px-2">
+                                  {/* Gain/Loss */}
+                                  <div className="bg-gray-700/20 rounded p-2">
+                                    <div className="text-[9px] text-gray-500 uppercase tracking-wide mb-0.5">Gain/Loss</div>
+                                    <div className={`text-xs font-semibold ${club.percentChange === 0 ? 'text-gray-400' : club.percentChange > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                      {club.percentChange > 0 ? '+' : ''}{formatPercent(club.percentChange)}
+                                    </div>
+                                  </div>
+                                  
+                                  {/* Market Cap */}
+                                  <div className="bg-gray-700/20 rounded p-2">
+                                    <div className="text-[9px] text-gray-500 uppercase tracking-wide mb-0.5">Market Cap</div>
+                                    <div className="text-xs font-mono font-semibold text-white truncate">
+                                      {formatCurrency(club.marketCap)}
+                                    </div>
+                                  </div>
+                                  
+                                  {/* Closes Time */}
+                                  <div className="bg-gray-700/20 rounded p-2">
+                                    <div className="text-[9px] text-gray-500 uppercase tracking-wide mb-0.5">Closes</div>
+                                    <div className="text-[10px] font-mono text-gray-300 truncate">
+                                      {(() => {
+                                        const status = buyWindowStatuses.get(club.id);
+                                        if (!status?.nextCloseTime) {
+                                          return <span className="text-gray-500">—</span>;
+                                        }
+                                        const deadline = formatTradingDeadline(status.nextCloseTime);
+                                        return deadline ? deadline.split(', ')[1] : '—'; // Show only time part
+                                      })()}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              <TeamDetailsSlideDown
+                                isOpen={selectedClub === club.id}
+                                teamId={parseInt(club.id)}
+                                teamName={club.name}
+                                userId={user?.id}
+                                fixtures={fixtures}
+                                teams={memoizedTeams}
+                                launchPrice={club.launchValue}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </React.Fragment>
+                  );
+                  });
+                }, [clubs, sortField, sortDirection, selectedClub, getGamesPlayed, handleTeamClick, handlePurchaseClick, isPurchasing, purchasingClubId, buyWindowStatuses])}
+              </div>
           </div>
         </CardContent>
       </Card>

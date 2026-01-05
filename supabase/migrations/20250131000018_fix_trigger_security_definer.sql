@@ -192,3 +192,4 @@ COMMENT ON FUNCTION public.fixture_result_trigger() IS
   'Trigger function that processes match results and updates market caps. Runs as SECURITY DEFINER to bypass RLS when inserting into total_ledger.';
 
 
+
