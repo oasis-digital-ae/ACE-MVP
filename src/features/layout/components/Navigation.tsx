@@ -7,6 +7,12 @@ import {
   TooltipTrigger,
 } from '@/shared/components/ui/tooltip';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/shared/components/ui/dropdown-menu';
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -32,7 +38,9 @@ import {
   Shield,
   Wallet,
   Menu,
-  X
+  X,
+  Mail,
+  ChevronDown
 } from 'lucide-react';
 
 interface NavigationProps {
@@ -41,7 +49,7 @@ interface NavigationProps {
 }
 
 const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) => {
-  const { signOut, profile, walletBalance, refreshWalletBalance, isAdmin } = useAuth();
+  const { signOut, profile, walletBalance, refreshWalletBalance, isAdmin, user } = useAuth();
   const [depositModalOpen, setDepositModalOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
@@ -148,12 +156,43 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
                     <Wallet className="w-3.5 h-3.5 text-trading-primary flex-shrink-0" />
                     <span className="text-xs lg:text-sm font-semibold whitespace-nowrap">{formatCurrency(walletBalance)}</span>
                   </div>
-                  <div className="hidden xl:flex items-center space-x-1 px-1.5 flex-shrink-0">
-                    <User className="w-3.5 h-3.5 flex-shrink-0" />
-                    <span className="text-xs lg:text-sm font-medium whitespace-nowrap truncate max-w-[100px]">
-                      {profile.first_name || (profile.full_name ? profile.full_name.split(' ')[0] : 'User')}
-                    </span>
-                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        className="hidden xl:flex items-center space-x-1 px-1.5 text-gray-300 hover:text-white hover:bg-white/10 flex-shrink-0"
+                      >
+                        <User className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span className="text-xs lg:text-sm font-medium whitespace-nowrap truncate max-w-[100px]">
+                          {profile.first_name || (profile.full_name ? profile.full_name.split(' ')[0] : 'User')}
+                        </span>
+                        <ChevronDown className="w-3 h-3 flex-shrink-0" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="bg-gray-800 border-gray-700 text-white w-56">
+                      <div className="px-2 py-1.5 border-b border-gray-700/50">
+                        <div className="flex items-center gap-2">
+                          <User className="w-4 h-4 text-gray-400" />
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-sm font-medium text-white truncate">
+                              {profile.first_name || (profile.full_name ? profile.full_name.split(' ')[0] : 'User')}
+                            </span>
+                            <span className="text-xs text-gray-400 truncate flex items-center gap-1">
+                              <Mail className="w-3 h-3 flex-shrink-0" />
+                              {profile.email || user?.email || 'No email'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <DropdownMenuItem
+                        onClick={handleSignOutClick}
+                        className="text-red-400 hover:text-red-300 hover:bg-red-900/20 cursor-pointer focus:text-red-300 focus:bg-red-900/20"
+                      >
+                        <LogOut className="w-4 h-4 mr-2" />
+                        Sign Out
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
                 <Button
                   onClick={() => setDepositModalOpen(true)}
@@ -165,14 +204,16 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
                 </Button>
               </>
             )}
-            <Button 
-              variant="ghost" 
-              onClick={handleSignOutClick} 
-              className="text-gray-300 hover:text-white hover:bg-white/10 p-1.5 lg:p-2 flex-shrink-0"
-              title="Sign Out"
-            >
-              <LogOut className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
-            </Button>
+            {!profile && (
+              <Button 
+                variant="ghost" 
+                onClick={handleSignOutClick} 
+                className="text-gray-300 hover:text-white hover:bg-white/10 p-1.5 lg:p-2 flex-shrink-0"
+                title="Sign Out"
+              >
+                <LogOut className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
+              </Button>
+            )}
           </div>
 
           {/* Mobile Wallet & User Info */}
