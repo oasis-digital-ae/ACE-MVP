@@ -219,14 +219,6 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
           {/* Mobile Wallet & User Info */}
           {profile && (
             <div className="md:hidden flex items-center gap-1.5 ml-auto">
-              {/* User Name */}
-              <div className="flex items-center gap-1 text-white px-2 py-1.5 text-xs">
-                <User className="w-3.5 h-3.5 flex-shrink-0" />
-                <span className="font-medium whitespace-nowrap truncate max-w-[60px] sm:max-w-[80px]">
-                  {profile.first_name || (profile.full_name ? profile.full_name.split(' ')[0] : 'User')}
-                </span>
-              </div>
-              
               {/* Wallet Balance */}
               <Button
                 onClick={() => setDepositModalOpen(true)}
@@ -236,6 +228,45 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
                 <Wallet className="w-3.5 h-3.5" />
                 <span className="font-semibold">{formatCurrency(walletBalance)}</span>
               </Button>
+              
+              {/* User Dropdown Menu - Mobile */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    className="flex items-center gap-1 text-white hover:bg-white/10 px-2 py-1.5 text-xs flex-shrink-0"
+                  >
+                    <User className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span className="font-medium whitespace-nowrap truncate max-w-[60px] sm:max-w-[80px]">
+                      {profile.first_name || (profile.full_name ? profile.full_name.split(' ')[0] : 'User')}
+                    </span>
+                    <ChevronDown className="w-3 h-3 flex-shrink-0" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="bg-gray-800 border-gray-700 text-white w-56">
+                  <div className="px-2 py-1.5 border-b border-gray-700/50">
+                    <div className="flex items-center gap-2">
+                      <User className="w-4 h-4 text-gray-400" />
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-sm font-medium text-white truncate">
+                          {profile.first_name || (profile.full_name ? profile.full_name.split(' ')[0] : 'User')}
+                        </span>
+                        <span className="text-xs text-gray-400 truncate flex items-center gap-1">
+                          <Mail className="w-3 h-3 flex-shrink-0" />
+                          {profile.email || user?.email || 'No email'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <DropdownMenuItem
+                    onClick={handleSignOutClick}
+                    className="text-red-400 hover:text-red-300 hover:bg-red-900/20 cursor-pointer focus:text-red-300 focus:bg-red-900/20"
+                  >
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Sign Out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           )}
         </div>
@@ -269,24 +300,6 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
                   </Button>
                 );
               })}
-              {profile && (
-                <div className="pt-2 mt-2 border-t border-gray-700/50">
-                  <div className="px-4 py-2 flex items-center gap-2 text-gray-300">
-                    <User className="w-4 h-4" />
-                    <span className="text-sm">
-                      {profile.first_name || (profile.full_name ? profile.full_name.split(' ')[0] : 'User')}
-                    </span>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    onClick={handleSignOutClick}
-                    className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 justify-start"
-                  >
-                    <LogOut className="w-5 h-5" />
-                    <span className="font-medium">Sign Out</span>
-                  </Button>
-                </div>
-              )}
             </div>
           </div>
         )}

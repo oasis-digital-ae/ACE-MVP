@@ -23,9 +23,10 @@ import { supabase } from '@/shared/lib/supabase';
 import {
   calculateMatchdayPercentChange,
   calculateLifetimePercentChange,
-  calculateProfitLoss
+  calculateProfitLoss,
+  calculatePriceImpactPercent
 } from '@/shared/lib/utils/calculations';
-import { toDecimal, roundForDisplay } from '@/shared/lib/utils/decimal';
+import { toDecimal, roundForDisplay, fromCents } from '@/shared/lib/utils/decimal';
 
 export const ClubValuesPage: React.FC = () => {
   const { clubs, matches, purchaseClub, user, refreshData } = useAppContext();
@@ -42,7 +43,7 @@ export const ClubValuesPage: React.FC = () => {
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [purchasingClubId, setPurchasingClubId] = useState<string | null>(null);
   const [buyWindowStatuses, setBuyWindowStatuses] = useState<Map<string, any>>(new Map());
-  const [sortField, setSortField] = useState<'name' | 'price' | 'change' | 'marketCap'>('change');
+  const [sortField, setSortField] = useState<'name' | 'price' | 'change' | 'marketCap'>('price');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [matchdayChanges, setMatchdayChanges] = useState<Map<string, { change: number; percentChange: number }>>(new Map());
 
@@ -104,10 +105,10 @@ export const ClubValuesPage: React.FC = () => {
       const teamIds = clubs.map(c => parseInt(c.id));
       const changesMap = new Map<string, { change: number; percentChange: number }>();
 
-      // Get match results for all teams
+      // Get latest match result for all teams
       const { data: ledgerData, error } = await supabase
         .from('total_ledger')
-        .select('team_id, share_price_before, share_price_after, event_date')
+        .select('team_id, market_cap_before, market_cap_after, event_date')
         .in('team_id', teamIds)
         .in('ledger_type', ['match_win', 'match_loss', 'match_draw'])
         .order('event_date', { ascending: false });
@@ -117,52 +118,28 @@ export const ClubValuesPage: React.FC = () => {
         return;
       }
 
-      // Group by team_id and get last two matches
-      const teamMatches = new Map<number, Array<{ before: number; after: number; date: string }>>();
+      // Group by team_id and get the latest match only
+      const latestMatches = new Map<number, { marketCapBefore: number; marketCapAfter: number; date: string }>();
       
       (ledgerData || []).forEach(entry => {
         const teamId = entry.team_id;
-        if (!teamMatches.has(teamId)) {
-          teamMatches.set(teamId, []);
-        }
-        const matches = teamMatches.get(teamId)!;
-        
-        // Only add if we have both before and after prices
-        if (entry.share_price_before && entry.share_price_after) {
-          matches.push({
-            before: roundForDisplay(toDecimal(entry.share_price_before)),
-            after: roundForDisplay(toDecimal(entry.share_price_after)),
+        // Only store the first (latest) match for each team
+        if (!latestMatches.has(teamId) && entry.market_cap_before && entry.market_cap_after) {
+          latestMatches.set(teamId, {
+            marketCapBefore: roundForDisplay(fromCents(entry.market_cap_before || 0)),
+            marketCapAfter: roundForDisplay(fromCents(entry.market_cap_after || 0)),
             date: entry.event_date
           });
         }
       });
 
-      // Calculate change between last two matchdays for each team
-      teamMatches.forEach((matches, teamId) => {
-        if (matches.length >= 2) {
-          // Get last two matches (most recent first)
-          const lastMatch = matches[0];
-          const previousMatch = matches[1];
-          
-          // Price after previous match is the price before last match
-          const priceAfterPreviousMatch = lastMatch.before;
-          const priceAfterLastMatch = lastMatch.after;
-          
-          const change = calculateProfitLoss(priceAfterLastMatch, priceAfterPreviousMatch);
-          const percentChange = calculateMatchdayPercentChange(priceAfterLastMatch, priceAfterPreviousMatch);
-          
-          changesMap.set(teamId.toString(), { change, percentChange });
-        } else if (matches.length === 1) {
-          // Only one match, compare to launch price
-          const match = matches[0];
-          const club = clubs.find(c => parseInt(c.id) === teamId);
-          if (club) {
-            const launchPrice = club.launchValue;
-            const change = calculateProfitLoss(match.after, launchPrice);
-            const percentChange = calculateLifetimePercentChange(match.after, launchPrice);
-            changesMap.set(teamId.toString(), { change, percentChange });
-          }
-        }
+      // Calculate latest match's price impact percentage for each team
+      latestMatches.forEach((match, teamId) => {
+        // Calculate percentage change from the latest match
+        const percentChange = calculatePriceImpactPercent(match.marketCapAfter, match.marketCapBefore);
+        const change = match.marketCapAfter - match.marketCapBefore;
+        
+        changesMap.set(teamId.toString(), { change, percentChange });
       });
 
       setMatchdayChanges(changesMap);
@@ -452,7 +429,7 @@ export const ClubValuesPage: React.FC = () => {
                       }}
                       className="flex items-center justify-center gap-1.5 hover:text-foreground transition-colors mx-auto"
                     >
-                      <span>Gain/Loss</span>
+                      <span>Latest Match</span>
                       {sortField === 'change' ? (
                         sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
                       ) : (
@@ -503,8 +480,8 @@ export const ClubValuesPage: React.FC = () => {
                         return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
                       }
                       case 'change': {
-                        const aValue = a.percentChange;
-                        const bValue = b.percentChange;
+                        const aValue = matchdayChanges.get(a.id)?.percentChange ?? 0;
+                        const bValue = matchdayChanges.get(b.id)?.percentChange ?? 0;
                         return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
                       }
                       case 'marketCap': {
@@ -513,8 +490,8 @@ export const ClubValuesPage: React.FC = () => {
                         return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
                       }
                       default: {
-                        const aValue = a.percentChange;
-                        const bValue = b.percentChange;
+                        const aValue = a.currentValue;
+                        const bValue = b.currentValue;
                         return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
                       }
                     }
@@ -552,8 +529,22 @@ export const ClubValuesPage: React.FC = () => {
                           {getGamesPlayed(club.id)}
                         </td>
                         <td className="px-3 text-center font-mono font-semibold">{formatCurrency(club.currentValue)}</td>
-                        <td className={`px-3 text-center ${club.percentChange === 0 ? 'price-neutral' : club.percentChange > 0 ? 'price-positive' : 'price-negative'}`}>
-                          {club.percentChange > 0 ? '+' : ''}{formatPercent(club.percentChange)}
+                        <td className={`px-3 text-center ${
+                          (() => {
+                            const latestMatchChange = matchdayChanges.get(club.id)?.percentChange;
+                            if (latestMatchChange === undefined || latestMatchChange === null) {
+                              return 'text-gray-500';
+                            }
+                            return latestMatchChange === 0 ? 'price-neutral' : latestMatchChange > 0 ? 'price-positive' : 'price-negative';
+                          })()
+                        }`}>
+                          {(() => {
+                            const latestMatchChange = matchdayChanges.get(club.id)?.percentChange;
+                            if (latestMatchChange === undefined || latestMatchChange === null) {
+                              return <span className="text-gray-500">—</span>;
+                            }
+                            return `${latestMatchChange > 0 ? '+' : ''}${formatPercent(latestMatchChange)}`;
+                          })()}
                         </td>
                         <td className="px-3 text-center font-mono text-xs" style={{ color: 'hsl(var(--foreground))' }}>
                           {formatCurrency(club.marketCap)}
@@ -600,7 +591,7 @@ export const ClubValuesPage: React.FC = () => {
                       </tr>
                     </React.Fragment>
                   ));
-                }, [clubs, sortField, sortDirection, selectedClub, getGamesPlayed, handleTeamClick, handlePurchaseClick, isPurchasing, purchasingClubId, buyWindowStatuses, formatTradingDeadline])}
+                }, [clubs, sortField, sortDirection, selectedClub, getGamesPlayed, handleTeamClick, handlePurchaseClick, isPurchasing, purchasingClubId, buyWindowStatuses, formatTradingDeadline, matchdayChanges])}
 
               </tbody>
             </table>
@@ -688,8 +679,8 @@ export const ClubValuesPage: React.FC = () => {
                         return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
                       }
                       case 'change': {
-                        const aValue = a.percentChange;
-                        const bValue = b.percentChange;
+                        const aValue = matchdayChanges.get(a.id)?.percentChange ?? 0;
+                        const bValue = matchdayChanges.get(b.id)?.percentChange ?? 0;
                         return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
                       }
                       case 'marketCap': {
@@ -698,8 +689,8 @@ export const ClubValuesPage: React.FC = () => {
                         return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
                       }
                       default: {
-                        const aValue = a.percentChange;
-                        const bValue = b.percentChange;
+                        const aValue = a.currentValue;
+                        const bValue = b.currentValue;
                         return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
                       }
                     }
@@ -743,8 +734,22 @@ export const ClubValuesPage: React.FC = () => {
                             </div>
                             
                             {/* Percent Change */}
-                            <div className={`text-center font-semibold text-[11px] flex-shrink-0 ${club.percentChange === 0 ? 'text-gray-400' : club.percentChange > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                              {club.percentChange > 0 ? '+' : ''}{formatPercent(club.percentChange)}
+                            <div className={`text-center font-semibold text-[11px] flex-shrink-0 ${
+                              (() => {
+                                const latestMatchChange = matchdayChanges.get(club.id)?.percentChange;
+                                if (latestMatchChange === undefined || latestMatchChange === null) {
+                                  return 'text-gray-500';
+                                }
+                                return latestMatchChange === 0 ? 'text-gray-400' : latestMatchChange > 0 ? 'text-green-400' : 'text-red-400';
+                              })()
+                            }`}>
+                              {(() => {
+                                const latestMatchChange = matchdayChanges.get(club.id)?.percentChange;
+                                if (latestMatchChange === undefined || latestMatchChange === null) {
+                                  return '—';
+                                }
+                                return `${latestMatchChange > 0 ? '+' : ''}${formatPercent(latestMatchChange)}`;
+                              })()}
                             </div>
                             
                             {/* Buy Button */}
@@ -820,7 +825,7 @@ export const ClubValuesPage: React.FC = () => {
                     </React.Fragment>
                   );
                   });
-                }, [clubs, sortField, sortDirection, selectedClub, getGamesPlayed, handleTeamClick, handlePurchaseClick, isPurchasing, purchasingClubId, buyWindowStatuses])}
+                }, [clubs, sortField, sortDirection, selectedClub, getGamesPlayed, handleTeamClick, handlePurchaseClick, isPurchasing, purchasingClubId, buyWindowStatuses, matchdayChanges])}
               </div>
           </div>
         </CardContent>
