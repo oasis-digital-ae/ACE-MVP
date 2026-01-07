@@ -31,17 +31,33 @@ const PortfolioPage: React.FC = () => {
 
   // Memoized KPI calculations
   const { totalInvested, totalMarketValue, totalProfitLoss } = useMemo(() => {
-    const invested = portfolio.reduce((sum, item) => sum + (item.purchasePrice * item.units), 0);
+    // Calculate net invested and P&L from transactions for each portfolio item
+    let invested = 0;
+    let profitLoss = 0;
+    
+    portfolio.forEach((item) => {
+      const transactions = getTransactionsByClub(item.clubId);
+      // Calculate net invested: total BUY - total SELL
+      const netInvested = transactions.reduce((sum, t) => {
+        return t.orderType === 'BUY' ? sum + t.totalValue : sum - t.totalValue;
+      }, 0);
+      
+      // Calculate P&L: current value - net invested
+      // This includes both unrealized P&L (from current holdings) and realized P&L (from sales)
+      const itemProfitLoss = item.totalValue - netInvested;
+      
+      invested += netInvested;
+      profitLoss += itemProfitLoss;
+    });
+    
     const marketValue = portfolio.reduce((sum, item) => sum + item.totalValue, 0);
-    // Total P&L = sum of all item.profitLoss (unrealized only)
-    const profitLoss = portfolio.reduce((sum, item) => sum + item.profitLoss, 0);
     
     return {
       totalInvested: invested,
       totalMarketValue: marketValue,
       totalProfitLoss: profitLoss
     };
-  }, [portfolio]);
+  }, [portfolio, getTransactionsByClub]);
 
   const handleClubClick = useCallback((clubId: string, clubName: string) => {
     const club = clubs.find(c => c.id === clubId);
@@ -106,6 +122,9 @@ const PortfolioPage: React.FC = () => {
     }, 0);
     const avgPrice = totalUnitsFromTransactions > 0 ? netInvested / totalUnitsFromTransactions : 0;
     
+    // Calculate P&L: current value - net invested (includes both unrealized and realized P&L)
+    const profitLoss = item.totalValue - netInvested;
+    
     // Calculate percentage change from average price
     // Use avgPrice and currentPrice directly (simpler and avoids market cap rounding issues)
     // This matches what users see: price change from their net invested average price
@@ -134,8 +153,8 @@ const PortfolioPage: React.FC = () => {
         </td>
         <td className="px-3 text-right font-mono">{formatCurrency(item.totalValue)}</td>
         <td className="px-3 text-right font-semibold text-trading-primary">{portfolioPercent.toFixed(2)}%</td>
-        <td className={`px-3 text-right font-semibold ${item.profitLoss === 0 ? 'text-gray-400' : item.profitLoss > 0 ? 'price-positive' : 'price-negative'}`}>
-          {item.profitLoss > 0 ? '+' : ''}{formatCurrency(item.profitLoss)}
+        <td className={`px-3 text-right font-semibold ${profitLoss === 0 ? 'text-gray-400' : profitLoss > 0 ? 'price-positive' : 'price-negative'}`}>
+          {profitLoss > 0 ? '+' : ''}{formatCurrency(profitLoss)}
         </td>
         <td className="px-3 text-center" onClick={(e) => handleSellClick(e, item)}>
           <Button
@@ -327,6 +346,9 @@ const PortfolioPage: React.FC = () => {
                     }, 0);
                     const avgPrice = totalUnitsFromTransactions > 0 ? netInvested / totalUnitsFromTransactions : 0;
                     
+                    // Calculate P&L: current value - net invested (includes both unrealized and realized P&L)
+                    const profitLoss = item.totalValue - netInvested;
+                    
                     // Calculate percentage change from average price
                     // Use avgPrice and currentPrice directly (simpler and avoids market cap rounding issues)
                     let percentChange = calculatePercentChange(item.currentPrice, avgPrice);
@@ -335,8 +357,6 @@ const PortfolioPage: React.FC = () => {
                     if (Math.abs(percentChange) < 0.01) {
                       percentChange = 0;
                     }
-                    // Use item.profitLoss (unrealized P&L only)
-                    const profitLoss = item.profitLoss;
                     
                     return (
                       <div
