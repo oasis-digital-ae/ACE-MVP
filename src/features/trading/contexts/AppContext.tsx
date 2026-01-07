@@ -228,11 +228,8 @@ const AppProviderInner: React.FC<{ children: React.ReactNode }> = ({ children })
         // Calculate unrealized P&L: current_value - total_invested (for current positions)
         const unrealizedPL = calculateProfitLoss(currentPrice, avgCostForDisplay) * position.quantity;
         
-        // Get realized P&L from SELL orders (already calculated above)
-        const realizedPL = realizedPLByTeam.get(teamId) || 0;
-        
-        // Total P&L = Unrealized P&L + Realized P&L
-        const profitLoss = unrealizedPL + realizedPL;
+        // Use only unrealized P&L (not including realized P&L from sales)
+        const profitLoss = unrealizedPL;
         
         // Calculate purchase market cap with full precision (no rounding)
         // purchase_market_cap = (total_invested / quantity) * totalShares

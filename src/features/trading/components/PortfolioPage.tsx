@@ -33,7 +33,7 @@ const PortfolioPage: React.FC = () => {
   const { totalInvested, totalMarketValue, totalProfitLoss } = useMemo(() => {
     const invested = portfolio.reduce((sum, item) => sum + (item.purchasePrice * item.units), 0);
     const marketValue = portfolio.reduce((sum, item) => sum + item.totalValue, 0);
-    // Total P&L = sum of all item.profitLoss (which already includes realized + unrealized)
+    // Total P&L = sum of all item.profitLoss (unrealized only)
     const profitLoss = portfolio.reduce((sum, item) => sum + item.profitLoss, 0);
     
     return {
@@ -335,7 +335,7 @@ const PortfolioPage: React.FC = () => {
                     if (Math.abs(percentChange) < 0.01) {
                       percentChange = 0;
                     }
-                    // Use item.profitLoss which already includes realized + unrealized P&L
+                    // Use item.profitLoss (unrealized P&L only)
                     const profitLoss = item.profitLoss;
                     
                     return (

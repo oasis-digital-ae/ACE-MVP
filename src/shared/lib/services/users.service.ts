@@ -185,12 +185,8 @@ export const usersService = {
         // Calculate unrealized P&L: current_value - total_invested
         const unrealizedPL = currentValue - totalInvestedDollars;
         
-        // Get realized P&L from SELL orders (already calculated above)
-        const key = `${position.user_id}:${position.team_id}`;
-        const realizedPL = realizedPLByUserTeam.get(key) || 0;
-        
-        // Total P&L = Unrealized P&L + Realized P&L
-        const profitLoss = unrealizedPL + realizedPL;
+        // Use only unrealized P&L (not including realized P&L from sales)
+        const profitLoss = unrealizedPL;
 
         const existing = userMetrics.get(position.user_id) || {
           totalInvested: 0,
@@ -207,29 +203,8 @@ export const usersService = {
         userMetrics.set(position.user_id, existing);
       });
 
-      // Also include realized P&L for users who have sold all their positions (no current positions)
-      // Sum up realized P&L for all teams per user
-      const realizedPLByUser = new Map<string, number>();
-      realizedPLByUserTeam.forEach((realizedPL, key) => {
-        const [userId] = key.split(':');
-        const current = realizedPLByUser.get(userId) || 0;
-        realizedPLByUser.set(userId, current + realizedPL);
-      });
-
-      // Add realized P&L for users with no current positions
-      (profiles || []).forEach(profile => {
-        const realizedPL = realizedPLByUser.get(profile.id) || 0;
-        if (realizedPL !== 0) {
-          const existing = userMetrics.get(profile.id) || {
-            totalInvested: 0,
-            portfolioValue: 0,
-            profitLoss: 0,
-            positionsCount: 0
-          };
-          existing.profitLoss += realizedPL;
-          userMetrics.set(profile.id, existing);
-        }
-      });
+      // Note: Realized P&L from sales is no longer included in profit/loss calculations
+      // Only unrealized P&L (current value - total invested) is used
 
       // Combine profiles with metrics
       const userList: UserListItem[] = (profiles || []).map(profile => {
