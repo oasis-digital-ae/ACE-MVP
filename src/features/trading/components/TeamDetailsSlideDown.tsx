@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { positionsService } from '@/shared/lib/database';
+import { positionsService, fixturesService } from '@/shared/lib/database';
 import type { DatabasePositionWithTeam } from '@/shared/types/database.types';
 import type { DatabaseFixture } from '@/shared/lib/services/fixtures.service';
 import type { DatabaseTeam } from '@/shared/lib/services/teams.service';
@@ -126,14 +126,15 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
 
     setLoading(prev => ({ ...prev, matches: true }));
     try {
-      const [positionResult, ledgerData] = await Promise.all([
+      const [positionResult, ledgerData, fixturesData] = await Promise.all([
         positionsService.getByUserIdAndTeamId(userId, teamId),
         supabase
           .from('total_ledger')
           .select('*')
           .eq('team_id', teamId)
           .in('ledger_type', ['match_win', 'match_loss', 'match_draw'])
-          .order('event_date', { ascending: false })
+          .order('event_date', { ascending: false }),
+        fixtures.length > 0 ? Promise.resolve(fixtures) : fixturesService.getAll()
       ]);
 
       if (ledgerData.error) {
@@ -141,6 +142,10 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
         setMatchHistory([]);
         return;
       }
+
+      // Create a map of fixtures by ID for quick lookup
+      const fixturesMap = new Map((fixturesData || []).map(f => [f.id, f]));
+      const teamsMap = new Map((teams || []).map(t => [t.id, t]));
 
       // Deduplicate match events by trigger_event_id (keep most recent by created_at or id)
       const matchEventsMap = new Map<number, typeof ledgerData.data[0]>();
@@ -183,7 +188,24 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
         // Process match events only
         const matchResult = event.ledger_type === 'match_win' ? 'win' : 
                            event.ledger_type === 'match_loss' ? 'loss' : 'draw';
-        const description = event.event_description || 'Match Result';
+        
+        // Determine opponent from fixture data (source of truth) instead of event_description
+        let opponentName = 'Unknown';
+        if (event.trigger_event_id) {
+          const fixture = fixturesMap.get(event.trigger_event_id);
+          if (fixture) {
+            // Determine if this team is home or away
+            const isHome = fixture.home_team_id === teamId;
+            const opponentId = isHome ? fixture.away_team_id : fixture.home_team_id;
+            const opponentTeam = teamsMap.get(opponentId);
+            opponentName = opponentTeam?.name || 'Unknown';
+          }
+        }
+        
+        // Use opponent name from fixture, fallback to extracting from description if fixture not found
+        const description = opponentName !== 'Unknown' 
+          ? `Match vs ${opponentName}`
+          : (event.event_description || 'Match Result');
         // Convert from cents (BIGINT) to dollars
         const marketCapBefore = roundForDisplay(fromCents(event.market_cap_before || 0));
         const marketCapAfter = roundForDisplay(fromCents(event.market_cap_after || 0));
