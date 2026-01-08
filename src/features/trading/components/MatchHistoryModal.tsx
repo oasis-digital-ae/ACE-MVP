@@ -4,9 +4,11 @@ import { Badge } from '@/shared/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { formatCurrency } from '@/shared/lib/formatters';
 import { fixturesService, teamsService } from '@/shared/lib/database';
+import { supabase } from '@/shared/lib/supabase';
 import type { DatabaseFixture, DatabaseTeam } from '@/shared/lib/database';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
-import { fromCents } from '@/shared/lib/utils/decimal';
+import { fromCents, roundForDisplay } from '@/shared/lib/utils/decimal';
+import { calculatePriceImpactPercent } from '@/shared/lib/utils/calculations';
 
 interface MatchHistoryModalProps {
   isOpen: boolean;
@@ -46,84 +48,64 @@ export const MatchHistoryModal: React.FC<MatchHistoryModalProps> = ({
   const loadMatchHistory = async () => {
     setLoading(true);
     try {
-      // Load fixtures and teams
-      const [fixturesData, teamsData] = await Promise.all([
+      const clubIdNum = parseInt(clubId);
+      
+      // Load ledger data, fixtures, and teams
+      const [ledgerResult, fixturesData, teamsData] = await Promise.all([
+        supabase
+          .from('total_ledger')
+          .select('*')
+          .eq('team_id', clubIdNum)
+          .in('ledger_type', ['match_win', 'match_loss', 'match_draw'])
+          .order('event_date', { ascending: false }),
         fixturesService.getAll(),
         teamsService.getAll()
       ]);
 
+      if (ledgerResult.error) {
+        throw ledgerResult.error;
+      }
+
       setTeams(teamsData);
 
-      // Filter fixtures for this club that have been completed
-      const clubIdNum = parseInt(clubId);
-      const clubFixtures = fixturesData.filter(fixture => 
-        (fixture.home_team_id === clubIdNum || fixture.away_team_id === clubIdNum) &&
-        fixture.status === 'applied' && 
-        fixture.result !== 'pending' &&
-        fixture.snapshot_home_cap !== null &&
-        fixture.snapshot_away_cap !== null
-      );
+      // Create maps for quick lookup
+      const fixturesMap = new Map((fixturesData || []).map(f => [f.id, f]));
+      const teamsMap = new Map((teamsData || []).map(t => [t.id, t]));
 
-      // Process each fixture to calculate price impacts
-      const matchesWithImpacts: MatchWithPriceImpact[] = clubFixtures.map(fixture => {
-        const isHome = fixture.home_team_id === clubIdNum;
-        const opponent = isHome ? 
-          teamsData.find(t => t.id === fixture.away_team_id)?.name || 'Unknown' :
-          teamsData.find(t => t.id === fixture.home_team_id)?.name || 'Unknown';
-
-        // Get current team data to calculate current market cap
-        const currentTeam = teamsData.find(t => t.id === clubIdNum);
-        const currentMarketCap = fromCents(currentTeam?.market_cap || 0).toNumber();
-
-        // Calculate pre-match market cap from snapshot (convert from cents to dollars)
-        const preMatchCap = fromCents(isHome ? 
-          (fixture.snapshot_home_cap || 0) : 
-          (fixture.snapshot_away_cap || 0)
-        ).toNumber();
-
-        // Calculate post-match market cap based on result
-        let postMatchCap = preMatchCap;
-        let result: 'win' | 'loss' | 'draw' = 'draw';
-        let priceImpact = 0;
-        let priceImpactPercent = 0;
-
-        if (fixture.result === 'home_win') {
-          if (isHome) {
-            result = 'win';
-            // Winner gets 10% of loser's market cap
-            const loserCap = fromCents(fixture.snapshot_away_cap || 0).toNumber();
-            priceImpact = loserCap * 0.10;
-            postMatchCap = preMatchCap + priceImpact;
-          } else {
-            result = 'loss';
-            // Loser loses 10% of their market cap
-            priceImpact = -preMatchCap * 0.10;
-            postMatchCap = preMatchCap + priceImpact;
-          }
-        } else if (fixture.result === 'away_win') {
-          if (isHome) {
-            result = 'loss';
-            // Loser loses 10% of their market cap
-            priceImpact = -preMatchCap * 0.10;
-            postMatchCap = preMatchCap + priceImpact;
-          } else {
-            result = 'win';
-            // Winner gets 10% of loser's market cap
-            const loserCap = fromCents(fixture.snapshot_home_cap || 0).toNumber();
-            priceImpact = loserCap * 0.10;
-            postMatchCap = preMatchCap + priceImpact;
-          }
-        } else {
-          result = 'draw';
-          priceImpact = 0;
-          postMatchCap = preMatchCap;
+      // Process ledger entries to get match history
+      const matchesWithImpacts: MatchWithPriceImpact[] = [];
+      
+      for (const ledgerEntry of (ledgerResult.data || [])) {
+        const fixture = fixturesMap.get(ledgerEntry.trigger_event_id || 0);
+        if (!fixture) {
+          continue; // Skip if fixture not found
         }
 
-        priceImpactPercent = preMatchCap > 0 ? (priceImpact / preMatchCap) * 100 : 0;
+        const isHome = fixture.home_team_id === clubIdNum;
+        const opponent = isHome ? 
+          teamsMap.get(fixture.away_team_id)?.name || 'Unknown' :
+          teamsMap.get(fixture.home_team_id)?.name || 'Unknown';
 
+        const result: 'win' | 'loss' | 'draw' = 
+          ledgerEntry.ledger_type === 'match_win' ? 'win' :
+          ledgerEntry.ledger_type === 'match_loss' ? 'loss' : 'draw';
+
+        // Use actual values from ledger (stored in cents)
+        const preMatchCap = roundForDisplay(fromCents(ledgerEntry.market_cap_before || 0));
+        const postMatchCap = roundForDisplay(fromCents(ledgerEntry.market_cap_after || 0));
+        
+        // Use amount_transferred directly from database to avoid rounding errors
+        const transferAmountDollars = roundForDisplay(fromCents(ledgerEntry.amount_transferred || 0));
+        const priceImpact = result === 'win' 
+          ? transferAmountDollars  // Winner gains the transfer amount
+          : result === 'loss' 
+          ? -transferAmountDollars  // Loser loses the transfer amount
+          : 0; // Draw: no transfer
+
+        const priceImpactPercent = calculatePriceImpactPercent(postMatchCap, preMatchCap);
         const score = `${fixture.home_score || 0}-${fixture.away_score || 0}`;
 
-        return {
+        matchesWithImpacts.push({
           fixture,
           opponent,
           isHome,
@@ -133,8 +115,8 @@ export const MatchHistoryModal: React.FC<MatchHistoryModalProps> = ({
           postMatchCap,
           priceImpact,
           priceImpactPercent
-        };
-      });
+        });
+      }
 
       // Sort by kickoff date (most recent first)
       matchesWithImpacts.sort((a, b) => 

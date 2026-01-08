@@ -209,7 +209,21 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
         // Convert from cents (BIGINT) to dollars
         const marketCapBefore = roundForDisplay(fromCents(event.market_cap_before || 0));
         const marketCapAfter = roundForDisplay(fromCents(event.market_cap_after || 0));
-        const priceImpact = roundForDisplay(toDecimal(marketCapAfter).minus(marketCapBefore));
+        
+        // Use amount_transferred directly from database to avoid rounding errors
+        // amount_transferred is stored in cents (BIGINT), convert to dollars
+        const transferAmountDollars = roundForDisplay(fromCents(event.amount_transferred || 0));
+        
+        // Calculate share price change: transfer amount / total shares (1000)
+        // This ensures winner and loser show the exact same dollar amount change
+        const TOTAL_SHARES = 1000;
+        const sharePriceChange = transferAmountDollars / TOTAL_SHARES;
+        const priceImpact = matchResult === 'win' 
+          ? sharePriceChange  // Winner's share price increases
+          : matchResult === 'loss' 
+          ? -sharePriceChange  // Loser's share price decreases
+          : 0; // Draw: no change
+        
         const priceImpactPercent = calculatePriceImpactPercent(marketCapAfter, marketCapBefore);
 
         return {
@@ -394,12 +408,12 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
                                       {formatCurrency(event.marketCapAfter)}
                                     </td>
                                     <td className={`px-3 py-2.5 text-[10px] font-mono ${
-                                      event.sharePriceAfter > event.sharePriceBefore ? 'price-positive' :
-                                      event.sharePriceAfter < event.sharePriceBefore ? 'price-negative' :
+                                      event.priceImpact > 0 ? 'price-positive' :
+                                      event.priceImpact < 0 ? 'price-negative' :
                                       ''
                                     }`} style={{ textAlign: 'center' }}>
-                                      {event.sharePriceAfter !== event.sharePriceBefore && (
-                                        <span>{event.sharePriceAfter > event.sharePriceBefore ? '+' : ''}${(event.sharePriceAfter - event.sharePriceBefore).toFixed(2)}</span>
+                                      {event.priceImpact !== 0 && (
+                                        <span>{event.priceImpact > 0 ? '+' : ''}${event.priceImpact.toFixed(2)}</span>
                                       )}
                                     </td>
                                     <td className={`px-3 py-2.5 text-xs font-semibold ${
@@ -418,7 +432,7 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
                           <div className="md:hidden space-y-2">
                             {matchHistory.map((event, index) => {
                               const isPositive = event.priceImpactPercent >= 0;
-                              const priceChange = event.sharePriceAfter - event.sharePriceBefore;
+                              const sharePriceChange = event.priceImpact; // Share price change (transfer amount / 1000)
                               const dateObj = new Date(event.date);
                               const formattedDate = dateObj.toLocaleDateString('en-US', {
                                 month: 'short',
@@ -463,11 +477,11 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
                                     <div className="text-right">
                                       <p className="text-[9px] sm:text-[10px] text-gray-400 mb-0.5">Change</p>
                                       <div className="flex items-center justify-end gap-1">
-                                        {priceChange !== 0 && (
+                                        {sharePriceChange !== 0 && (
                                           <p className={`text-[10px] sm:text-xs font-semibold font-mono ${
                                             isPositive ? 'text-[#10B981]' : 'text-[#EF4444]'
                                           }`}>
-                                            {priceChange > 0 ? '+' : ''}${priceChange.toFixed(2)}
+                                            {sharePriceChange > 0 ? '+' : ''}${sharePriceChange.toFixed(2)}
                                           </p>
                                         )}
                                         <p className={`text-[11px] sm:text-xs font-bold ${
