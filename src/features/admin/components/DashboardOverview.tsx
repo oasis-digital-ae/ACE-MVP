@@ -48,11 +48,11 @@ export const DashboardOverview: React.FC = () => {
     try {
       setLoading(true);
 
-      // Load metrics
+      // Load metrics - increased activity limit to show more comprehensive feed
       const [stats, financial, activity, system] = await Promise.all([
         adminService.getSystemStats(),
         adminService.getFinancialOverview(),
-        adminService.getRecentActivity(10),
+        adminService.getRecentActivity(50), // Show more activities including deposits
         adminService.getSystemActivity()
       ]);
 
@@ -321,6 +321,7 @@ export const DashboardOverview: React.FC = () => {
                   <div key={index} className="flex items-start gap-3 p-2 rounded-lg hover:bg-muted/50">
                     <div className="mt-1">
                       {activity.type === 'trade' && <TrendingUp className="h-4 w-4 text-blue-500" />}
+                      {activity.type === 'deposit' && <DollarSign className="h-4 w-4 text-green-500" />}
                       {activity.type === 'registration' && <Users className="h-4 w-4 text-green-500" />}
                       {activity.type === 'match' && <Calendar className="h-4 w-4 text-purple-500" />}
                     </div>
@@ -340,6 +341,7 @@ export const DashboardOverview: React.FC = () => {
     </div>
   );
 };
+
 
 
 

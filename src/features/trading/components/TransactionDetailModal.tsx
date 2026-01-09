@@ -49,14 +49,18 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {transactions.map((transaction) => (
+                {transactions.map((transaction) => {
+                  // Format date with time for display
+                  const dateWithTime = new Date(transaction.timestamp).toLocaleString();
+                  return (
                   <tr key={transaction.id} className="border-b border-gray-700">
-                    <td className="p-2">{transaction.date}</td>
+                    <td className="p-2">{dateWithTime}</td>
                     <td className="p-2 text-right">{formatNumber(transaction.units)}</td>
                     <td className="p-2 text-right">{formatCurrency(transaction.pricePerUnit)}</td>
                     <td className="p-2 text-right">{formatCurrency(transaction.totalValue)}</td>
                   </tr>
-                ))}
+                );
+                })}
               </tbody>
             </table>
           </div>

@@ -3,6 +3,7 @@ import { supabase } from '../supabase';
 import { logger } from '../logger';
 import { auditService } from './audit.service';
 import { fromCents } from '../utils/decimal';
+import { formatCurrency } from '../formatters';
 import type { 
   SystemStats, 
   TeamMarketCapOverview, 
@@ -625,25 +626,28 @@ export const adminService = {
   },
 
   /**
-   * Get recent activity feed (trades, registrations, match results)
+   * Get recent activity feed (trades, deposits, registrations, match results)
+   * Shows all user activities throughout the application
    */
-  async getRecentActivity(limit = 10): Promise<Array<{
-    type: 'trade' | 'registration' | 'match';
+  async getRecentActivity(limit = 50): Promise<Array<{
+    type: 'trade' | 'deposit' | 'registration' | 'match';
     timestamp: string;
     description: string;
     user_id?: string;
     username?: string;
+    amount?: number;
   }>> {
     try {
       const activities: Array<{
-        type: 'trade' | 'registration' | 'match';
+        type: 'trade' | 'deposit' | 'registration' | 'match';
         timestamp: string;
         description: string;
         user_id?: string;
         username?: string;
+        amount?: number;
       }> = [];
 
-      // Get recent trades
+      // Get recent trades - increased limit to show more activity
       const { data: recentTrades, error: tradesError } = await supabase
         .from('orders')
         .select(`
@@ -652,24 +656,67 @@ export const adminService = {
           created_at,
           order_type,
           total_amount,
+          quantity,
           profiles!inner(username),
           teams!inner(name)
         `)
         .eq('status', 'FILLED')
         .order('executed_at', { ascending: false })
-        .limit(5);
+        .limit(limit);
 
       if (!tradesError && recentTrades) {
         recentTrades.forEach((trade: any) => {
           const team = trade.teams || {};
           const profile = trade.profiles || {};
+          const amount = fromCents(trade.total_amount || 0).toNumber();
+          const quantity = trade.quantity || 0;
           
           activities.push({
             type: 'trade',
             timestamp: trade.executed_at || trade.created_at,
-            description: `${profile.username || 'User'} ${trade.order_type === 'BUY' ? 'bought' : 'sold'} $${fromCents(trade.total_amount || 0).toNumber().toFixed(2)} worth of ${team.name || 'shares'}`,
+            description: `${profile.username || 'User'} ${trade.order_type === 'BUY' ? 'bought' : 'sold'} ${quantity} shares of ${team.name || 'shares'} for ${formatCurrency(amount)}`,
             user_id: trade.user_id,
-            username: profile.username
+            username: profile.username,
+            amount: amount
+          });
+        });
+      }
+
+      // Get recent wallet deposits/transactions
+      const { data: recentDeposits, error: depositsError } = await supabase
+        .from('wallet_transactions')
+        .select(`
+          user_id,
+          amount_cents,
+          type,
+          created_at,
+          profiles!inner(username)
+        `)
+        .in('type', ['deposit', 'refund', 'adjustment'])
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (!depositsError && recentDeposits) {
+        recentDeposits.forEach((deposit: any) => {
+          const profile = deposit.profiles || {};
+          const amount = fromCents(deposit.amount_cents || 0).toNumber();
+          
+          let description = '';
+          if (deposit.type === 'deposit') {
+            description = `${profile.username || 'User'} deposited ${formatCurrency(amount)}`;
+          } else if (deposit.type === 'refund') {
+            description = `${profile.username || 'User'} received a refund of ${formatCurrency(amount)}`;
+          } else if (deposit.type === 'adjustment') {
+            description = `${profile.username || 'User'} wallet adjusted by ${formatCurrency(amount)}`;
+          }
+          
+          activities.push({
+            type: 'deposit',
+            timestamp: deposit.created_at,
+            description: description,
+            user_id: deposit.user_id,
+            username: profile.username,
+            amount: amount
           });
         });
       }
@@ -679,7 +726,7 @@ export const adminService = {
         .from('profiles')
         .select('id, username, created_at')
         .order('created_at', { ascending: false })
-        .limit(3);
+        .limit(10);
 
       if (!usersError && recentUsers) {
         recentUsers.forEach(user => {
@@ -706,7 +753,7 @@ export const adminService = {
         `)
         .eq('status', 'applied')
         .order('kickoff_at', { ascending: false })
-        .limit(5);
+        .limit(10);
 
       if (!matchesError && recentMatches) {
         recentMatches.forEach(match => {

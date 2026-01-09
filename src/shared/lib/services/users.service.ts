@@ -31,8 +31,9 @@ export interface UserDetails extends UserListItem {
     current_value: number;
     profit_loss: number;
     price_per_share: number; // Current share price (market cap / total shares)
+    avg_price: number; // Average purchase price (total_invested / quantity) - matches user portfolio calculation
     market_cap: number; // Current market cap in dollars
-    percent_change_from_purchase: number; // Change from purchase price (calculated using market cap for accuracy)
+    percent_change_from_purchase: number; // Change from purchase price: (current_price - avg_price) / avg_price * 100
   }>;
   orders: Array<{
     id: number;
@@ -478,7 +479,13 @@ export const usersService = {
 
         // Calculate percentage change: (Current Price - Avg Price) / Avg Price * 100
         // This shows the change from the user's average purchase price to the current price
-        const percentChangeFromPurchase = calculatePercentChange(sharePrice, avgCost);
+        let percentChangeFromPurchase = calculatePercentChange(sharePrice, avgCost);
+        // Round very small changes to 0.00% to avoid showing "+0.03%" when it should be "0.00%"
+        // This handles floating point precision issues where prices are effectively the same
+        // Matches the logic in PortfolioPage.tsx for consistency
+        if (Math.abs(percentChangeFromPurchase) < 0.01) {
+          percentChangeFromPurchase = 0;
+        }
 
         totalInvested += totalInvestedDollars;
         portfolioValue += currentValue;
@@ -491,9 +498,10 @@ export const usersService = {
           total_invested: totalInvestedDollars,
           current_value: currentValue,
           profit_loss: pl,
-          price_per_share: sharePrice, // Include share price to avoid recalculation rounding issues
+          price_per_share: sharePrice, // Current share price (market cap / total shares)
+          avg_price: avgCost, // Average purchase price (total_invested / quantity) - matches user portfolio calculation
           market_cap: marketCapDollars, // Include market cap for accurate percentage calculations
-          percent_change_from_purchase: percentChangeFromPurchase // Change from purchase price: (current_share_price - purchase_price) / purchase_price * 100
+          percent_change_from_purchase: percentChangeFromPurchase // Change from purchase price: (current_share_price - avg_price) / avg_price * 100
         };
       });
 

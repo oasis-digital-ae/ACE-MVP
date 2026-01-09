@@ -260,6 +260,8 @@ const AppProviderInner: React.FC<{ children: React.ReactNode }> = ({ children })
       if (userOrders) {
         logger.db('Loading user orders for transactions', { count: userOrders.length });
         userOrders.forEach((order) => {
+          const timestamp = order.executed_at || order.created_at;
+          const dateObj = new Date(timestamp);
           convertedTransactions.push({
             id: order.id.toString(),
             clubId: order.team_id.toString(),
@@ -267,7 +269,8 @@ const AppProviderInner: React.FC<{ children: React.ReactNode }> = ({ children })
             units: order.quantity,
             pricePerUnit: fromCents(order.price_per_share).toNumber(), // Convert cents to dollars
             totalValue: fromCents(order.total_amount).toNumber(), // Convert cents to dollars
-            date: new Date(order.executed_at || order.created_at).toLocaleDateString(),
+            date: dateObj.toLocaleDateString(),
+            timestamp: timestamp, // Store full ISO timestamp for proper sorting by date and time
             orderType: order.order_type as 'BUY' | 'SELL'
           });
         });
@@ -832,7 +835,7 @@ const AppProviderInner: React.FC<{ children: React.ReactNode }> = ({ children })
 
   const getTransactionsByClub = (clubId: string): Transaction[] => {
     return transactions.filter(t => t.clubId === clubId).sort((a, b) => 
-      new Date(b.date).getTime() - new Date(a.date).getTime()
+      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
   };
 

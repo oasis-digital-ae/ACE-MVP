@@ -45,7 +45,8 @@ export interface Transaction {
   units: number;
   pricePerUnit: number;
   totalValue: number;
-  date: string;
+  date: string; // Display date (formatted)
+  timestamp: string; // Full ISO timestamp for sorting (executed_at or created_at)
   orderType: 'BUY' | 'SELL';
 }
 

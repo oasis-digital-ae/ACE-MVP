@@ -80,9 +80,12 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({
               </tr>
             </thead>
             <tbody>
-              {transactions.map((transaction) => (
+              {transactions.map((transaction) => {
+                // Format date with time for display
+                const dateWithTime = new Date(transaction.timestamp).toLocaleString();
+                return (
                 <tr key={transaction.id} className="border-b border-gray-700">
-                  <td className="p-2">{transaction.date}</td>
+                  <td className="p-2">{dateWithTime}</td>
                   <td className="p-2 text-center">
                     <span className={`px-2 py-1 rounded text-xs font-semibold ${
                       transaction.orderType === 'BUY' 
@@ -96,7 +99,8 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({
                   <td className="p-2 text-right">{formatCurrency(transaction.pricePerUnit)}</td>
                   <td className="p-2 text-right">{formatCurrency(transaction.totalValue)}</td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
         </div>
