@@ -84,11 +84,25 @@ export const handler: Handler = async (event) => {
           : null;
 
         if (userId && depositAmountCents && depositAmountCents > 0) {
+          // CRITICAL: Validate deposit amount matches expected range
+          // If deposit_amount_cents is suspiciously high, log warning
+          if (depositAmountCents > 1000000) { // More than $10,000
+            console.error('WARNING: Suspiciously high deposit amount detected:', {
+              depositAmountCents,
+              paymentIntentId: pi.id,
+              totalCharged: pi.amount,
+              metadata: pi.metadata,
+            });
+          }
+          
           console.log(`Processing wallet credit for user ${userId}:`, {
             depositAmountCents,
+            depositAmountDollars: depositAmountCents / 100,
             platformFeeCents,
             paymentIntentId: pi.id,
             totalCharged: pi.amount,
+            totalChargedDollars: pi.amount / 100,
+            metadata: pi.metadata,
           });
 
           const { data: creditResult, error: creditError } = await supabase.rpc('credit_wallet', {

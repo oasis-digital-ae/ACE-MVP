@@ -39,8 +39,14 @@ interface DepositModalProps {
 }
 
 // Payment form component
-const PaymentForm: React.FC<{ depositAmount: number; onSuccess: () => void; onClose: () => void }> = ({ 
+const PaymentForm: React.FC<{ 
+  depositAmount: number; 
+  clientSecret: string;
+  onSuccess: () => void; 
+  onClose: () => void 
+}> = ({ 
   depositAmount, 
+  clientSecret,
   onSuccess, 
   onClose 
 }) => {
@@ -54,7 +60,7 @@ const PaymentForm: React.FC<{ depositAmount: number; onSuccess: () => void; onCl
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!stripe || !elements || !user) {
+    if (!stripe || !elements || !user || !clientSecret) {
       return;
     }
 
@@ -69,60 +75,13 @@ const PaymentForm: React.FC<{ depositAmount: number; onSuccess: () => void; onCl
         throw submitError;
       }
 
-      // Calculate amounts
-      const depositAmountCents = Math.round(depositAmount * 100);
-      const platformFeeCents = Math.round(depositAmountCents * PLATFORM_FEE_PERCENT);
-      const totalChargeCents = depositAmountCents + platformFeeCents;
-
-      // Create payment intent
-      const functionUrl = getNetlifyFunctionUrl('create-payment-intent');
-      const response = await fetch(functionUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          deposit_amount_cents: depositAmountCents,
-          user_id: user.id,
-          currency: 'usd',
-        }),
-      });
-
-      // Check if response is ok
-      if (!response.ok) {
-        const errorText = await response.text();
-        let errorMessage = `Server error: ${response.status}`;
-        try {
-          const errorJson = JSON.parse(errorText);
-          errorMessage = errorJson.error || errorMessage;
-        } catch {
-          errorMessage = errorText || errorMessage;
-        }
-        throw new Error(errorMessage);
-      }
-
-      // Parse JSON response
-      const responseText = await response.text();
-      if (!responseText) {
-        throw new Error('Empty response from server');
-      }
-
-      let responseData;
-      try {
-        responseData = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error('Failed to parse response:', responseText);
-        throw new Error('Invalid response from server');
-      }
-
-      const { clientSecret, error: apiError } = responseData;
-
-      if (apiError || !clientSecret) {
-        throw new Error(apiError || 'Failed to create payment intent');
-      }
+      // Use the existing clientSecret that was already created in handleContinue
+      // DO NOT create a new payment intent here - it's already been created!
 
       // Now confirm payment (elements.submit() was already called above)
       const { error: confirmError, paymentIntent } = await stripe.confirmPayment({
         elements,
-        clientSecret,
+        clientSecret, // Use the clientSecret passed as prop
         confirmParams: {
           return_url: `${window.location.origin}/portfolio`,
         },
@@ -133,64 +92,11 @@ const PaymentForm: React.FC<{ depositAmount: number; onSuccess: () => void; onCl
         throw confirmError;
       }
 
-      // Extract payment intent ID from clientSecret (format: pi_xxx_secret_xxx)
-      const paymentIntentId = paymentIntent?.id || clientSecret.split('_secret_')[0];
-
-      // Payment succeeded - check if webhook credited wallet, if not, manually credit
-      let walletCredited = false;
+      // Payment succeeded - webhook will credit wallet automatically
+      // Wait a moment for webhook to process, then refresh balance
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Get initial balance
-      await refreshWalletBalance();
-      let initialBalance = 0;
-      try {
-        initialBalance = user ? await walletService.getBalance(user.id) : 0;
-      } catch (balanceError) {
-        console.error('Error getting initial balance:', balanceError);
-        // Continue with 0 if balance check fails
-      }
-      
-      // Wait a moment for webhook to process
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      // Check if wallet was credited
-      await refreshWalletBalance();
-      let balanceAfterWait = 0;
-      try {
-        balanceAfterWait = user ? await walletService.getBalance(user.id) : 0;
-      } catch (balanceError) {
-        console.error('Error getting balance after wait:', balanceError);
-        // Continue with 0 if balance check fails
-      }
-      walletCredited = balanceAfterWait > initialBalance;
-
-      // If webhook didn't credit, manually credit via fallback endpoint
-      if (!walletCredited && paymentIntentId && user) {
-        console.log('Webhook did not credit wallet, using manual fallback...');
-        try {
-          const manualCreditUrl = getNetlifyFunctionUrl('manual-credit-wallet');
-          const manualCreditResponse = await fetch(manualCreditUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              payment_intent_id: paymentIntentId,
-              user_id: user.id,
-            }),
-          });
-
-          if (manualCreditResponse.ok) {
-            const manualCreditData = await manualCreditResponse.json();
-            console.log('Manual credit successful:', manualCreditData);
-            walletCredited = true;
-          } else {
-            const errorText = await manualCreditResponse.text();
-            console.error('Manual credit failed:', errorText);
-          }
-        } catch (manualCreditError) {
-          console.error('Error calling manual credit:', manualCreditError);
-        }
-      }
-      
-      // Final refresh
+      // Refresh wallet balance
       await refreshWalletBalance();
       
       // Also trigger wallet balance change event for other components
@@ -198,9 +104,7 @@ const PaymentForm: React.FC<{ depositAmount: number; onSuccess: () => void; onCl
 
       toast({
         title: "Deposit Successful",
-        description: walletCredited 
-          ? `${formatCurrency(depositAmount)} has been credited to your wallet.`
-          : `${formatCurrency(depositAmount)} payment processed. Wallet will be updated shortly.`,
+        description: `${formatCurrency(depositAmount)} payment processed. Your wallet will be updated shortly via webhook.`,
         variant: "default",
       });
 
@@ -430,10 +334,11 @@ export const DepositModal: React.FC<DepositModalProps> = ({ isOpen, onClose, onS
             </>
           ) : (
             <>
-              {stripePromise && options && (
+              {stripePromise && options && clientSecret && (
                 <Elements stripe={stripePromise} options={options}>
                   <PaymentForm 
-                    depositAmount={depositAmountNum} 
+                    depositAmount={depositAmountNum}
+                    clientSecret={clientSecret}
                     onSuccess={() => {
                       onSuccess?.();
                       onClose();
