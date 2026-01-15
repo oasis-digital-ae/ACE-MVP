@@ -39,16 +39,16 @@ interface DepositModalProps {
 }
 
 // Payment form component
-const PaymentForm: React.FC<{ 
-  depositAmount: number; 
+const PaymentForm: React.FC<{
+  depositAmount: number;
   clientSecret: string;
-  onSuccess: () => void; 
-  onClose: () => void 
-}> = ({ 
-  depositAmount, 
+  onSuccess: () => void;
+  onClose: () => void
+}> = ({
+  depositAmount,
   clientSecret,
-  onSuccess, 
-  onClose 
+  onSuccess,
+  onClose
 }) => {
   const stripe = useStripe();
   const elements = useElements();
@@ -95,10 +95,10 @@ const PaymentForm: React.FC<{
       // Payment succeeded - webhook will credit wallet automatically
       // Wait a moment for webhook to process, then refresh balance
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
+
       // Refresh wallet balance
       await refreshWalletBalance();
-      
+
       // Also trigger wallet balance change event for other components
       window.dispatchEvent(new CustomEvent('wallet-balance-changed'));
 
@@ -121,7 +121,7 @@ const PaymentForm: React.FC<{
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <PaymentElement />
-      
+
       {error && (
         <div className="flex items-center gap-2 text-red-400 text-sm bg-red-900/20 border border-red-700/50 rounded p-3">
           <AlertCircle className="w-4 h-4" />
@@ -268,7 +268,7 @@ export const DepositModal: React.FC<DepositModalProps> = ({ isOpen, onClose, onS
             Deposit Funds
           </DialogTitle>
           <DialogDescription className="text-center text-gray-400">
-            Add funds to your wallet to start trading. A 5% platform fee applies to all deposits.
+            Add funds to your wallet to start trading. A 5% Processing fee applies to all deposits.
           </DialogDescription>
         </DialogHeader>
 
@@ -303,7 +303,7 @@ export const DepositModal: React.FC<DepositModalProps> = ({ isOpen, onClose, onS
                       <span className="text-white font-medium">{formatCurrency(depositAmountNum)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-300">Platform Fee (5%):</span>
+                      <span className="text-gray-300">Processing fee (5%):</span>
                       <span className="text-gray-400">{formatCurrency(platformFee)}</span>
                     </div>
                     <div className="border-t border-gray-600 pt-2 flex justify-between">
@@ -336,13 +336,13 @@ export const DepositModal: React.FC<DepositModalProps> = ({ isOpen, onClose, onS
             <>
               {stripePromise && options && clientSecret && (
                 <Elements stripe={stripePromise} options={options}>
-                  <PaymentForm 
+                  <PaymentForm
                     depositAmount={depositAmountNum}
                     clientSecret={clientSecret}
                     onSuccess={() => {
                       onSuccess?.();
                       onClose();
-                    }} 
+                    }}
                     onClose={onClose}
                   />
                 </Elements>
