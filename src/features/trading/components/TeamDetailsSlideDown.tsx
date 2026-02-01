@@ -300,18 +300,28 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
       const teamsMap = new Map((teams || []).map(t => [t.id, t]));
       
       // Get the selected team's info
-      const selectedTeam = teamsMap.get(teamId);
-        // Filter upcoming and live matches for this team
+      const selectedTeam = teamsMap.get(teamId);      // Filter upcoming and live matches for this team
       const now = new Date();
       const upcomingFixtures = (fixturesData || [])
         .filter(fixture => {
           const kickoffDate = new Date(fixture.kickoff_at);
-          // Include scheduled (upcoming) and closed (live) matches, exclude applied (finished)
-          const isUpcomingOrLive = (kickoffDate > now && fixture.status === 'scheduled') || fixture.status === 'closed';
           const isTeamInFixture = fixture.home_team_id === teamId || fixture.away_team_id === teamId;
-          return isUpcomingOrLive && isTeamInFixture;
+          
+          // Include:
+          // 1. Scheduled matches that haven't kicked off yet
+          // 2. Live matches (status = 'closed') regardless of kickoff time
+          // Exclude finished matches (status = 'applied')
+          const isRelevant = 
+            (fixture.status === 'scheduled' && kickoffDate > now) || 
+            (fixture.status === 'closed');
+            return isRelevant && isTeamInFixture;
         })
-        .sort((a, b) => new Date(a.kickoff_at).getTime() - new Date(b.kickoff_at).getTime());      // Process upcoming fixtures
+        .sort((a, b) => {
+          // Sort live matches first, then upcoming by kickoff time
+          if (a.status === 'closed' && b.status !== 'closed') return -1;
+          if (a.status !== 'closed' && b.status === 'closed') return 1;
+          return new Date(a.kickoff_at).getTime() - new Date(b.kickoff_at).getTime();
+        });// Process upcoming fixtures
       const processedUpcoming = upcomingFixtures.map(fixture => {
         const isHome = fixture.home_team_id === teamId;
         const opponentId = isHome ? fixture.away_team_id : fixture.home_team_id;
@@ -746,22 +756,25 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
                                     minute: '2-digit',
                                     hour12: true,
                                     timeZone: 'Asia/Dubai'
-                                  });
-                                  const formattedDateTime = `${datePart}, ${timePart}`;                                  
+                                  });                                  const formattedDateTime = `${datePart}, ${timePart}`;                                  
                                   return (
                                     <tr key={index} className={`border-b border-gray-800/30 ${
-                                      match.status === 'closed' ? 'bg-red-500/5 border-l-4 border-l-red-500' : ''
+                                      match.status === 'closed' ? 'bg-red-500/5 border-2 border-red-500' : ''
                                     }`}>
                                       <td className="px-3 py-2.5" style={{ textAlign: 'left' }}>
                                         <div className="flex items-center gap-2">
                                           <div className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
-                                            match.isHome ? 'bg-[#10B981]/20 text-[#10B981]' : 'bg-[#F59E0B]/20 text-[#F59E0B]'
+                                            match.status === 'closed' 
+                                              ? 'bg-yellow-500/20 text-yellow-500' 
+                                              : match.isHome 
+                                                ? 'bg-[#10B981]/20 text-[#10B981]' 
+                                                : 'bg-[#F59E0B]/20 text-[#F59E0B]'
                                           }`}>
-                                            {match.isHome ? 'H' : 'A'}
+                                            {match.status === 'closed' ? match.matchday : (match.isHome ? 'H' : 'A')}
                                           </div>
                                           <span className="text-xs font-medium">Match vs {match.opponent}</span>
                                           {match.status === 'closed' && (
-                                            <Badge variant="outline" className="ml-2 text-red-400 border-red-400/50 text-[10px] px-1.5 py-0 animate-pulse">
+                                            <Badge variant="outline" className="ml-2 text-yellow-400 border-yellow-400/50 text-[10px] px-1.5 py-0 animate-pulse">
                                               LIVE
                                             </Badge>
                                           )}
@@ -818,18 +831,22 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
                               });
                               const formattedDateTime = `${datePart}, ${timePart}`;                              return (                                <div
                                   key={index}
-                                  className={`bg-gray-800/40 border border-gray-700/30 rounded-lg p-2.5 sm:p-3 touch-manipulation ${
-                                    match.status === 'closed' ? 'border-l-4 border-l-red-500 bg-red-500/5' : ''
+                                  className={`rounded-lg p-2.5 sm:p-3 touch-manipulation ${
+                                    match.status === 'closed' 
+                                      ? 'bg-red-500/5 border-2 border-red-500' 
+                                      : 'bg-gray-800/40 border border-gray-700/30'
                                   }`}
                                 >{/* Header Row: Badge + Opponent + Date */}
                                   <div className="flex items-start justify-between gap-2 mb-2">
                                     <div className="flex items-center gap-2 flex-1 min-w-0">
                                       <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
-                                        match.isHome 
-                                          ? 'bg-[#10B981]/20 text-[#10B981] border border-[#10B981]/30' 
-                                          : 'bg-[#F59E0B]/20 text-[#F59E0B] border border-[#F59E0B]/30'
+                                        match.status === 'closed'
+                                          ? 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30'
+                                          : match.isHome 
+                                            ? 'bg-[#10B981]/20 text-[#10B981] border border-[#10B981]/30' 
+                                            : 'bg-[#F59E0B]/20 text-[#F59E0B] border border-[#F59E0B]/30'
                                       }`}>
-                                        {match.isHome ? 'H' : 'A'}
+                                        {match.status === 'closed' ? match.matchday : (match.isHome ? 'H' : 'A')}
                                       </div>
                                       <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2">
@@ -837,7 +854,7 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
                                             Match vs {match.opponent}
                                           </p>
                                           {match.status === 'closed' && (
-                                            <Badge variant="outline" className="text-red-400 border-red-400/50 text-[9px] px-1 py-0 animate-pulse">
+                                            <Badge variant="outline" className="text-yellow-400 border-yellow-400/50 text-[9px] px-1 py-0 animate-pulse">
                                               LIVE
                                             </Badge>
                                           )}
