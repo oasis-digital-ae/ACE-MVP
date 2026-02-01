@@ -58,29 +58,35 @@ const MatchResultsPage: React.FC = () => {
   };  const filteredFixtures = fixtures.filter(fixture => {
     if (filter === 'finished') return fixture.status === 'applied';
     if (filter === 'upcoming') return fixture.status === 'scheduled' || fixture.status === 'closed';
+    if (filter === 'all') return true; // Show all fixtures including live matches
     return true;
   });
-
   // Group fixtures by date
   const groupedFixtures = useMemo(() => {
     const groups: Record<string, DatabaseFixtureWithTeams[]> = {};
+    const liveMatchesGroup: DatabaseFixtureWithTeams[] = [];
     
-    // Group fixtures by date first
+    // Separate live matches and group other fixtures by date
     filteredFixtures.forEach(fixture => {
-      const date = new Date(fixture.kickoff_at);
-      const dateKey = date.toLocaleDateString('en-US', { 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-      });
-      
-      if (!groups[dateKey]) {
-        groups[dateKey] = [];
+      if (fixture.status === 'closed') {
+        // Add to live matches group
+        liveMatchesGroup.push(fixture);
+      } else {
+        // Group by date for non-live matches
+        const date = new Date(fixture.kickoff_at);
+        const dateKey = date.toLocaleDateString('en-US', { 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric' 
+        });
+        
+        if (!groups[dateKey]) {
+          groups[dateKey] = [];
+        }
+        groups[dateKey].push(fixture);
       }
-      groups[dateKey].push(fixture);
     });
-    
-    // Sort matches within each date group
+      // Sort matches within each date group
     Object.keys(groups).forEach(dateKey => {
       groups[dateKey].sort((a, b) => {
         const aTime = new Date(a.kickoff_at).getTime();
@@ -110,6 +116,15 @@ const MatchResultsPage: React.FC = () => {
     
     // Build sorted groups object
     const sortedGroups: Record<string, DatabaseFixtureWithTeams[]> = {};
+    
+    // Add live matches first if any exist
+    if (liveMatchesGroup.length > 0) {
+      sortedGroups['__LIVE__'] = liveMatchesGroup.sort((a, b) => 
+        new Date(a.kickoff_at).getTime() - new Date(b.kickoff_at).getTime()
+      );
+    }
+    
+    // Add other date groups
     groupEntries.forEach(([dateKey, fixtures]) => {
       sortedGroups[dateKey] = fixtures;
     });
@@ -315,37 +330,48 @@ const MatchResultsPage: React.FC = () => {
             </p>
           </CardContent>
         </Card>
-      ) : (
-        <div className="space-y-6">
+      ) : (        <div className="space-y-6">
           {Object.entries(groupedFixtures).map(([dateKey, dateFixtures]) => (
             <div key={dateKey} className="space-y-3">
               {/* Date Header */}
               <div className="flex items-center gap-3">
                 <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wide">
-                  {formatDateHeader(dateFixtures[0].kickoff_at)}
+                  {dateKey === '__LIVE__' ? (
+                    <span className="flex items-center gap-2">
+                      <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                      Live Matches
+                    </span>
+                  ) : (
+                    formatDateHeader(dateFixtures[0].kickoff_at)
+                  )}
                 </h2>
                 <div className="flex-1 h-px bg-gray-700"></div>
                 <span className="text-xs text-gray-500">
                   {dateFixtures.length} {dateFixtures.length === 1 ? 'match' : 'matches'}
                 </span>
-              </div>
-
-              {/* Fixtures for this date */}
+              </div>              {/* Fixtures for this date */}
               <Card className="trading-card overflow-hidden">
                 <CardContent className="p-0">
-                  <div className="divide-y divide-gray-700/50">
-                    {dateFixtures.map((fixture, idx) => (                      <div 
+                  {(() => {
+                    // For live matches group, all are live
+                    // For other groups, separate live and non-live (shouldn't have live in other groups now)
+                    const isLiveGroup = dateKey === '__LIVE__';
+                    const liveMatches = isLiveGroup ? dateFixtures : dateFixtures.filter(f => f.status === 'closed');
+                    const otherMatches = isLiveGroup ? [] : dateFixtures.filter(f => f.status !== 'closed');
+                    
+                    const renderFixture = (fixture: DatabaseFixtureWithTeams, idx: number) => (
+                      <div 
                         key={fixture.id} 
-                        className={`p-3 sm:p-4 hover:bg-gray-800/30 transition-colors ${
-                          fixture.status === 'closed' ? 'bg-red-500/5 border-l-4 border-l-red-500' : ''
-                        }`}
+                        className="p-3 sm:p-4 hover:bg-gray-800/30 transition-colors"
                       >
                         {/* Mobile Layout */}
                         <div className="md:hidden space-y-3">
                           {/* Header: Matchday & Status */}
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <div className="text-xs text-gray-500 font-mono">
+                              <div className={`text-xs font-mono font-bold ${
+                                fixture.status === 'closed' ? 'text-yellow-500' : 'text-gray-500'
+                              }`}>
                                 MD{fixture.matchday}
                               </div>
                               {getStatusBadge(fixture.status)}
@@ -383,7 +409,7 @@ const MatchResultsPage: React.FC = () => {
                                   {fixture.home_score}
                                 </span>
                               ) : (
-                                fixture.home_team_id && (
+                                fixture.home_team_id && fixture.status !== 'closed' && (
                                   <Button
                                     onClick={() => handlePurchaseClick(
                                       fixture.home_team_id,
@@ -433,12 +459,12 @@ const MatchResultsPage: React.FC = () => {
 
                             {/* Away Team Row */}
                             <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2 flex-1 min-w-0">
-                                <TeamLogo 
-                                  teamName={fixture.away_team?.name || 'Away Team'} 
-                                  externalId={fixture.away_team?.external_id ? parseInt(fixture.away_team.external_id) : undefined}
-                                  size="sm" 
-                                />
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <TeamLogo 
+                                teamName={fixture.away_team?.name || 'Away Team'} 
+                                externalId={fixture.away_team?.external_id ? parseInt(fixture.away_team.external_id) : undefined}
+                                size="sm" 
+/>
                                 <ClickableTeamName
                                   teamName={fixture.away_team?.name || 'Away Team'}
                                   teamId={fixture.away_team_id}
@@ -455,7 +481,7 @@ const MatchResultsPage: React.FC = () => {
                                   {fixture.away_score}
                                 </span>
                               ) : (
-                                fixture.away_team_id && (
+                                fixture.away_team_id && fixture.status !== 'closed' && (
                                   <Button
                                     onClick={() => handlePurchaseClick(
                                       fixture.away_team_id,
@@ -477,7 +503,9 @@ const MatchResultsPage: React.FC = () => {
                         <div className="hidden md:grid grid-cols-[140px_50px_1fr_32px_80px_32px_1fr_50px_120px] items-center gap-2">
                           {/* Left: Matchday & Status */}
                           <div className="flex items-center gap-3">
-                            <div className="text-xs text-gray-500 font-mono">
+                            <div className={`text-xs font-mono font-bold ${
+                              fixture.status === 'closed' ? 'text-yellow-500' : 'text-gray-500'
+                            }`}>
                               MD{fixture.matchday}
                             </div>
                             {getStatusBadge(fixture.status)}
@@ -581,8 +609,8 @@ const MatchResultsPage: React.FC = () => {
                             )}
                           </div>
 
-                          {/* Right: Buy Window Info (for scheduled matches) */}
-                          <div className="min-w-[120px] text-right">
+                          {/* Right: Close Time (Only for scheduled) */}
+                          <div className="flex justify-end">
                             {fixture.status === 'scheduled' && fixture.buy_close_at && (
                               <div className="text-xs text-gray-500">
                                 Closes {formatTime(fixture.buy_close_at)}
@@ -591,8 +619,30 @@ const MatchResultsPage: React.FC = () => {
                           </div>
                         </div>
                       </div>
-                    ))}
-                  </div>
+                    );
+                    
+                    return (
+                      <>
+                        {/* Live matches group with red border */}
+                        {liveMatches.length > 0 && (
+                          <div className="border-2 border-red-500 bg-red-500/5">
+                            <div className="divide-y divide-gray-700/50">
+                              {liveMatches.map(renderFixture)}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Other matches without border */}
+                        {otherMatches.length > 0 && (
+                          <div className={liveMatches.length > 0 ? "border-t border-gray-700/50" : ""}>
+                            <div className="divide-y divide-gray-700/50">
+                              {otherMatches.map(renderFixture)}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </CardContent>
               </Card>
             </div>
