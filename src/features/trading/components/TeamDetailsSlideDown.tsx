@@ -352,15 +352,13 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
       loadMatchesData();
       loadUpcomingMatches();
     }
-  }, [isOpen, teamId, userId, loadMatchesData, loadUpcomingMatches]);
-  // Expose refresh function for external components to call
+  }, [isOpen, teamId, userId, loadMatchesData, loadUpcomingMatches]);  // Expose refresh function for external components to call
   useEffect(() => {
     if (teamId) {
       const refreshKey = `refreshTeamDetails_${teamId}`;
       (window as any)[refreshKey] = async () => {
         if (isOpen) {
           await loadMatchesData();
-          await loadUpcomingMatches();
           await loadUpcomingMatches();
           await loadChartData();
         }
@@ -369,7 +367,6 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
         delete (window as any)[refreshKey];
       };
     }
-  }, [teamId, isOpen, loadMatchesData, loadUpcomingMatches, loadChartData]);
   }, [teamId, isOpen, loadMatchesData, loadUpcomingMatches, loadChartData]);
   // Listen for global refresh signal
   useEffect(() => {
