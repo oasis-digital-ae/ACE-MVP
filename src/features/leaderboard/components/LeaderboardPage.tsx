@@ -4,6 +4,9 @@ import { formatPercent } from '@/shared/lib/formatters';
 import { ArrowUpDown, ArrowUp, ArrowDown, Trophy } from 'lucide-react';
 import { supabase } from '@/shared/lib/supabase';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
+import { LeaderboardInfoWidget } from './LeaderboardInfoWidget';
+import { LeaderboardInfoWidgetCompact } from './LeaderboardInfoWidgetCompact';
+import { LEADERBOARD_WIDGET_CONFIG } from '../config/leaderboard-widget.config';
 
 interface LeaderboardEntry {
   rank: number;
@@ -23,13 +26,65 @@ const LeaderboardPage: React.FC = () => {
   useEffect(() => {
     loadLeaderboardData();
   }, [user]);
-
   const loadLeaderboardData = async () => {
     try {
       setLoading(true);
       
-      // TODO: Replace with actual backend query
-      // For now, using mock data structure
+      // Try to fetch real data from weekly_leaderboard table
+      const { data: leaderboardRecords, error: leaderboardError } = await supabase
+        .from('weekly_leaderboard')
+        .select(`
+          rank,
+          user_id,
+          weekly_return,
+          profiles!inner(full_name)
+        `)
+        .eq('is_latest', true)
+        .order('rank', { ascending: true });
+
+      if (leaderboardError) {
+        console.error('Error fetching leaderboard:', leaderboardError);
+        throw leaderboardError;
+      }
+
+      // If we have real data, use it
+      if (leaderboardRecords && leaderboardRecords.length > 0) {
+        const transformedData: LeaderboardEntry[] = leaderboardRecords.map((record: any) => ({
+          rank: record.rank,
+          userId: record.user_id,
+          userName: record.profiles?.full_name || 'Unknown User',
+          weeklyReturn: parseFloat(record.weekly_return) * 100, // Convert to percentage
+          isCurrentUser: user?.id === record.user_id
+        }));
+
+        setLeaderboardData(transformedData);
+      } else {
+        // Fallback to mock data if no real data exists yet
+        console.log('No leaderboard data found, using mock data');
+        const mockData: LeaderboardEntry[] = [
+          { rank: 1, userId: '1', userName: 'Alex Johnson', weeklyReturn: 12.45, isCurrentUser: false },
+          { rank: 2, userId: '2', userName: 'Sam Williams', weeklyReturn: 8.21, isCurrentUser: false },
+          { rank: 3, userId: '3', userName: 'Jordan Lee', weeklyReturn: 5.02, isCurrentUser: false },
+          { rank: 4, userId: '4', userName: 'Chris Patel', weeklyReturn: 3.11, isCurrentUser: false },
+          { rank: 5, userId: '5', userName: 'Pat Morgan', weeklyReturn: 1.04, isCurrentUser: false },
+          { rank: 6, userId: '6', userName: 'Taylor Swift', weeklyReturn: 0.00, isCurrentUser: false },
+          { rank: 7, userId: '7', userName: 'Morgan Freeman', weeklyReturn: 0.00, isCurrentUser: false },
+          { rank: 8, userId: '8', userName: 'Casey Brown', weeklyReturn: -1.23, isCurrentUser: false },
+          { rank: 9, userId: '9', userName: 'Drew Davis', weeklyReturn: -2.45, isCurrentUser: false },
+          { rank: 10, userId: '10', userName: 'Jamie Wilson', weeklyReturn: -4.67, isCurrentUser: false },
+        ];
+
+        const dataWithCurrentUser = mockData.map(entry => ({
+          ...entry,
+          isCurrentUser: user?.id === entry.userId
+        }));
+
+        setLeaderboardData(dataWithCurrentUser);
+      }
+    } catch (error) {
+      console.error('Error loading leaderboard data:', error);
+      
+      // Fallback to mock data on error
       const mockData: LeaderboardEntry[] = [
         { rank: 1, userId: '1', userName: 'Alex Johnson', weeklyReturn: 12.45, isCurrentUser: false },
         { rank: 2, userId: '2', userName: 'Sam Williams', weeklyReturn: 8.21, isCurrentUser: false },
@@ -43,15 +98,12 @@ const LeaderboardPage: React.FC = () => {
         { rank: 10, userId: '10', userName: 'Jamie Wilson', weeklyReturn: -4.67, isCurrentUser: false },
       ];
 
-      // Mark current user
       const dataWithCurrentUser = mockData.map(entry => ({
         ...entry,
         isCurrentUser: user?.id === entry.userId
       }));
 
       setLeaderboardData(dataWithCurrentUser);
-    } catch (error) {
-      console.error('Error loading leaderboard data:', error);
     } finally {
       setLoading(false);
     }
@@ -301,10 +353,18 @@ const LeaderboardPage: React.FC = () => {
                   </div>
                 </div>
               ))}
-            </div>
-          </div>
+            </div>          </div>
         </CardContent>
       </Card>
+
+      {/* Info Widget - Can be easily removed via LEADERBOARD_WIDGET_CONFIG */}
+      {LEADERBOARD_WIDGET_CONFIG.enabled && (
+        LEADERBOARD_WIDGET_CONFIG.variant === 'full' ? (
+          <LeaderboardInfoWidget position={LEADERBOARD_WIDGET_CONFIG.position} />
+        ) : (
+          <LeaderboardInfoWidgetCompact />
+        )
+      )}
     </div>
   );
 };
