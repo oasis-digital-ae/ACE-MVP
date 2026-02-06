@@ -247,13 +247,11 @@ const LeaderboardPage: React.FC = () => {
                 ))}
               </tbody>
             </table>
-          </div>
-
-          {/* Mobile Table Layout - Matching Marketplace Style */}
+          </div>          {/* Mobile Table Layout - Matching Marketplace Style */}
           <div className="md:hidden -mx-3 sm:-mx-4">
             {/* Mobile Table Header */}
             <div className="sticky top-0 z-10 bg-gray-900/95 backdrop-blur-sm border-b border-gray-700/50">
-              <div className="grid grid-cols-[60px_1fr_100px] gap-1.5 px-3 py-2 text-[10px] font-semibold text-gray-400 items-center">
+              <div className="grid grid-cols-[70px_1fr_110px] gap-2 px-4 py-2 text-[10px] font-semibold text-gray-400 items-center">
                 <button
                   onClick={() => {
                     if (sortField === 'rank') {
@@ -308,13 +306,11 @@ const LeaderboardPage: React.FC = () => {
                   )}
                 </button>
               </div>
-            </div>
-
-            {/* Mobile Table Rows */}
+            </div>            {/* Mobile Table Rows */}
             <div className="space-y-0">
               {sortedData.map((entry) => (
                 <div key={entry.userId} className="border-b border-gray-700/30 last:border-b-0">
-                  <div className={`grid grid-cols-[60px_1fr_100px] gap-1.5 px-3 py-2 items-center active:bg-gray-700/30 transition-colors touch-manipulation ${
+                  <div className={`grid grid-cols-[70px_1fr_110px] gap-2 px-4 py-2.5 items-center active:bg-gray-700/30 transition-colors touch-manipulation ${
                     entry.isCurrentUser ? 'bg-trading-primary/10' : ''
                   }`}>
                     {/* Rank */}
@@ -330,10 +326,8 @@ const LeaderboardPage: React.FC = () => {
                           <span className="ml-1 text-[9px] text-gray-400">(You)</span>
                         )}
                       </span>
-                    </div>
-
-                    {/* Return */}
-                    <div className={`text-right font-mono font-semibold text-[11px] flex-shrink-0 ${
+                    </div>                    {/* Return */}
+                    <div className={`text-right font-mono font-semibold text-[11px] ${
                       entry.weeklyReturn === 0 
                         ? 'text-gray-400' 
                         : entry.weeklyReturn > 0 
