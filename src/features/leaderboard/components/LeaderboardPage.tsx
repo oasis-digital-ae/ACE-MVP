@@ -29,30 +29,22 @@ const LeaderboardPage: React.FC = () => {
   const loadLeaderboardData = async () => {
     try {
       setLoading(true);
-      
-      // Try to fetch real data from weekly_leaderboard table
+        // Try to fetch real data from weekly_leaderboard table
       const { data: leaderboardRecords, error: leaderboardError } = await supabase
         .from('weekly_leaderboard')
-        .select(`
-          rank,
-          user_id,
-          weekly_return,
-          profiles!inner(full_name)
-        `)
+        .select('rank, user_id, weekly_return')
         .eq('is_latest', true)
         .order('rank', { ascending: true });
 
       if (leaderboardError) {
         console.error('Error fetching leaderboard:', leaderboardError);
         throw leaderboardError;
-      }
-
-      // If we have real data, use it
+      }      // If we have real data, use it
       if (leaderboardRecords && leaderboardRecords.length > 0) {
         const transformedData: LeaderboardEntry[] = leaderboardRecords.map((record: any) => ({
           rank: record.rank,
           userId: record.user_id,
-          userName: record.profiles?.full_name || 'Unknown User',
+          userName: `User ${record.user_id.substring(0, 8)}`, // Temporary until profiles table exists
           weeklyReturn: parseFloat(record.weekly_return) * 100, // Convert to percentage
           isCurrentUser: user?.id === record.user_id
         }));
