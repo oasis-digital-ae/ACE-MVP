@@ -8,6 +8,7 @@ import MatchResultsPage from '../../trading/components/MatchResultsPage';
 import StandingsPage from '../../trading/components/StandingsPage';
 import SeasonSimulation from '../../trading/components/SeasonSimulation';
 import { AdminDashboard } from '../../admin/components/AdminDashboard';
+import LeaderboardPage from '../../leaderboard/components/LeaderboardPage';
 
 const AppLayout: React.FC = () => {
   const { currentPage, setCurrentPage } = useAppContext();
@@ -30,6 +31,8 @@ const AppLayout: React.FC = () => {
         return <ClubValuesPage />;
       case 'portfolio':
         return <PortfolioPage />;
+      case 'leaderboard':
+        return <LeaderboardPage />;
       case 'match-results':
         return <MatchResultsPage />;
       case 'standings':
