@@ -20,7 +20,11 @@ interface AdminLeaderboardRow {
   rank: number;
   userId: string;
   username: string;
+  startWalletValue: number;
+  startPortfolioValue: number;
   startAccountValue: number;
+  endWalletValue: number;
+  endPortfolioValue: number;
   endAccountValue: number;
   totalDeposits: number;
   weeklyReturn: number;
@@ -96,11 +100,10 @@ export const AdminWeeklyLeaderboardPanel: React.FC = () => {
     const loadLeaderboard = async () => {
       setLoading(true);
 
-      try {
-        // Read directly from weekly_leaderboard table
+      try {        // Read directly from weekly_leaderboard table
         const { data: leaderboardData, error: leaderboardError } = await supabase
           .from('weekly_leaderboard')
-          .select('user_id, rank, start_account_value, end_account_value, deposits_week, weekly_return, week_start, week_end')
+          .select('user_id, rank, start_wallet_value, start_portfolio_value, start_account_value, end_wallet_value, end_portfolio_value, end_account_value, deposits_week, weekly_return, week_start, week_end')
           .eq('week_start', selectedWeek.weekStart)
           .eq('week_end', selectedWeek.weekEnd)
           .order('rank', { ascending: true });
@@ -124,14 +127,16 @@ export const AdminWeeklyLeaderboardPanel: React.FC = () => {
               ? p.full_name.trim()
               : [p.first_name, p.last_name].filter(Boolean).join(' ').trim() || p.username || 'Unknown User'
           ])
-        );
-
-        // Map the data
+        );        // Map the data
         const mappedData = leaderboardData.map(row => ({
           rank: row.rank,
           userId: row.user_id,
           username: userMap.get(row.user_id) || 'Unknown User',
+          startWalletValue: row.start_wallet_value,
+          startPortfolioValue: row.start_portfolio_value,
           startAccountValue: row.start_account_value,
+          endWalletValue: row.end_wallet_value,
+          endPortfolioValue: row.end_portfolio_value,
           endAccountValue: row.end_account_value,
           totalDeposits: row.deposits_week,
           weeklyReturn: Number(row.weekly_return)
@@ -241,8 +246,7 @@ export const AdminWeeklyLeaderboardPanel: React.FC = () => {
           <Skeleton className="h-48 w-full" />
         ) : (
           <div className="rounded-md border">
-            <Table>
-              <TableHeader>
+            <Table>              <TableHeader>
                 <TableRow>
                   <TableHead>
                     <button onClick={() => setSortField('rank')} className="flex items-center gap-1">
@@ -254,32 +258,46 @@ export const AdminWeeklyLeaderboardPanel: React.FC = () => {
                       User <SortIcon field="username" />
                     </button>
                   </TableHead>
-                  <TableHead className="text-right">Start Account Value of the Week</TableHead>
-                  <TableHead className="text-right">End Account Value of the Week</TableHead>
-                  <TableHead className="text-right">Total Deposits during the Week</TableHead>
-                  <TableHead className="text-right">
+                  <TableHead className="text-center">Start Wallet Value</TableHead>
+                  <TableHead className="text-center">Start Portfolio Value</TableHead>
+                  <TableHead className="text-center">Start Account Value</TableHead>
+                  <TableHead className="text-center">End Wallet Value</TableHead>
+                  <TableHead className="text-center">End Portfolio Value</TableHead>
+                  <TableHead className="text-center">End Account Value</TableHead>
+                  <TableHead className="text-center">Total Deposits</TableHead>
+                  <TableHead className="text-center">
                     <button onClick={() => setSortField('weeklyReturn')} className="flex items-center gap-1 ml-auto">
                       % Weekly Return <SortIcon field="weeklyReturn" />
                     </button>
                   </TableHead>
                 </TableRow>
-              </TableHeader>
-
-              <TableBody>
+              </TableHeader>              <TableBody>
                 {sortedData.map(row => (
                   <TableRow key={row.userId}>
                     <TableCell>{row.rank}</TableCell>
                     <TableCell className="font-medium">{row.username}</TableCell>
-                    <TableCell className="text-right font-mono">
+                    <TableCell className="text-center font-mono">
+                      {formatCurrency(row.startWalletValue / 100)}
+                    </TableCell>
+                    <TableCell className="text-center font-mono">
+                      {formatCurrency(row.startPortfolioValue / 100)}
+                    </TableCell>
+                    <TableCell className="text-center font-mono">
                       {formatCurrency(row.startAccountValue / 100)}
                     </TableCell>
-                    <TableCell className="text-right font-mono">
+                    <TableCell className="text-center font-mono">
+                      {formatCurrency(row.endWalletValue / 100)}
+                    </TableCell>
+                    <TableCell className="text-center font-mono">
+                      {formatCurrency(row.endPortfolioValue / 100)}
+                    </TableCell>
+                    <TableCell className="text-center font-mono">
                       {formatCurrency(row.endAccountValue / 100)}
                     </TableCell>
-                    <TableCell className="text-right font-mono">
+                    <TableCell className="text-center font-mono">
                       {formatCurrency(row.totalDeposits / 100)}
                     </TableCell>
-                    <TableCell className={`text-right font-mono font-semibold ${
+                    <TableCell className={`text-center font-mono font-semibold ${
                       row.weeklyReturn >= 0 ? 'text-green-600' : 'text-red-600'
                     }`}>
                       {row.weeklyReturn >= 0 ? '+' : ''}
