@@ -55,7 +55,6 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
     const allPages = [
     { id: 'marketplace', label: 'Marketplace', icon: TrendingUp },
     { id: 'portfolio', label: 'Portfolio', icon: Briefcase },
-    { id: 'leaderboard', label: 'Leaderboard', icon: Trophy },
     { id: 'match-results', label: 'Fixtures', icon: Calendar },
     { id: 'standings', label: 'League Table', icon: BarChart3 },
     { id: 'season-simulation', label: 'Simulation', icon: Settings },
