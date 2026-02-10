@@ -55,6 +55,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
   const [netWorthDialogOpen, setNetWorthDialogOpen] = useState(false);
+  const { totalMarketValue = 0, totalDeposits = 0 } = useContext(AppContext) || {};
 
   const allPages = [
     { id: 'marketplace', label: 'Marketplace', icon: TrendingUp },
@@ -87,6 +88,14 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
     }
   };
 
+  // Calculate Net Worth values
+  const portfolioValue = totalMarketValue || 0;
+  const netWorth = walletBalance + portfolioValue;
+  const pnl = netWorth - totalDeposits;
+  const isProfit = pnl > 0;
+  const isLoss = pnl < 0;
+  const isBreakEven = pnl === 0;
+  
   return (
     <>
       <nav className="bg-gradient-primary border-b border-trading-primary/20 backdrop-blur-md sticky top-0 z-50 w-full">
@@ -192,7 +201,25 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
                         >
                           <LogOut className="w-4 h-4 mr-2" />
                           Sign Out
+                        </DropdownMenuItem>                        <DropdownMenuItem
+                          onClick={() => setNetWorthDialogOpen(true)}
+                          className="cursor-pointer hover:bg-gray-700/50"
+                        >
+                          <TrendingUp
+                            className={`w-4 h-4 mr-2 ${
+                              isProfit ? 'text-green-400' : isLoss ? 'text-red-400' : 'text-gray-400'
+                            }`}
+                          />
+                          <span className="flex-1">Net Worth</span>
+                          <span
+                            className={`font-semibold ${
+                              isProfit ? 'text-green-400' : isLoss ? 'text-red-400' : 'text-white'
+                            }`}
+                          >
+                            {formatCurrency(netWorth)}
+                          </span>
                         </DropdownMenuItem>
+
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
@@ -269,6 +296,19 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
                       onClick={() => setNetWorthDialogOpen(true)}
                       className="cursor-pointer hover:bg-gray-700/50"
                     >
+                      <TrendingUp
+                        className={`w-4 h-4 mr-2 ${
+                          isProfit ? 'text-green-400' : isLoss ? 'text-red-400' : 'text-gray-400'
+                        }`}
+                      />
+                      <span className="flex-1">Net Worth</span>
+                      <span
+                        className={`font-semibold ${
+                          isProfit ? 'text-green-400' : isLoss ? 'text-red-400' : 'text-white'
+                        }`}
+                      >
+                        {formatCurrency(netWorth)}
+                      </span>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -350,6 +390,62 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Net Worth Dialog */}
+        <AlertDialog open={netWorthDialogOpen} onOpenChange={setNetWorthDialogOpen}>
+          <AlertDialogContent className="bg-gray-800 border-gray-700 text-white">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-lg font-bold flex items-center gap-2">
+                <Briefcase className="w-5 h-5 text-trading-primary" />
+                Net Worth Breakdown
+              </AlertDialogTitle>
+            </AlertDialogHeader>            <div className="space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-400">Wallet Balance</span>
+                <span className="text-white">{formatCurrency(walletBalance)}</span>
+              </div>
+
+              <div className="flex justify-between">
+                <span className="text-gray-400">Portfolio Value</span>
+                <span className="text-white">{formatCurrency(portfolioValue)}</span>
+              </div>
+
+              <div className="flex justify-between">
+                <span className="text-gray-400">Total Deposited</span>
+                <span className="text-white">{formatCurrency(totalDeposits)}</span>
+              </div>
+
+              <div className="border-t border-gray-700 pt-3 flex justify-between font-semibold">
+                <span>Net Worth</span>
+                <span className={
+                  isProfit ? 'text-green-400' : isLoss ? 'text-red-400' : 'text-white'
+                }>
+                  {formatCurrency(netWorth)}
+                </span>
+              </div>
+
+              <div className="flex justify-between">
+                <span className="text-gray-400">Overall P&L</span>
+                <span className={
+                  isProfit ? 'text-green-400' : isLoss ? 'text-red-400' : 'text-white'
+                }>
+                  {isProfit ? '+' : isLoss ? '' : ''}
+                  {formatCurrency(Math.abs(pnl))}
+                </span>
+              </div>
+            </div>
+
+            <AlertDialogFooter className="pt-4">
+              <AlertDialogAction
+                onClick={() => setNetWorthDialogOpen(false)}
+                className="bg-trading-primary hover:bg-trading-primary/80 text-white w-full"
+              >
+                Close
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
       </nav>
 
       {/* Bottom Navigation Bar - Mobile Only */}
