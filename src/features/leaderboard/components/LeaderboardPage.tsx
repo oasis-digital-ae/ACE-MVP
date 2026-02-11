@@ -68,11 +68,7 @@ const LeaderboardPage: React.FC = () => {
       setLoading(false);
     }
   };
-
   const getRankDisplay = (rank: number) => {
-    if (rank === 1) return <span className="text-yellow-400 text-lg">🥇</span>;
-    if (rank === 2) return <span className="text-gray-300 text-lg">🥈</span>;
-    if (rank === 3) return <span className="text-orange-400 text-lg">🥉</span>;
     return <span className="text-gray-400 font-medium">{rank}</span>;
   };
 
