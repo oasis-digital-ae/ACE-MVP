@@ -758,14 +758,16 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
                                     minute: '2-digit',
                                     hour12: true,
                                     timeZone: 'Asia/Dubai'
-                                  });                                  const formattedDateTime = `${datePart}, ${timePart}`;                                  
-                                  return (
+                                  });                                  
+                                  
+                                  const formattedDateTime = `${datePart}, ${timePart}`;                                  
+                                    return (
                                     <tr key={index} className={`border-b border-gray-800/30 ${
                                       match.status === 'closed' ? 'bg-red-500/5 border-2 border-red-500' : ''
                                     }`}>
-                                      <td className="px-3 py-2.5" style={{ textAlign: 'left' }}>
-                                        <div className="flex items-center gap-2">
-                                          <div className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
+                                      <td className="px-2 py-2" style={{ textAlign: 'left' }}>
+                                        <div className="flex items-center gap-1.5">
+                                          <div className={`w-4 h-4 rounded flex items-center justify-center text-[9px] font-bold flex-shrink-0 ${
                                             match.status === 'closed' 
                                               ? 'bg-yellow-500/20 text-yellow-500' 
                                               : match.isHome 
@@ -774,24 +776,24 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
                                           }`}>
                                             {match.status === 'closed' ? match.matchday : (match.isHome ? 'H' : 'A')}
                                           </div>
-                                          <span className="text-xs font-medium">Match vs {match.opponent}</span>
+                                          <span className="text-[10px] font-medium whitespace-nowrap">vs {match.opponent}</span>
                                           {match.status === 'closed' && (
-                                            <Badge variant="outline" className="ml-2 text-yellow-400 border-yellow-400/50 text-[10px] px-1.5 py-0 animate-pulse">
+                                            <Badge variant="outline" className="ml-1 text-yellow-400 border-yellow-400/50 text-[9px] px-1 py-0 animate-pulse">
                                               LIVE
                                             </Badge>
                                           )}
                                         </div>
                                       </td>
-                                      <td className="px-3 py-2.5 text-xs font-mono" style={{ textAlign: 'center', color: '#C9A961' }}>
+                                      <td className="px-2 py-2 text-[10px] font-mono whitespace-nowrap" style={{ textAlign: 'center', color: '#C9A961' }}>
                                         {match.status === 'closed' && match.homeScore !== null && match.awayScore !== null ? (
-                                          <div className="flex flex-col items-center gap-1">
-                                            <span className="text-[10px]">{formattedDateTime}</span>
-                                            <div className="flex items-center gap-1.5">
-                                              <span className="text-sm font-bold text-white">
+                                          <div className="flex items-center justify-center gap-2">
+                                            <span>{formattedDateTime}</span>
+                                            <div className="flex items-center gap-1">
+                                              <span className="text-xs font-bold text-white">
                                                 {match.isHome ? match.homeScore : match.awayScore}
                                               </span>
                                               <span className="text-gray-500">-</span>
-                                              <span className="text-sm font-bold text-white">
+                                              <span className="text-xs font-bold text-white">
                                                 {match.isHome ? match.awayScore : match.homeScore}
                                               </span>
                                             </div>
@@ -800,16 +802,16 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
                                           formattedDateTime
                                         )}
                                       </td>
-                                      <td className="px-3 py-2.5 text-xs font-mono font-semibold text-white" style={{ textAlign: 'center' }}>
+                                      <td className="px-2 py-2 text-[10px] font-mono font-semibold text-white" style={{ textAlign: 'center' }}>
                                         {formatCurrency(match.teamSharePrice)}
                                       </td>
-                                      <td className="px-3 py-2.5 text-xs font-mono font-semibold text-white" style={{ textAlign: 'center' }}>
+                                      <td className="px-2 py-2 text-[10px] font-mono font-semibold text-white" style={{ textAlign: 'center' }}>
                                         {formatCurrency(match.teamMarketCap)}
                                       </td>
-                                      <td className="px-3 py-2.5 text-xs font-mono font-semibold text-white" style={{ textAlign: 'center' }}>
+                                      <td className="px-2 py-2 text-[10px] font-mono font-semibold text-white" style={{ textAlign: 'center' }}>
                                         {formatCurrency(match.opponentSharePrice)}
                                       </td>
-                                      <td className="px-3 py-2.5 text-xs font-mono font-semibold text-white" style={{ textAlign: 'center' }}>
+                                      <td className="px-2 py-2 text-[10px] font-mono font-semibold text-white" style={{ textAlign: 'center' }}>
                                         {formatCurrency(match.opponentMarketCap)}
                                       </td>
                                     </tr>

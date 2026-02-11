@@ -193,9 +193,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
                                 {profile.email || user?.email || 'No email'}                        </span>
                             </div>
                           </div>
-                        </div>
-
-                        <DropdownMenuItem
+                        </div>                        <DropdownMenuItem
                           onClick={handleSignOutClick}
                           className="text-red-400 hover:text-red-300 hover:bg-red-900/20 cursor-pointer focus:text-red-300 focus:bg-red-900/20"
                         >
@@ -205,17 +203,9 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
                           onClick={() => setNetWorthDialogOpen(true)}
                           className="cursor-pointer hover:bg-gray-700/50"
                         >
-                          <TrendingUp
-                            className={`w-4 h-4 mr-2 ${
-                              isProfit ? 'text-green-400' : isLoss ? 'text-red-400' : 'text-gray-400'
-                            }`}
-                          />
+                          <TrendingUp className="w-4 h-4 mr-2 text-trading-primary" />
                           <span className="flex-1">Net Worth</span>
-                          <span
-                            className={`font-semibold ${
-                              isProfit ? 'text-green-400' : isLoss ? 'text-red-400' : 'text-white'
-                            }`}
-                          >
+                          <span className="font-semibold text-white">
                             {formatCurrency(netWorth)}
                           </span>
                         </DropdownMenuItem>
@@ -296,17 +286,9 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
                       onClick={() => setNetWorthDialogOpen(true)}
                       className="cursor-pointer hover:bg-gray-700/50"
                     >
-                      <TrendingUp
-                        className={`w-4 h-4 mr-2 ${
-                          isProfit ? 'text-green-400' : isLoss ? 'text-red-400' : 'text-gray-400'
-                        }`}
-                      />
+                      <TrendingUp className="w-4 h-4 mr-2 text-trading-primary" />
                       <span className="flex-1">Net Worth</span>
-                      <span
-                        className={`font-semibold ${
-                          isProfit ? 'text-green-400' : isLoss ? 'text-red-400' : 'text-white'
-                        }`}
-                      >
+                      <span className="font-semibold text-white">
                         {formatCurrency(netWorth)}
                       </span>
                     </DropdownMenuItem>
@@ -415,13 +397,9 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
                 <span className={totalDeposits !== 0 ? 'text-red-400' : 'text-white'}>
                   {formatCurrency(totalDeposits)}
                 </span>
-              </div>
-
-              <div className="border-t border-gray-700 pt-3 flex justify-between font-semibold">
+              </div>              <div className="border-t border-gray-700 pt-3 flex justify-between font-semibold">
                 <span>Net Worth</span>
-                <span className={
-                  isProfit ? 'text-green-400' : isLoss ? 'text-red-400' : 'text-white'
-                }>
+                <span className="text-white">
                   {formatCurrency(netWorth)}
                 </span>
               </div>
@@ -431,7 +409,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
                 <span className={
                   isProfit ? 'text-green-400' : isLoss ? 'text-red-400' : 'text-white'
                 }>
-                  {isProfit ? '+' : isLoss ? '' : ''}
+                  {isProfit ? '+' : isLoss ? '-' : ''}
                   {formatCurrency(Math.abs(pnl))}
                 </span>
               </div>

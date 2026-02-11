@@ -196,7 +196,6 @@ export const UsersManagementPanel: React.FC = () => {
 
     return filtered;
   }, [users, searchTerm, sortField, sortDirection]);
-
   const handleExportCSV = () => {    const headers = [
       'Username',
       'Name',
@@ -205,7 +204,7 @@ export const UsersManagementPanel: React.FC = () => {
       'Total Deposits',
       'Cost',
       'Portfolio Value',
-      'P&L',
+      'Total P&L',
       'Positions',
       'Last Activity',
       'Created'
@@ -219,7 +218,7 @@ export const UsersManagementPanel: React.FC = () => {
       user.total_deposits,
       user.total_invested,
       user.portfolio_value,
-      user.profit_loss,
+      user.wallet_balance + user.portfolio_value - user.total_deposits,
       user.positions_count,
       new Date(user.last_activity).toLocaleString(),
       new Date(user.created_at).toLocaleString()
@@ -335,12 +334,6 @@ export const UsersManagementPanel: React.FC = () => {
                     </Button>
                   </TableHead>
                   <TableHead className="text-center">
-                    <span className="font-medium">Unrealized P&L</span>
-                  </TableHead>
-                  <TableHead className="text-center">
-                    <span className="font-medium">Realized P&L</span>
-                  </TableHead>
-                  <TableHead className="text-center">
                     <Button variant="ghost" onClick={() => handleSort('profit_loss')} className="h-auto p-0 font-medium">
                       Total P&L <SortIcon field="profit_loss" />
                     </Button>
@@ -381,29 +374,19 @@ export const UsersManagementPanel: React.FC = () => {
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="font-medium font-mono">{formatCurrency(user.total_deposits)}</div>
-                    </TableCell>
-                    <TableCell className="text-center">
+                    </TableCell>                    <TableCell className="text-center">
                       <div className="font-medium font-mono">{formatCurrency(user.total_invested)}</div>
                     </TableCell>
                     <TableCell className="text-center">
-                      <span className={`font-mono text-sm ${(user.unrealized_pnl ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {(user.unrealized_pnl ?? 0) >= 0 ? '+' : ''}{formatCurrency(user.unrealized_pnl ?? 0)}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <span className={`font-mono text-sm ${(user.realized_pnl ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {(user.realized_pnl ?? 0) >= 0 ? '+' : ''}{formatCurrency(user.realized_pnl ?? 0)}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-1">
-                        {user.profit_loss >= 0 ? (
+                        {(user.wallet_balance + user.portfolio_value - user.total_deposits) >= 0 ? (
                           <TrendingUp className="h-4 w-4 text-green-600" />
                         ) : (
                           <TrendingDown className="h-4 w-4 text-red-600" />
                         )}
-                        <span className={`font-mono ${user.profit_loss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {user.profit_loss >= 0 ? '+' : ''}{formatCurrency(user.profit_loss)}
+                        <span className={`font-mono ${(user.wallet_balance + user.portfolio_value - user.total_deposits) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {(user.wallet_balance + user.portfolio_value - user.total_deposits) >= 0 ? '+' : ''}
+                          {formatCurrency(user.wallet_balance + user.portfolio_value - user.total_deposits)}
                         </span>
                       </div>
                     </TableCell>
@@ -574,21 +557,18 @@ export const UsersManagementPanel: React.FC = () => {
                   (() => {
                     // Total portfolio value for % Portfolio column (matches user portfolio tab)
                     const totalPortfolioValue = selectedUser.positions.reduce((sum, p) => sum + p.current_value, 0);
-                    return (
-                      <div className="rounded-md border overflow-hidden w-full">
+                    return (                      <div className="rounded-md border overflow-hidden w-full">
                         <div className="w-full overflow-x-auto">
-                          <table className="w-full caption-bottom text-sm min-w-[900px]">
+                          <table className="w-full caption-bottom text-sm min-w-[800px]">
                             <colgroup>
-                              <col className="w-[18%]" />
-                              <col className="w-[8%]" />
+                              <col className="w-[20%]" />
                               <col className="w-[10%]" />
-                              <col className="w-[10%]" />
-                              <col className="w-[9%]" />
+                              <col className="w-[12%]" />
                               <col className="w-[12%]" />
                               <col className="w-[10%]" />
-                              <col className="w-[11%]" />
-                              <col className="w-[11%]" />
-                              <col className="w-[11%]" />
+                              <col className="w-[12%]" />
+                              <col className="w-[12%]" />
+                              <col className="w-[12%]" />
                             </colgroup>
                             <thead className="[&_tr]:border-b">
                               <tr className="border-b transition-colors hover:bg-muted/50">
@@ -599,8 +579,6 @@ export const UsersManagementPanel: React.FC = () => {
                                 <th className="h-12 px-2 sm:px-3 md:px-4 text-right align-middle font-medium text-muted-foreground">% Change</th>
                                 <th className="h-12 px-2 sm:px-3 md:px-4 text-right align-middle font-medium text-muted-foreground">Total Value</th>
                                 <th className="h-12 px-2 sm:px-3 md:px-4 text-right align-middle font-medium text-muted-foreground">% Portfolio</th>
-                                <th className="h-12 px-2 sm:px-3 md:px-4 text-right align-middle font-medium text-muted-foreground">Unrealized</th>
-                                <th className="h-12 px-2 sm:px-3 md:px-4 text-right align-middle font-medium text-muted-foreground">Realized</th>
                                 <th className="h-12 px-2 sm:px-3 md:px-4 text-right align-middle font-medium text-muted-foreground">Total P&L</th>
                               </tr>
                             </thead>
@@ -635,16 +613,6 @@ export const UsersManagementPanel: React.FC = () => {
                                     </td>
                                     <td className="p-2 sm:p-3 md:p-4 text-right font-mono align-middle text-sm">
                                       {percentPortfolio.toFixed(2)}%
-                                    </td>
-                                    <td className={`p-2 sm:p-3 md:p-4 text-right font-mono font-semibold align-middle text-sm ${
-                                      (pos.unrealized_pnl ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'
-                                    }`}>
-                                      {(pos.unrealized_pnl ?? 0) >= 0 ? '+' : ''}{formatCurrency(pos.unrealized_pnl ?? 0)}
-                                    </td>
-                                    <td className={`p-2 sm:p-3 md:p-4 text-right font-mono font-semibold align-middle text-sm ${
-                                      (pos.realized_pnl ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'
-                                    }`}>
-                                      {(pos.realized_pnl ?? 0) >= 0 ? '+' : ''}{formatCurrency(pos.realized_pnl ?? 0)}
                                     </td>
                                     <td className={`p-2 sm:p-3 md:p-4 text-right font-mono font-semibold align-middle text-sm ${
                                       pos.profit_loss >= 0 ? 'text-green-600' : 'text-red-600'
