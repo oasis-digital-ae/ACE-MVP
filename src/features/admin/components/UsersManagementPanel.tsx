@@ -33,7 +33,7 @@ import {
   calculateAverageCost
 } from '@/shared/lib/utils/calculations';
 
-type SortField = 'username' | 'wallet_balance' | 'total_deposits' | 'total_invested' | 'portfolio_value' | 'profit_loss' | 'positions_count' | 'last_activity' | 'created_at';
+type SortField = 'username' | 'wallet_balance' | 'total_deposits' | 'net_worth' | 'portfolio_value' | 'profit_loss' | 'return_percent' | 'positions_count' | 'last_activity' | 'created_at';
 type SortDirection = 'asc' | 'desc';
 
 export const UsersManagementPanel: React.FC = () => {
@@ -161,9 +161,9 @@ export const UsersManagementPanel: React.FC = () => {
           aValue = a.total_deposits;
           bValue = b.total_deposits;
           break;
-        case 'total_invested':
-          aValue = a.total_invested;
-          bValue = b.total_invested;
+        case 'net_worth':
+          aValue = a.wallet_balance + a.portfolio_value;
+          bValue = b.wallet_balance + b.portfolio_value;
           break;
         case 'portfolio_value':
           aValue = a.portfolio_value;
@@ -172,6 +172,10 @@ export const UsersManagementPanel: React.FC = () => {
         case 'profit_loss':
           aValue = a.profit_loss;
           bValue = b.profit_loss;
+          break;
+        case 'return_percent':
+          aValue = a.total_deposits !== 0 ? ((a.wallet_balance + a.portfolio_value - a.total_deposits) / a.total_deposits) * 100 : 0;
+          bValue = b.total_deposits !== 0 ? ((b.wallet_balance + b.portfolio_value - b.total_deposits) / b.total_deposits) * 100 : 0;
           break;
         case 'positions_count':
           aValue = a.positions_count;
@@ -195,35 +199,41 @@ export const UsersManagementPanel: React.FC = () => {
     });
 
     return filtered;
-  }, [users, searchTerm, sortField, sortDirection]);
-
-  const handleExportCSV = () => {    const headers = [
+  }, [users, searchTerm, sortField, sortDirection]);  const handleExportCSV = () => {    const headers = [
       'Username',
       'Name',
       'Email',
       'Wallet Balance',
-      'Total Deposits',
-      'Cost',
       'Portfolio Value',
-      'P&L',
+      'Net Worth',
+      'Total Deposits',
+      'Total P&L',
+      'Return %',
       'Positions',
       'Last Activity',
       'Created'
     ];
 
-    const csvData = filteredAndSortedUsers.map(user => [
-      user.username,
-      `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'N/A',
-      user.email || 'N/A',
-      user.wallet_balance,
-      user.total_deposits,
-      user.total_invested,
-      user.portfolio_value,
-      user.profit_loss,
-      user.positions_count,
-      new Date(user.last_activity).toLocaleString(),
-      new Date(user.created_at).toLocaleString()
-    ]);
+    const csvData = filteredAndSortedUsers.map(user => {
+      const netWorth = user.wallet_balance + user.portfolio_value;
+      const totalPnL = netWorth - user.total_deposits;
+      const returnPercent = user.total_deposits !== 0 ? (totalPnL / user.total_deposits) * 100 : 0;
+      
+      return [
+        user.username,
+        `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'N/A',
+        user.email || 'N/A',
+        user.wallet_balance,
+        user.portfolio_value,
+        netWorth,
+        user.total_deposits,
+        totalPnL,
+        returnPercent.toFixed(2) + '%',
+        user.positions_count,
+        new Date(user.last_activity).toLocaleString(),
+        new Date(user.created_at).toLocaleString()
+      ];
+    });
 
     const csvContent = [
       headers.join(','),
@@ -326,23 +336,23 @@ export const UsersManagementPanel: React.FC = () => {
                     </Button>
                   </TableHead>
                   <TableHead className="text-center">
+                    <Button variant="ghost" onClick={() => handleSort('net_worth')} className="h-auto p-0 font-medium">
+                      Net Worth <SortIcon field="net_worth" />
+                    </Button>
+                  </TableHead>
+                  <TableHead className="text-center">
                     <Button variant="ghost" onClick={() => handleSort('total_deposits')} className="h-auto p-0 font-medium">
                       Total Deposits <SortIcon field="total_deposits" />
                     </Button>
-                  </TableHead>                  <TableHead className="text-center">
-                    <Button variant="ghost" onClick={() => handleSort('total_invested')} className="h-auto p-0 font-medium">
-                      Cost <SortIcon field="total_invested" />
-                    </Button>
-                  </TableHead>
-                  <TableHead className="text-center">
-                    <span className="font-medium">Unrealized P&L</span>
-                  </TableHead>
-                  <TableHead className="text-center">
-                    <span className="font-medium">Realized P&L</span>
                   </TableHead>
                   <TableHead className="text-center">
                     <Button variant="ghost" onClick={() => handleSort('profit_loss')} className="h-auto p-0 font-medium">
                       Total P&L <SortIcon field="profit_loss" />
+                    </Button>
+                  </TableHead>
+                  <TableHead className="text-center">
+                    <Button variant="ghost" onClick={() => handleSort('return_percent')} className="h-auto p-0 font-medium">
+                      Return % <SortIcon field="return_percent" />
                     </Button>
                   </TableHead>
                   <TableHead className="text-center">
@@ -357,9 +367,13 @@ export const UsersManagementPanel: React.FC = () => {
                   </TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredAndSortedUsers.map((user) => (
+              </TableHeader>              <TableBody>
+                {filteredAndSortedUsers.map((user) => {
+                  const netWorth = user.wallet_balance + user.portfolio_value;
+                  const totalPnL = netWorth - user.total_deposits;
+                  const returnPercent = user.total_deposits !== 0 ? (totalPnL / user.total_deposits) * 100 : 0;
+                  
+                  return (
                   <TableRow key={user.id}>
                     <TableCell>
                       <div className="space-y-1">
@@ -380,31 +394,27 @@ export const UsersManagementPanel: React.FC = () => {
                       <div className="font-medium font-mono">{formatCurrency(user.portfolio_value)}</div>
                     </TableCell>
                     <TableCell className="text-center">
+                      <div className="font-medium font-mono">{formatCurrency(netWorth)}</div>
+                    </TableCell>
+                    <TableCell className="text-center">
                       <div className="font-medium font-mono">{formatCurrency(user.total_deposits)}</div>
                     </TableCell>
                     <TableCell className="text-center">
-                      <div className="font-medium font-mono">{formatCurrency(user.total_invested)}</div>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <span className={`font-mono text-sm ${(user.unrealized_pnl ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {(user.unrealized_pnl ?? 0) >= 0 ? '+' : ''}{formatCurrency(user.unrealized_pnl ?? 0)}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <span className={`font-mono text-sm ${(user.realized_pnl ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {(user.realized_pnl ?? 0) >= 0 ? '+' : ''}{formatCurrency(user.realized_pnl ?? 0)}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-1">
-                        {user.profit_loss >= 0 ? (
+                        {totalPnL >= 0 ? (
                           <TrendingUp className="h-4 w-4 text-green-600" />
                         ) : (
                           <TrendingDown className="h-4 w-4 text-red-600" />
                         )}
-                        <span className={`font-mono ${user.profit_loss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {user.profit_loss >= 0 ? '+' : ''}{formatCurrency(user.profit_loss)}
+                        <span className={`font-mono ${totalPnL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {totalPnL >= 0 ? '+' : ''}
+                          {formatCurrency(totalPnL)}
                         </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className={`font-mono font-semibold ${returnPercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {returnPercent >= 0 ? '+' : ''}{returnPercent.toFixed(2)}%
                       </div>
                     </TableCell>
                     <TableCell className="text-center">
@@ -426,7 +436,8 @@ export const UsersManagementPanel: React.FC = () => {
                       </Button>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
@@ -574,21 +585,18 @@ export const UsersManagementPanel: React.FC = () => {
                   (() => {
                     // Total portfolio value for % Portfolio column (matches user portfolio tab)
                     const totalPortfolioValue = selectedUser.positions.reduce((sum, p) => sum + p.current_value, 0);
-                    return (
-                      <div className="rounded-md border overflow-hidden w-full">
+                    return (                      <div className="rounded-md border overflow-hidden w-full">
                         <div className="w-full overflow-x-auto">
-                          <table className="w-full caption-bottom text-sm min-w-[900px]">
+                          <table className="w-full caption-bottom text-sm min-w-[800px]">
                             <colgroup>
-                              <col className="w-[18%]" />
-                              <col className="w-[8%]" />
+                              <col className="w-[20%]" />
                               <col className="w-[10%]" />
-                              <col className="w-[10%]" />
-                              <col className="w-[9%]" />
+                              <col className="w-[12%]" />
                               <col className="w-[12%]" />
                               <col className="w-[10%]" />
-                              <col className="w-[11%]" />
-                              <col className="w-[11%]" />
-                              <col className="w-[11%]" />
+                              <col className="w-[12%]" />
+                              <col className="w-[12%]" />
+                              <col className="w-[12%]" />
                             </colgroup>
                             <thead className="[&_tr]:border-b">
                               <tr className="border-b transition-colors hover:bg-muted/50">
@@ -599,8 +607,6 @@ export const UsersManagementPanel: React.FC = () => {
                                 <th className="h-12 px-2 sm:px-3 md:px-4 text-right align-middle font-medium text-muted-foreground">% Change</th>
                                 <th className="h-12 px-2 sm:px-3 md:px-4 text-right align-middle font-medium text-muted-foreground">Total Value</th>
                                 <th className="h-12 px-2 sm:px-3 md:px-4 text-right align-middle font-medium text-muted-foreground">% Portfolio</th>
-                                <th className="h-12 px-2 sm:px-3 md:px-4 text-right align-middle font-medium text-muted-foreground">Unrealized</th>
-                                <th className="h-12 px-2 sm:px-3 md:px-4 text-right align-middle font-medium text-muted-foreground">Realized</th>
                                 <th className="h-12 px-2 sm:px-3 md:px-4 text-right align-middle font-medium text-muted-foreground">Total P&L</th>
                               </tr>
                             </thead>
@@ -635,16 +641,6 @@ export const UsersManagementPanel: React.FC = () => {
                                     </td>
                                     <td className="p-2 sm:p-3 md:p-4 text-right font-mono align-middle text-sm">
                                       {percentPortfolio.toFixed(2)}%
-                                    </td>
-                                    <td className={`p-2 sm:p-3 md:p-4 text-right font-mono font-semibold align-middle text-sm ${
-                                      (pos.unrealized_pnl ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'
-                                    }`}>
-                                      {(pos.unrealized_pnl ?? 0) >= 0 ? '+' : ''}{formatCurrency(pos.unrealized_pnl ?? 0)}
-                                    </td>
-                                    <td className={`p-2 sm:p-3 md:p-4 text-right font-mono font-semibold align-middle text-sm ${
-                                      (pos.realized_pnl ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'
-                                    }`}>
-                                      {(pos.realized_pnl ?? 0) >= 0 ? '+' : ''}{formatCurrency(pos.realized_pnl ?? 0)}
                                     </td>
                                     <td className={`p-2 sm:p-3 md:p-4 text-right font-mono font-semibold align-middle text-sm ${
                                       pos.profit_loss >= 0 ? 'text-green-600' : 'text-red-600'

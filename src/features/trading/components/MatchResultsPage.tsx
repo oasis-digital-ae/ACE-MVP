@@ -140,7 +140,6 @@ const MatchResultsPage: React.FC = () => {
       timeZone: 'Asia/Dubai'
     });
   };
-
   const formatDateHeader = (dateString: string) => {
     const date = new Date(dateString);
     const today = new Date();
@@ -148,7 +147,7 @@ const MatchResultsPage: React.FC = () => {
     tomorrow.setDate(tomorrow.getDate() + 1);
     
     const dateStr = date.toLocaleDateString('en-US', { 
-      month: 'short', 
+      month: 'short',
       day: 'numeric' 
     });
     
@@ -163,6 +162,19 @@ const MatchResultsPage: React.FC = () => {
         day: 'numeric' 
       });
     }
+  };
+
+  // Calculate projected % return for a team
+  const calculateProjectedReturn = (teamId: number, opponentId: number): number | null => {
+    const team = clubs.find(c => c.id === teamId.toString());
+    const opponent = clubs.find(c => c.id === opponentId.toString());
+    
+    if (!team || !opponent || team.marketCap === 0) {
+      return null;
+    }
+    
+    // Formula: ((0.10 × opponent_market_cap) ÷ team_market_cap) × 100
+    return ((0.10 * opponent.marketCap) / team.marketCap) * 100;
   };
 
   const handlePurchaseClick = useCallback((teamId: number, teamName: string, externalId?: number) => {
@@ -381,9 +393,7 @@ const MatchResultsPage: React.FC = () => {
                                 Closes {formatTime(fixture.buy_close_at)}
                               </div>
                             )}
-                          </div>
-
-                          {/* Match Display */}
+                          </div>                          {/* Match Display */}
                           <div className="bg-gray-800/40 rounded-lg p-3 border border-gray-700/30">
                             {/* Home Team Row */}
                             <div className="flex items-center justify-between mb-2">
@@ -400,7 +410,16 @@ const MatchResultsPage: React.FC = () => {
                                 userId={user?.id}
                                 variant="default"
                                 className="text-sm font-semibold text-white hover:text-trading-primary transition-colors truncate text-left"
-                              />                            </div>
+                              />
+                            </div>
+                              {fixture.status !== 'applied' && fixture.status !== 'closed' && (() => {
+                                const projectedReturn = calculateProjectedReturn(fixture.home_team_id, fixture.away_team_id);
+                                return projectedReturn !== null && (
+                                  <span className="text-[10px] text-green-400 font-medium whitespace-nowrap mx-2">
+                                    +{projectedReturn.toFixed(2)}%
+                                  </span>
+                                );
+                              })()}
                               {(fixture.status === 'applied' || fixture.status === 'closed') && fixture.home_score !== null ? (
                                 <span className={`text-lg font-bold ml-2 ${
                                   fixture.status === 'applied' && fixture.result === 'home_win' ? 'text-green-400' : 
@@ -418,14 +437,14 @@ const MatchResultsPage: React.FC = () => {
                                     )}
                                     size="sm"
                                     disabled={isPurchasing || purchasingClubId === fixture.home_team_id.toString()}
-                                    className="bg-[#10B981] hover:bg-[#059669] text-white font-medium px-3 py-1.5 text-xs rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation min-h-[36px] ml-2 flex-shrink-0"
+                                    className="bg-[#10B981] hover:bg-[#059669] text-white font-medium px-3 py-1.5 text-xs rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation min-h-[36px] flex-shrink-0"
                                     title="Buy shares"
                                   >
                                     {isPurchasing && purchasingClubId === fixture.home_team_id.toString() ? '...' : 'Buy'}
                                   </Button>
                                 )
                               )}
-                            </div>                            {/* Score/Time Divider */}
+                            </div>{/* Score/Time Divider */}
                             {(fixture.status === 'applied' || fixture.status === 'closed') && fixture.home_score !== null && fixture.away_score !== null ? (
                               <div className="flex items-center justify-center py-2 mb-2">
                                 <div className="flex items-center gap-2">
@@ -455,9 +474,7 @@ const MatchResultsPage: React.FC = () => {
                                   {formatTime(fixture.kickoff_at)}
                                 </span>
                               </div>
-                            )}
-
-                            {/* Away Team Row */}
+                            )}                            {/* Away Team Row */}
                             <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2 flex-1 min-w-0">
                               <TeamLogo 
@@ -472,7 +489,16 @@ const MatchResultsPage: React.FC = () => {
                                   userId={user?.id}
                                   variant="default"
                                   className="text-sm font-semibold text-white hover:text-trading-primary transition-colors truncate text-left"
-                                />                              </div>
+                                />
+                              </div>
+                              {fixture.status !== 'applied' && fixture.status !== 'closed' && (() => {
+                                const projectedReturn = calculateProjectedReturn(fixture.away_team_id, fixture.home_team_id);
+                                return projectedReturn !== null && (
+                                  <span className="text-[10px] text-green-400 font-medium whitespace-nowrap mx-2">
+                                    +{projectedReturn.toFixed(2)}%
+                                  </span>
+                                );
+                              })()}
                               {(fixture.status === 'applied' || fixture.status === 'closed') && fixture.away_score !== null ? (
                                 <span className={`text-lg font-bold ml-2 ${
                                   fixture.status === 'applied' && fixture.result === 'away_win' ? 'text-green-400' : 
@@ -490,7 +516,7 @@ const MatchResultsPage: React.FC = () => {
                                     )}
                                     size="sm"
                                     disabled={isPurchasing || purchasingClubId === fixture.away_team_id.toString()}
-                                    className="bg-[#10B981] hover:bg-[#059669] text-white font-medium px-3 py-1.5 text-xs rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation min-h-[36px] ml-2 flex-shrink-0"
+                                    className="bg-[#10B981] hover:bg-[#059669] text-white font-medium px-3 py-1.5 text-xs rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation min-h-[36px] flex-shrink-0"
                                     title="Buy shares"
                                   >
                                     {isPurchasing && purchasingClubId === fixture.away_team_id.toString() ? '...' : 'Buy'}
@@ -500,7 +526,7 @@ const MatchResultsPage: React.FC = () => {
                             </div>
                           </div>
                         </div>{/* Desktop/Tablet Layout */}
-                        <div className="hidden md:grid grid-cols-[140px_50px_1fr_32px_80px_32px_1fr_50px_120px] items-center gap-2">
+                        <div className="hidden md:grid grid-cols-[140px_50px_60px_1fr_32px_80px_32px_1fr_60px_50px_120px] items-center gap-2">
                           {/* Left: Matchday & Status */}
                           <div className="flex items-center gap-3">
                             <div className={`text-xs font-mono font-bold ${
@@ -509,8 +535,10 @@ const MatchResultsPage: React.FC = () => {
                               MD{fixture.matchday}
                             </div>
                             {getStatusBadge(fixture.status)}
-                          </div>                          {/* Home Buy Button */}
-                          <div className="flex justify-end -mr-1">
+                          </div>
+
+                          {/* Home Buy Button */}
+                          <div className="flex justify-center">
                             {fixture.home_team_id && fixture.status !== 'applied' && fixture.status !== 'closed' && (
                               <Button
                                 onClick={() => handlePurchaseClick(
@@ -528,8 +556,20 @@ const MatchResultsPage: React.FC = () => {
                             )}
                           </div>
 
+                          {/* Home Projected % Return */}
+                          <div className="flex justify-center items-center">
+                            {fixture.status !== 'applied' && fixture.status !== 'closed' && (() => {
+                              const projectedReturn = calculateProjectedReturn(fixture.home_team_id, fixture.away_team_id);
+                              return projectedReturn !== null ? (
+                                <span className="text-xs text-green-400 font-medium whitespace-nowrap">
+                                  +{projectedReturn.toFixed(2)}%
+                                </span>
+                              ) : null;
+                            })()}
+                          </div>
+
                           {/* Home Team Name */}
-                          <div className="flex items-center gap-2 justify-end overflow-hidden -ml-1">
+                          <div className="flex items-center gap-2 justify-end overflow-hidden">
                             <ClickableTeamName
                               teamName={fixture.home_team?.name || 'Home Team'}
                               teamId={fixture.home_team_id}
@@ -547,7 +587,7 @@ const MatchResultsPage: React.FC = () => {
                               externalId={fixture.home_team?.external_id ? parseInt(fixture.home_team.external_id) : undefined}
                               size="sm" 
                             />
-                          </div>                          {/* Score/Time */}
+                          </div>{/* Score/Time */}
                           <div className="flex items-center gap-2 justify-center">
                             {(fixture.status === 'applied' || fixture.status === 'closed') && fixture.home_score !== null && fixture.away_score !== null ? (
                               <>
@@ -570,9 +610,7 @@ const MatchResultsPage: React.FC = () => {
                                 {formatTime(fixture.kickoff_at)}
                               </span>
                             )}
-                          </div>
-
-                          {/* Away Team Logo */}
+                          </div>                          {/* Away Team Logo */}
                           <div className="flex justify-center">
                             <TeamLogo 
                               teamName={fixture.away_team?.name || 'Away Team'} 
@@ -580,8 +618,9 @@ const MatchResultsPage: React.FC = () => {
                               size="sm" 
                             />
                           </div>
+
                           {/* Away Team Name */}
-                          <div className="flex items-center gap-2 justify-start overflow-hidden -mr-1">
+                          <div className="flex items-center gap-2 justify-start overflow-hidden">
                             <ClickableTeamName
                               teamName={fixture.away_team?.name || 'Away Team'}
                               teamId={fixture.away_team_id}
@@ -590,8 +629,22 @@ const MatchResultsPage: React.FC = () => {
                               variant="default"
                               className="text-sm font-medium text-white hover:text-trading-primary transition-colors text-left truncate"
                             />
-                          </div>                          {/* Away Buy Button */}
-                          <div className="flex justify-start -ml-1">
+                          </div>
+
+                          {/* Away Projected % Return */}
+                          <div className="flex justify-center items-center">
+                            {fixture.status !== 'applied' && fixture.status !== 'closed' && (() => {
+                              const projectedReturn = calculateProjectedReturn(fixture.away_team_id, fixture.home_team_id);
+                              return projectedReturn !== null ? (
+                                <span className="text-xs text-green-400 font-medium whitespace-nowrap">
+                                  +{projectedReturn.toFixed(2)}%
+                                </span>
+                              ) : null;
+                            })()}
+                          </div>
+
+                          {/* Away Buy Button */}
+                          <div className="flex justify-center">
                             {fixture.away_team_id && fixture.status !== 'applied' && fixture.status !== 'closed' && (
                               <Button
                                 onClick={() => handlePurchaseClick(
