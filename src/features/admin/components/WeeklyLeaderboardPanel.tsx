@@ -190,17 +190,18 @@ export const AdminWeeklyLeaderboardPanel: React.FC = () => {
     return sortDirection === 'asc'
       ? <ArrowUp className="h-3 w-3" />
       : <ArrowDown className="h-3 w-3" />;
-  };
-  /* -------------------- UI -------------------- */
+  };  /* -------------------- UI -------------------- */
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Trophy className="h-5 w-5 text-yellow-400" />
-            Admin Weekly Leaderboard
+        <CardTitle className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-2">
+            <div className="flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-yellow-400" />
+              <span className="text-base md:text-lg">Admin Weekly Leaderboard</span>
+            </div>
             {selectedWeek && (
-              <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+              <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 text-[10px] md:text-xs w-fit">
                 {(() => {
                   const startDate = new Date(selectedWeek.weekStart);
                   const endDate = new Date(selectedWeek.weekEnd);
@@ -209,12 +210,8 @@ export const AdminWeeklyLeaderboardPanel: React.FC = () => {
                     const day = date.getDate().toString().padStart(2, '0');
                     const month = date.toLocaleDateString('en-GB', { month: 'short' });
                     const year = date.getFullYear();
-                    const time = date.toLocaleTimeString('en-US', { 
-                      hour: '2-digit', 
-                      minute: '2-digit', 
-                      second: '2-digit',
-                      hour12: true 
-                    });
+                    // Show UAE time (3:00 AM) - hardcoded for client display
+                    const time = '3:00 AM (UAE)';
                     return `${day}/${month}/${year} ${time}`;
                   };
 
@@ -229,7 +226,7 @@ export const AdminWeeklyLeaderboardPanel: React.FC = () => {
               if (week) setSelectedWeek(week);
             }}
           >
-            <SelectTrigger className="w-[260px]">
+            <SelectTrigger className="w-full md:w-[260px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
