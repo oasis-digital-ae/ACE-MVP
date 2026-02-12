@@ -371,47 +371,78 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
-        </AlertDialog>
-
-        {/* Net Worth Dialog */}
+        </AlertDialog>        {/* Net Worth Dialog */}
         <AlertDialog open={netWorthDialogOpen} onOpenChange={setNetWorthDialogOpen}>
-          <AlertDialogContent className="bg-gray-800 border-gray-700 text-white">
+          <AlertDialogContent className="bg-gray-800 border-gray-700 text-white max-w-lg">
             <AlertDialogHeader>
-              <AlertDialogTitle className="text-lg font-bold flex items-center gap-2">
-                <Briefcase className="w-5 h-5 text-trading-primary" />
-                Net Worth Breakdown
+              <AlertDialogTitle className="text-sm font-normal flex items-center gap-2 text-gray-400">
+                <Briefcase className="w-4 h-4 text-trading-primary" />
+                Net Worth
               </AlertDialogTitle>
-            </AlertDialogHeader>            <div className="space-y-3 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-400">Wallet Balance</span>
-                <span className="text-white">{formatCurrency(walletBalance)}</span>
-              </div>
+            </AlertDialogHeader>
 
-              <div className="flex justify-between">
-                <span className="text-gray-400">Portfolio Value</span>
-                <span className="text-white">{formatCurrency(portfolioValue)}</span>
+            {/* Large Centered Total Value */}
+            <div className="text-center py-6">
+              <div className="text-5xl font-bold text-white mb-2">
+                {formatCurrency(netWorth)}
               </div>
-
-              <div className="flex justify-between">
-                <span className="text-gray-400">Total Deposited</span>
-                <span className={totalDeposits !== 0 ? 'text-red-400' : 'text-white'}>
-                  {formatCurrency(totalDeposits)}
-                </span>
-              </div>              <div className="border-t border-gray-700 pt-3 flex justify-between font-semibold">
-                <span>Net Worth</span>
-                <span className="text-white">
-                  {formatCurrency(netWorth)}
-                </span>
+              <div className="text-sm text-gray-400">
+                Current total value
               </div>
+            </div>            {/* Horizontal Divider */}
+            <div className="border-t border-gray-700"></div>            {/* Two Column Layout */}
+            <div className="grid grid-cols-[1fr_auto_1fr] gap-0 py-6">
+              {/* Net Worth Column */}
+              <div className="space-y-4 pr-4">
+                <h3 className="text-sm font-semibold text-white mb-4">Net Worth</h3>
+                
+                {/* Portfolio Value Row */}
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-gray-400 text-sm">Portfolio Value</span>
+                  <span className="text-white font-medium text-sm">{formatCurrency(portfolioValue)}</span>
+                </div>
+                
+                {/* Wallet Balance Row */}
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-gray-400 text-sm">Wallet Balance</span>
+                  <span className="text-white font-medium text-sm">{formatCurrency(walletBalance)}</span>
+                </div>
+                
+                {/* Total Value Row */}
+                <div className="flex justify-between items-center py-2 border-t border-gray-700/50 pt-3">
+                  <span className="text-gray-400 text-sm">Total Value</span>
+                  <span className="text-white font-semibold text-sm">{formatCurrency(netWorth)}</span>
+                </div>              </div>
 
-              <div className="flex justify-between">
-                <span className="text-gray-400">Overall P&L</span>
-                <span className={
-                  isProfit ? 'text-green-400' : isLoss ? 'text-red-400' : 'text-white'
-                }>
-                  {isProfit ? '+' : isLoss ? '-' : ''}
-                  {formatCurrency(Math.abs(pnl))}
-                </span>
+              {/* Vertical Divider */}
+              <div className="border-l border-gray-700"></div>
+
+              {/* Performance Column */}
+              <div className="space-y-4 pl-4">
+                <h3 className="text-sm font-semibold text-white mb-4">Performance</h3>
+                
+                {/* Total Deposited Row */}
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-gray-400 text-sm">Total Deposited</span>
+                  <span className="text-white font-medium text-sm">{formatCurrency(totalDeposits)}</span>
+                </div>
+                
+                {/* Overall P&L Row */}
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-gray-400 text-sm">Overall P&L</span>
+                  <span className={`font-medium text-sm ${
+                    isProfit ? 'text-green-400' : isLoss ? 'text-red-400' : 'text-white'
+                  }`}>
+                    {isProfit ? '+' : ''}
+                    {isLoss ? '-' : ''}
+                    {formatCurrency(Math.abs(pnl))}
+                    {!isBreakEven && totalDeposits !== 0 && (
+                      <span className="ml-1">
+                        ({isProfit ? '+' : '-'}{Math.abs((pnl / totalDeposits) * 100).toFixed(2)}%)
+                      </span>
+                    )}
+                  </span>
+                </div>
               </div>
             </div>
 
