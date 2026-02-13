@@ -29,12 +29,24 @@ const MatchResultsPage: React.FC = () => {
   useEffect(() => {
     loadFixtures();
   }, []);
-
   const loadFixtures = async () => {
     try {
       setLoading(true);
       const fixturesData = await fixturesService.getAll();
       setFixtures(fixturesData);
+        // Log postponed matches for debugging
+      const postponed = fixturesData.filter(f => f.status === 'postponed');
+      if (postponed.length > 0) {
+        console.log('=== POSTPONED FIXTURES ===');
+        postponed.forEach(fixture => {
+          const kickoffDate = new Date(fixture.kickoff_at);
+          const isPast = kickoffDate < new Date();
+          console.log(`Matchday ${fixture.matchday}: ${fixture.home_team?.name} vs ${fixture.away_team?.name}`);
+          console.log(`  Scheduled for: ${kickoffDate.toLocaleDateString('en-US', { dateStyle: 'full', timeStyle: 'short' })}`);
+          console.log(`  Status: ${isPast ? '⏰ PAST DATE (will show in Finished)' : '📅 FUTURE DATE (will show in Upcoming)'}`);
+          console.log(`  Fixture ID: ${fixture.id}`);
+        });
+      }
     } catch (error) {
       console.error('Error loading fixtures:', error);
     } finally {
@@ -56,8 +68,26 @@ const MatchResultsPage: React.FC = () => {
         return <Badge variant="outline" className="text-xs px-2 py-0.5">{status}</Badge>;
     }
   };  const filteredFixtures = fixtures.filter(fixture => {
-    if (filter === 'finished') return fixture.status === 'applied';
-    if (filter === 'upcoming') return fixture.status === 'scheduled' || fixture.status === 'closed';
+    if (filter === 'finished') {
+      // Include applied matches and postponed matches that are past their date
+      if (fixture.status === 'applied') return true;
+      if (fixture.status === 'postponed') {
+        const kickoffDate = new Date(fixture.kickoff_at);
+        const now = new Date();
+        return kickoffDate < now; // Past postponed matches go to finished
+      }
+      return false;
+    }
+    if (filter === 'upcoming') {
+      // Include scheduled matches and postponed matches that haven't passed yet
+      if (fixture.status === 'scheduled') return true;
+      if (fixture.status === 'postponed') {
+        const kickoffDate = new Date(fixture.kickoff_at);
+        const now = new Date();
+        return kickoffDate >= now; // Future postponed matches stay in upcoming
+      }
+      return false;
+    }
     if (filter === 'all') return true; // Show all fixtures including live matches
     return true;
   });
@@ -306,7 +336,13 @@ const MatchResultsPage: React.FC = () => {
               : 'text-gray-300 hover:text-white hover:bg-white/10'
           }`}
         >
-          Finished ({fixtures.filter(f => f.status === 'applied').length})
+          Finished ({fixtures.filter(f => {
+            if (f.status === 'applied') return true;
+            if (f.status === 'postponed') {
+              return new Date(f.kickoff_at) < new Date();
+            }
+            return false;
+          }).length})
         </Button>
         <Button 
           onClick={() => setFilter('upcoming')} 
@@ -316,9 +352,14 @@ const MatchResultsPage: React.FC = () => {
             filter === 'upcoming' 
               ? 'bg-trading-primary hover:bg-trading-primary/80 text-white' 
               : 'text-gray-300 hover:text-white hover:bg-white/10'
-          }`}
-        >
-          Upcoming ({fixtures.filter(f => f.status === 'scheduled' || f.status === 'closed').length})
+          }`}        >
+          Upcoming ({fixtures.filter(f => {
+            if (f.status === 'scheduled') return true;
+            if (f.status === 'postponed') {
+              return new Date(f.kickoff_at) >= new Date();
+            }
+            return false;
+          }).length})
         </Button>
       </div>
 
