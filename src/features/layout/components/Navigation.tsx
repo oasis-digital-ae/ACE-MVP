@@ -55,7 +55,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
   const [netWorthDialogOpen, setNetWorthDialogOpen] = useState(false);
-  const { totalMarketValue = 0 } = useContext(AppContext) || {};
+  const { totalMarketValue = 0, refreshData } = useContext(AppContext) || {};
 
   const allPages = [
     { id: 'marketplace', label: 'Marketplace', icon: TrendingUp },
@@ -74,17 +74,30 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
     }
     return true;
   });
-
   const handleSignOutClick = () => {
     setLogoutDialogOpen(true);
     setMobileMenuOpen(false); // Close mobile menu if open
   };
+  
   const handleConfirmSignOut = async () => {
     try {
       setLogoutDialogOpen(false);
       await signOut();
     } catch (error) {
       console.error('Error signing out:', error);
+    }
+  };
+
+  // Handle Net Worth dialog opening with data refresh
+  const handleNetWorthClick = async () => {
+    setNetWorthDialogOpen(true);
+    // Refresh data to get latest portfolio values after matches
+    if (refreshData) {
+      try {
+        await refreshData();
+      } catch (error) {
+        console.error('Error refreshing data:', error);
+      }
     }
   };
 
@@ -198,9 +211,8 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
                           className="text-red-400 hover:text-red-300 hover:bg-red-900/20 cursor-pointer focus:text-red-300 focus:bg-red-900/20"
                         >
                           <LogOut className="w-4 h-4 mr-2" />
-                          Sign Out
-                        </DropdownMenuItem>                        <DropdownMenuItem
-                          onClick={() => setNetWorthDialogOpen(true)}
+                          Sign Out                        </DropdownMenuItem>                        <DropdownMenuItem
+                          onClick={handleNetWorthClick}
                           className="cursor-pointer hover:bg-gray-700/50"
                         >
                           <TrendingUp className="w-4 h-4 mr-2 text-trading-primary" />
@@ -281,9 +293,8 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
                       className="text-red-400 hover:text-red-300 hover:bg-red-900/20 cursor-pointer focus:text-red-300 focus:bg-red-900/20"
                     >
                       <LogOut className="w-4 h-4 mr-2" />
-                      Sign Out
-                    </DropdownMenuItem>                    <DropdownMenuItem
-                      onClick={() => setNetWorthDialogOpen(true)}
+                      Sign Out                    </DropdownMenuItem>                    <DropdownMenuItem
+                      onClick={handleNetWorthClick}
                       className="cursor-pointer hover:bg-gray-700/50"
                     >
                       <TrendingUp className="w-4 h-4 mr-2 text-trading-primary" />

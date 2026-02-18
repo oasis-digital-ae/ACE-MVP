@@ -16,6 +16,7 @@ interface UserProfile {
   country: string;
   phone: string;
   is_admin?: boolean;
+  reffered_by?: string;
 }
 
 interface AuthContextType {
@@ -350,8 +351,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         // Convert birthday string to date if provided
         const birthdayDate = userData.birthday ? new Date(userData.birthday).toISOString().split('T')[0] : null;
-        
-        // Use atomic RPC function to create/update profile
+          // Use atomic RPC function to create/update profile
         // This ensures all fields are set atomically in a single transaction
         const { error: profileError } = await supabase.rpc(
           'create_or_update_profile_atomic',
@@ -363,7 +363,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             p_email: email,
             p_birthday: birthdayDate,
             p_country: userData.country || null,
-            p_phone: userData.phone || null
+            p_phone: userData.phone || null,
+            p_reffered_by: userData.reffered_by || null
           }
         );
 
