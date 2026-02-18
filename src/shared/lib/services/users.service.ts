@@ -13,13 +13,13 @@ export interface UserListItem {
   wallet_balance: number;
   total_deposits: number; // Total deposits made by user
   total_invested: number;
-  portfolio_value: number;
-  unrealized_pnl: number;
+  portfolio_value: number;  unrealized_pnl: number;
   realized_pnl: number;
   profit_loss: number; // Total P&L (unrealized + realized)
   positions_count: number;
   last_activity: string;
   created_at: string;
+  reffered_by?: string;
 }
 
 export interface UserDetails extends UserListItem {
@@ -67,8 +67,7 @@ export const usersService = {
    * Get list of all users with aggregated metrics
    */
   async getUserList(): Promise<UserListItem[]> {
-    try {
-      // Get all profiles with wallet balances
+    try {      // Get all profiles with wallet balances
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
         .select(`
@@ -78,7 +77,8 @@ export const usersService = {
           last_name,
           email,
           wallet_balance,
-          created_at
+          created_at,
+          reffered_by
         `)
         .order('created_at', { ascending: false });
 
@@ -234,9 +234,7 @@ export const usersService = {
           realizedPnl: 0,
           profitLoss: 0,
           positionsCount: 0
-        };
-
-        return {
+        };        return {
           id: profile.id,
           username: profile.username || 'Unknown',
           first_name: profile.first_name,
@@ -248,10 +246,10 @@ export const usersService = {
           portfolio_value: metrics.portfolioValue,
           unrealized_pnl: metrics.unrealizedPnl,
           realized_pnl: metrics.realizedPnl,
-          profit_loss: metrics.profitLoss,
-          positions_count: metrics.positionsCount,
+          profit_loss: metrics.profitLoss,          positions_count: metrics.positionsCount,
           last_activity: lastActivityMap.get(profile.id) || profile.created_at,
-          created_at: profile.created_at
+          created_at: profile.created_at,
+          reffered_by: profile.reffered_by
         };
       });
 
@@ -613,10 +611,10 @@ export const usersService = {
         portfolio_value: portfolioValue,
         unrealized_pnl: unrealizedPnl,
         realized_pnl: realizedPnl,
-        profit_loss: profitLoss,
-        positions_count: positionsList.length,
+        profit_loss: profitLoss,        positions_count: positionsList.length,
         last_activity: ordersList[0]?.executed_at || profile.created_at,
         created_at: profile.created_at,
+        reffered_by: profile.reffered_by,
         positions: positionsList,
         orders: ordersList
       };

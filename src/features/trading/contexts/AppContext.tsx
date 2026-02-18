@@ -626,9 +626,18 @@ const AppProviderInner: React.FC<{ children: React.ReactNode }> = ({ children })
         }
         
         throw new BusinessLogicError(friendlyMessage);
-      }
+      }      logger.debug(`Atomic purchase completed successfully:`, result);
 
-      logger.debug(`Atomic purchase completed successfully:`, result);
+      // EVENT-DRIVEN SYNC: Update portfolio_value in database immediately
+      // This ensures admin panel and all views show consistent values
+      try {
+        const { portfolioSyncService } = await import('@/shared/lib/services/portfolio-sync.service');
+        await portfolioSyncService.syncUserPortfolio(profileId, true);
+        logger.debug('Portfolio sync completed after purchase');
+      } catch (syncError) {
+        logger.error('Portfolio sync failed after purchase (non-fatal):', syncError);
+        // Don't throw - sync failure shouldn't break user experience
+      }
 
       // Refresh data immediately after purchase
       logger.debug('Refreshing data after purchase...');
@@ -800,9 +809,18 @@ const AppProviderInner: React.FC<{ children: React.ReactNode }> = ({ children })
         }
         
         throw new BusinessLogicError(friendlyMessage);
-      }
+      }      logger.debug(`Atomic sale completed successfully:`, result);
 
-      logger.debug(`Atomic sale completed successfully:`, result);
+      // EVENT-DRIVEN SYNC: Update portfolio_value in database immediately
+      // This ensures admin panel and all views show consistent values
+      try {
+        const { portfolioSyncService } = await import('@/shared/lib/services/portfolio-sync.service');
+        await portfolioSyncService.syncUserPortfolio(profileId, true);
+        logger.debug('Portfolio sync completed after sale');
+      } catch (syncError) {
+        logger.error('Portfolio sync failed after sale (non-fatal):', syncError);
+        // Don't throw - sync failure shouldn't break user experience
+      }
 
       // Refresh data immediately after sale
       logger.debug('Refreshing data after sale...');
