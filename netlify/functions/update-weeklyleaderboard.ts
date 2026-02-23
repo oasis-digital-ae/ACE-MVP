@@ -70,10 +70,10 @@ function getCompletedUAEWeekBounds() {
   weekStartUAE.setUTCDate(nowUAE.getUTCDate() + diffToMonday);
   weekStartUAE.setUTCHours(3, 0, 0, 0);
 
-  // Next Monday 02:59 UAE (exactly 7 days minus 1 minute)
+  // Next Monday 02:59:59 UAE (exactly 7 days, matches DB format)
   const weekEndUAE = new Date(weekStartUAE);
   weekEndUAE.setUTCDate(weekStartUAE.getUTCDate() + 7);
-  weekEndUAE.setUTCHours(2, 59, 0, 0);
+  weekEndUAE.setUTCHours(2, 59, 59, 0);
 
   // Convert back to UTC before saving to DB
   return {
@@ -119,6 +119,9 @@ export const handler = schedule("0 23 * * 0", async (event: HandlerEvent): Promi
   console.log("  Week start (UTC):", week_start.toISOString());
   console.log("  Week end   (UTC):", week_end.toISOString());
 
+  const weekStartStr = week_start.toISOString();
+  const weekEndStr = week_end.toISOString();
+
   /**
    * Guard: prevent duplicate leaderboard generation
    * We check using a RANGE instead of exact timestamps
@@ -127,8 +130,8 @@ export const handler = schedule("0 23 * * 0", async (event: HandlerEvent): Promi
   const { count } = await supabase
     .from("weekly_leaderboard")
     .select("id", { count: "exact", head: true })
-    .gte("week_start", week_start)
-    .lt("week_start", week_end);
+    .gte("week_start", weekStartStr)
+    .lt("week_start", weekEndStr);
 
   if (count && count > 0) {
     console.log("⚠️ Leaderboard already generated for this week");
@@ -141,8 +144,8 @@ export const handler = schedule("0 23 * * 0", async (event: HandlerEvent): Promi
   const { data, error } = await supabase.rpc(
     "generate_weekly_leaderboard",
     {
-      p_week_start: week_start.toISOString(),
-      p_week_end: week_end.toISOString(),
+      p_week_start: weekStartStr,
+      p_week_end: weekEndStr,
     }
   );
 
@@ -152,12 +155,27 @@ export const handler = schedule("0 23 * * 0", async (event: HandlerEvent): Promi
   }
 
   /**
-   * Step 2: Insert new leaderboard rows
+   * Step 2: Get next week_number (table has week_number column, RPC does not return it)
    */
-  const rows = data.map((r: any) => ({
+  const { data: maxWeek } = await supabase
+    .from("weekly_leaderboard")
+    .select("week_number")
+    .order("week_number", { ascending: false })
+    .limit(1)
+    .single();
+
+  const nextWeekNumber = (maxWeek?.week_number ?? 0) + 1;
+  console.log("  Week number:", nextWeekNumber);
+
+  /**
+   * Step 3: Insert new leaderboard rows
+   * Table expects: user_id, rank, *values, week_start, week_end, week_number, is_latest
+   */
+  const rows = data.map((r: Record<string, unknown>) => ({
     ...r,
-    week_start: week_start.toISOString(),
-    week_end: week_end.toISOString(),
+    week_start: weekStartStr,
+    week_end: weekEndStr,
+    week_number: nextWeekNumber,
     is_latest: true,
   }));
 
@@ -171,13 +189,17 @@ export const handler = schedule("0 23 * * 0", async (event: HandlerEvent): Promi
   }
 
   /**
-   * Step 3: Safely demote previous leaderboard entries
-   * (Only after new rows are successfully inserted)
+   * Step 4: Demote previous leaderboard entries (set is_latest = false)
+   * Use week_start string for consistent comparison with timestamptz
    */
-  await supabase
+  const { error: demoteError } = await supabase
     .from("weekly_leaderboard")
     .update({ is_latest: false })
-    .neq("week_start", week_start);
+    .neq("week_start", weekStartStr);
+
+  if (demoteError) {
+    console.warn("⚠️ Demote previous failed (non-fatal):", demoteError);
+  }
 
   console.log(`✅ Weekly leaderboard generated (${rows.length} users)`);
 

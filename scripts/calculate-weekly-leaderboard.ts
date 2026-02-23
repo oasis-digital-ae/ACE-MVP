@@ -73,7 +73,7 @@ function getUAEWeekBounds(weeksAgo = 0) {
 
   const weekEndUAE = new Date(weekStartUAE);
   weekEndUAE.setUTCDate(weekStartUAE.getUTCDate() + 7);
-  weekEndUAE.setUTCHours(2, 59, 0, 0);
+  weekEndUAE.setUTCHours(2, 59, 59, 0); // Match DB format (22:59:59 UTC)
 
   return {
     week_start: new Date(weekStartUAE.getTime() - 4 * 60 * 60 * 1000),
@@ -122,6 +122,17 @@ async function backfillWeeklyLeaderboard(weeksToBackfill: number) {
       continue;
     }
 
+    // Get week_number: for backfill, use max - i so oldest week gets lowest number
+    const { data: maxWeek } = await supabase
+      .from('weekly_leaderboard')
+      .select('week_number')
+      .order('week_number', { ascending: false })
+      .limit(1)
+      .single();
+
+    const maxNum = maxWeek?.week_number ?? 0;
+    const weekNumber = maxNum - i; // i=0 (current) -> max, i=3 (oldest) -> max-3
+
     // Reset is_latest if this is the current week
     if (isLatest) {
       await supabase
@@ -130,11 +141,12 @@ async function backfillWeeklyLeaderboard(weeksToBackfill: number) {
         .eq('is_latest', true);
     }
 
-    // Insert
+    // Insert (include week_number to match table structure)
     const rows = data.map((r: Record<string, unknown>) => ({
       ...r,
       week_start: week_start.toISOString(),
       week_end: week_end.toISOString(),
+      week_number: weekNumber,
       is_latest: isLatest,
     }));
 
