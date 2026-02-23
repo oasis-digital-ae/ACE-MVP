@@ -1,4 +1,5 @@
-import { Handler } from "@netlify/functions";
+import type { HandlerEvent, HandlerResponse } from "@netlify/functions";
+import { schedule } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
 
 /**
@@ -81,17 +82,32 @@ function getCompletedUAEWeekBounds() {
   };
 }
 
-export const handler: Handler = async (event: any) => {
+/**
+ * Weekly leaderboard scheduled function.
+ * Schedule: Sunday 23:00 UTC = Monday 03:00 UAE
+ * Uses schedule() wrapper so Netlify recognizes it as a scheduled function.
+ * NOTE: Scheduled functions only run on PRODUCTION (published) deploys, not branch deploys.
+ */
+export const handler = schedule("0 23 * * 0", async (event: HandlerEvent): Promise<HandlerResponse> => {
   /**
-   * Allow execution ONLY via:
-   * - Netlify scheduled cron
-   * - Manual admin trigger (POST with header)
+   * Allow execution via:
+   * - Netlify scheduled cron (body contains next_run)
+   * - Manual: POST with header x-manual-run: true or query ?manual=true
    */
+  const headers = event.headers || {};
+  const manualHeader = headers["x-manual-run"] ?? headers["X-Manual-Run"];
+  const manualQuery = event.queryStringParameters?.manual === "true";
   const isManual =
     event.httpMethod === "POST" &&
-    event.headers["x-manual-run"] === "true";
+    (manualHeader === "true" || manualQuery);
 
-  if (!event?.cron && !isManual) {
+  // Scheduled invocations send body: {"next_run":"..."} (per Netlify docs)
+  const isScheduled = Boolean(
+    (event as { cron?: boolean }).cron ||
+    (event.body && typeof event.body === "string" && event.body.includes("next_run"))
+  );
+
+  if (!isScheduled && !isManual) {
     return { statusCode: 403, body: "Forbidden" };
   }
 
@@ -140,8 +156,8 @@ export const handler: Handler = async (event: any) => {
    */
   const rows = data.map((r: any) => ({
     ...r,
-    week_start,
-    week_end,
+    week_start: week_start.toISOString(),
+    week_end: week_end.toISOString(),
     is_latest: true,
   }));
 
@@ -169,4 +185,4 @@ export const handler: Handler = async (event: any) => {
     statusCode: 200,
     body: "Weekly leaderboard generated successfully",
   };
-};
+});
