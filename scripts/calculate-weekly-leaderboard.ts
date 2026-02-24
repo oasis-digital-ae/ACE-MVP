@@ -19,6 +19,16 @@
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { createClient } from '@supabase/supabase-js';
+import Decimal from 'decimal.js';
+
+// Import centralized calculation utilities
+import {
+  calculateWeeklyReturn,
+  calculateLeaderboard,
+  toLeaderboardDbFormat,
+  validateLeaderboardEntries,
+  type UserLeaderboardData
+} from '../src/shared/lib/utils/leaderboard-calculations';
 
 // Load .env if present
 const envPath = join(process.cwd(), '.env');
@@ -81,6 +91,152 @@ function getUAEWeekBounds(weeksAgo = 0) {
   };
 }
 
+/**
+ * Helper: Convert cents (bigint) to dollars with FULL PRECISION
+ * CRITICAL: Do NOT round during intermediate calculations
+ */
+function fromCents(cents: number | null | undefined): number {
+  if (cents === null || cents === undefined) return 0;
+  return new Decimal(cents).dividedBy(100).toNumber();
+}
+
+/**
+ * Helper: Convert Decimal to number with FULL PRECISION
+ */
+function toNumber(value: Decimal): number {
+  return value.toNumber();
+}
+
+/**
+ * Fetch user wallet and portfolio data for leaderboard calculation
+ * Uses the same calculation logic as the frontend for consistency
+ */
+async function fetchUserLeaderboardData(
+  weekStart: string,
+  weekEnd: string
+): Promise<UserLeaderboardData[]> {
+  console.log('   📊 Fetching user data...');
+
+  // Get all users with profiles
+  const { data: profiles, error: profilesError } = await supabase
+    .from('profiles')
+    .select('id, full_name, wallet_balance');
+
+  if (profilesError) {
+    console.error('   ❌ Failed to fetch profiles:', profilesError);
+    throw profilesError;
+  }
+
+  if (!profiles || profiles.length === 0) {
+    console.log('   ⚠️ No users found');
+    return [];
+  }
+
+  console.log(`   Found ${profiles.length} users`);
+
+  // Process each user
+  const userData: UserLeaderboardData[] = [];
+
+  for (const profile of profiles) {
+    const userId = profile.id;
+
+    // 1. Get wallet balance at start and end of week
+    const { data: startWalletData } = await supabase
+      .from('wallet_transactions')
+      .select('balance_after')
+      .eq('user_id', userId)
+      .lt('created_at', weekStart)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const { data: endWalletData } = await supabase
+      .from('wallet_transactions')
+      .select('balance_after')
+      .eq('user_id', userId)
+      .lt('created_at', weekEnd)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const startWalletValue = fromCents(startWalletData?.balance_after ?? 0);
+    const endWalletValue = fromCents(endWalletData?.balance_after ?? profile.wallet_balance ?? 0);    // 2. Get portfolio value at start and end of week
+    const { data: startPositions } = await supabase
+      .from('positions')
+      .select('team_id, quantity, total_invested')
+      .eq('user_id', userId);
+
+    // CRITICAL: Use Decimal.js for ALL portfolio calculations to ensure precision
+    let startPortfolioValue = new Decimal(0);
+    let endPortfolioValue = new Decimal(0);
+
+    if (startPositions && startPositions.length > 0) {
+      for (const position of startPositions) {
+        const { data: startLedger } = await supabase
+          .from('total_ledger')
+          .select('share_price_after')
+          .eq('team_id', position.team_id)
+          .lte('event_date', weekStart)
+          .order('event_date', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const { data: endLedger } = await supabase
+          .from('total_ledger')
+          .select('share_price_after')
+          .eq('team_id', position.team_id)
+          .lte('event_date', weekEnd)
+          .order('event_date', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const startPrice = new Decimal(startLedger?.share_price_after ?? 20.0);
+        const endPrice = new Decimal(endLedger?.share_price_after ?? startLedger?.share_price_after ?? 20.0);
+        const quantity = new Decimal(position.quantity ?? 0);
+
+        // Use Decimal multiplication for precision
+        startPortfolioValue = startPortfolioValue.plus(startPrice.times(quantity));
+        endPortfolioValue = endPortfolioValue.plus(endPrice.times(quantity));
+      }
+    }
+
+    // 3. Calculate deposits during the week
+    const { data: deposits } = await supabase
+      .from('wallet_transactions')
+      .select('amount_cents')
+      .eq('user_id', userId)
+      .eq('type', 'deposit')
+      .gte('created_at', weekStart)
+      .lt('created_at', weekEnd);
+
+    const depositsWeek = (deposits || []).reduce((sum, tx) => sum + fromCents(tx.amount_cents), 0);
+
+    // 4. Calculate account values using Decimal.js
+    const startAccountValue = new Decimal(startWalletValue).plus(startPortfolioValue).toNumber();
+    const endAccountValue = new Decimal(endWalletValue).plus(endPortfolioValue).toNumber();
+
+    // 5. Include users with any account activity
+    const hasActivity = startAccountValue > 0 || endAccountValue > 0 || depositsWeek > 0;
+
+    if (hasActivity) {
+      userData.push({
+        user_id: userId,
+        full_name: profile.full_name,
+        start_wallet_value: startWalletValue,
+        start_portfolio_value: toNumber(startPortfolioValue),
+        start_account_value: startAccountValue,
+        end_wallet_value: endWalletValue,
+        end_portfolio_value: toNumber(endPortfolioValue),
+        end_account_value: endAccountValue,
+        deposits_week: depositsWeek
+      });
+    }
+  }
+
+  console.log(`   Processed ${userData.length} users with activity`);
+  return userData;
+}
+
 async function backfillWeeklyLeaderboard(weeksToBackfill: number) {
   console.log(`🚀 Weekly Leaderboard Backfill (last ${weeksToBackfill} week(s))`);
   console.log('');
@@ -104,23 +260,28 @@ async function backfillWeeklyLeaderboard(weeksToBackfill: number) {
     if (count && count > 0) {
       console.log('   ⏭️  Already processed, skipping');
       continue;
-    }
+    }    // Fetch user data and compute leaderboard using TypeScript
+    const userData = await fetchUserLeaderboardData(
+      week_start.toISOString(),
+      week_end.toISOString()
+    );
 
-    // Compute via RPC
-    const { data, error } = await supabase.rpc('generate_weekly_leaderboard_exact_v2', {
-      p_week_start: week_start.toISOString(),
-      p_week_end: week_end.toISOString(),
-    });
-
-    if (error) {
-      console.error('   ❌ RPC error:', error.message);
-      throw error;
-    }
-
-    if (!data || data.length === 0) {
+    if (userData.length === 0) {
       console.log('   ⚠️  No users with accounts, skipping insert');
       continue;
     }
+
+    // Calculate leaderboard using centralized calculation logic
+    const leaderboardEntries = calculateLeaderboard(userData);
+
+    // Validate calculations
+    const validationErrors = validateLeaderboardEntries(leaderboardEntries);
+    if (validationErrors.length > 0) {
+      console.error('   ❌ Validation errors:', validationErrors);
+      throw new Error('Validation failed');
+    }
+
+    console.log(`   ✅ Calculated leaderboard for ${leaderboardEntries.length} users`);
 
     // Get week_number: for backfill, use max - i so oldest week gets lowest number
     const { data: maxWeek } = await supabase
@@ -139,11 +300,9 @@ async function backfillWeeklyLeaderboard(weeksToBackfill: number) {
         .from('weekly_leaderboard')
         .update({ is_latest: false })
         .eq('is_latest', true);
-    }
-
-    // Insert (include week_number to match table structure)
-    const rows = data.map((r: Record<string, unknown>) => ({
-      ...r,
+    }    // Insert (include week_number to match table structure)
+    const rows = leaderboardEntries.map((entry) => ({
+      ...toLeaderboardDbFormat(entry),
       week_start: week_start.toISOString(),
       week_end: week_end.toISOString(),
       week_number: weekNumber,

@@ -1,6 +1,16 @@
 import type { HandlerEvent, HandlerResponse } from "@netlify/functions";
 import { schedule } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
+import Decimal from 'decimal.js';
+
+// Import centralized calculation utilities
+import {
+  calculateWeeklyReturn,
+  calculateLeaderboard,
+  toLeaderboardDbFormat,
+  validateLeaderboardEntries,
+  type UserLeaderboardData
+} from "../../src/shared/lib/utils/leaderboard-calculations";
 
 /**
  * Helper function to get environment variables with fallbacks
@@ -74,12 +84,174 @@ function getCompletedUAEWeekBounds() {
   const weekEndUAE = new Date(weekStartUAE);
   weekEndUAE.setUTCDate(weekStartUAE.getUTCDate() + 7);
   weekEndUAE.setUTCHours(2, 59, 59, 0);
-
   // Convert back to UTC before saving to DB
   return {
     week_start: new Date(weekStartUAE.getTime() - 4 * 60 * 60 * 1000),
     week_end: new Date(weekEndUAE.getTime() - 4 * 60 * 60 * 1000),
   };
+}
+
+/**
+ * Helper: Convert cents (bigint) to dollars with FULL PRECISION
+ * CRITICAL: Do NOT round during intermediate calculations
+ * Only round when displaying or storing final results
+ */
+function fromCents(cents: number | null | undefined): number {
+  if (cents === null || cents === undefined) return 0;
+  // Keep full precision - let Decimal.js handle it
+  return new Decimal(cents).dividedBy(100).toNumber();
+}
+
+/**
+ * Helper: Convert Decimal to number with FULL PRECISION
+ * Used for intermediate calculations to avoid rounding errors
+ */
+function toNumber(value: Decimal): number {
+  return value.toNumber();
+}
+
+/**
+ * Fetch user wallet and portfolio data for leaderboard calculation
+ * Uses the same calculation logic as the frontend for consistency
+ */
+async function fetchUserLeaderboardData(
+  weekStart: string,
+  weekEnd: string
+): Promise<UserLeaderboardData[]> {
+  console.log("📊 Fetching user data for leaderboard calculation...");
+
+  // Get all users with profiles
+  const { data: profiles, error: profilesError } = await supabase
+    .from("profiles")
+    .select("id, full_name, wallet_balance");
+
+  if (profilesError) {
+    console.error("❌ Failed to fetch profiles:", profilesError);
+    throw profilesError;
+  }
+
+  if (!profiles || profiles.length === 0) {
+    console.log("⚠️ No users found");
+    return [];
+  }
+
+  console.log(`  Found ${profiles.length} users`);
+
+  // Process each user
+  const userData: UserLeaderboardData[] = [];
+
+  for (const profile of profiles) {
+    const userId = profile.id;
+
+    // 1. Get wallet balance at start and end of week
+    // Start: Get wallet_balance from last transaction BEFORE week_start
+    const { data: startWalletData } = await supabase
+      .from("wallet_transactions")
+      .select("balance_after")
+      .eq("user_id", userId)
+      .lt("created_at", weekStart)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    // End: Get wallet_balance from last transaction BEFORE week_end (or current if no transactions)
+    const { data: endWalletData } = await supabase
+      .from("wallet_transactions")
+      .select("balance_after")
+      .eq("user_id", userId)
+      .lt("created_at", weekEnd)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();    const startWalletValue = fromCents(startWalletData?.balance_after ?? 0);
+    const endWalletValue = fromCents(endWalletData?.balance_after ?? profile.wallet_balance ?? 0);
+
+    // 2. Get user's positions for portfolio calculation
+    const { data: startPositions } = await supabase
+      .from("positions")
+      .select("team_id, quantity, total_invested")
+      .eq("user_id", userId);
+
+    // 2. Get portfolio value at start and end of week
+    // CRITICAL: Use Decimal.js for ALL portfolio calculations to ensure precision
+    let startPortfolioValue = new Decimal(0);
+    let endPortfolioValue = new Decimal(0);
+
+    if (startPositions && startPositions.length > 0) {
+      for (const position of startPositions) {
+        // Get team price at week start (from total_ledger)
+        const { data: startLedger } = await supabase
+          .from("total_ledger")
+          .select("share_price_after")
+          .eq("team_id", position.team_id)
+          .lte("event_date", weekStart)
+          .order("event_date", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        // Get team price at week end
+        const { data: endLedger } = await supabase
+          .from("total_ledger")
+          .select("share_price_after")
+          .eq("team_id", position.team_id)
+          .lte("event_date", weekEnd)
+          .order("event_date", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const startPrice = new Decimal(startLedger?.share_price_after ?? 20.0);
+        const endPrice = new Decimal(endLedger?.share_price_after ?? startLedger?.share_price_after ?? 20.0);
+        const quantity = new Decimal(position.quantity ?? 0);
+
+        // Use Decimal multiplication for precision
+        startPortfolioValue = startPortfolioValue.plus(startPrice.times(quantity));
+        endPortfolioValue = endPortfolioValue.plus(endPrice.times(quantity));
+      }
+    }
+
+    // 3. Calculate deposits during the week
+    const { data: deposits } = await supabase
+      .from("wallet_transactions")
+      .select("amount_cents")
+      .eq("user_id", userId)
+      .eq("type", "deposit")
+      .gte("created_at", weekStart)
+      .lt("created_at", weekEnd);
+
+    const depositsWeek = (deposits || []).reduce((sum, tx) => sum + fromCents(tx.amount_cents), 0);
+
+    // 4. Calculate account values using Decimal.js
+    const startAccountValue = new Decimal(startWalletValue).plus(startPortfolioValue).toNumber();
+    const endAccountValue = new Decimal(endWalletValue).plus(endPortfolioValue).toNumber();
+
+    // 5. Determine if user should be included in leaderboard
+    // Include if ANY of these conditions are met:
+    // - Has starting account value (existing user)
+    // - Has ending account value (made trades/received deposits)
+    // - Made deposits this week (new user who deposited)
+    const hasActivity = startAccountValue > 0 || endAccountValue > 0 || depositsWeek > 0;
+    
+    // Special handling for mid-week joiners:
+    // If user joined mid-week (start = 0) but has deposits and trades (end > deposits),
+    // they should be included
+    const isMidWeekJoiner = startAccountValue === 0 && depositsWeek > 0;
+    const hasTradingActivity = endAccountValue > depositsWeek; // Traded, not just deposited
+
+    if (hasActivity) {
+      userData.push({
+        user_id: userId,
+        full_name: profile.full_name,
+        start_wallet_value: startWalletValue,
+        start_portfolio_value: toNumber(startPortfolioValue),
+        start_account_value: startAccountValue,
+        end_wallet_value: endWalletValue,
+                end_portfolio_value: toNumber(endPortfolioValue),
+        end_account_value: endAccountValue,
+        deposits_week: depositsWeek
+      });
+    }
+  }
+  console.log(`  Processed ${userData.length} users with account activity`);
+  return userData;
 }
 
 /**
@@ -137,22 +309,30 @@ export const handler = schedule("0 23 * * 0", async (event: HandlerEvent): Promi
     console.log("⚠️ Leaderboard already generated for this week");
     return { statusCode: 200, body: "Already processed" };
   }
-
   /**
-   * Step 1: Compute leaderboard via SQL function
+   * Step 1: Fetch user data and compute leaderboard using TypeScript
+   * This ensures calculations match the frontend exactly (using Decimal.js)
    */
-  const { data, error } = await supabase.rpc(
-    "generate_weekly_leaderboard_exact_v2",
-    {
-      p_week_start: weekStartStr,
-      p_week_end: weekEndStr,
-    }
-  );
+  const userData = await fetchUserLeaderboardData(weekStartStr, weekEndStr);
 
-  if (error || !data || data.length === 0) {
-    console.error("❌ Leaderboard computation failed", error);
-    return { statusCode: 500, body: "Computation failed" };
+  if (userData.length === 0) {
+    console.log("⚠️ No users with account activity for this week");
+    return { statusCode: 200, body: "No users to process" };
   }
+
+  // Calculate leaderboard using centralized calculation logic
+  const leaderboardEntries = calculateLeaderboard(userData);
+
+  // Validate calculations
+  const validationErrors = validateLeaderboardEntries(leaderboardEntries);
+  if (validationErrors.length > 0) {
+    console.error("❌ Validation errors:", validationErrors);
+    return { statusCode: 500, body: "Validation failed" };
+  }
+
+  console.log(`✅ Calculated leaderboard for ${leaderboardEntries.length} users`);
+  console.log(`  Top 3: ${leaderboardEntries.slice(0, 3).map(e => `${e.full_name || 'Unknown'}: ${(e.weekly_return * 100).toFixed(2)}%`).join(', ')}`);
+
 
   /**
    * Step 2: Get next week_number (table has week_number column, RPC does not return it)
@@ -166,13 +346,12 @@ export const handler = schedule("0 23 * * 0", async (event: HandlerEvent): Promi
 
   const nextWeekNumber = (maxWeek?.week_number ?? 0) + 1;
   console.log("  Week number:", nextWeekNumber);
-
   /**
    * Step 3: Insert new leaderboard rows
-   * Table expects: user_id, rank, *values, week_start, week_end, week_number, is_latest
+   * Convert to database format (cents for bigint storage)
    */
-  const rows = data.map((r: Record<string, unknown>) => ({
-    ...r,
+  const rows = leaderboardEntries.map((entry) => ({
+    ...toLeaderboardDbFormat(entry),
     week_start: weekStartStr,
     week_end: weekEndStr,
     week_number: nextWeekNumber,
