@@ -13,7 +13,8 @@ export interface UserListItem {
   wallet_balance: number;
   total_deposits: number; // Total deposits made by user
   total_invested: number;
-  portfolio_value: number;  unrealized_pnl: number;
+  portfolio_value: number;  
+  unrealized_pnl: number;
   realized_pnl: number;
   profit_loss: number; // Total P&L (unrealized + realized)
   positions_count: number;
