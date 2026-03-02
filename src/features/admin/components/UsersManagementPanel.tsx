@@ -23,7 +23,7 @@ import {
   Wallet,
   CreditCard
 } from 'lucide-react';
-import { usersService, type UserListItem, type UserDetails, type WalletTransaction } from '@/shared/lib/services/users.service';
+import { usersService, type UserListItem, type UserDetails, type WalletTransactionEnriched } from '@/shared/lib/services/users.service';
 import { formatCurrency } from '@/shared/lib/formatters';
 import { useToast } from '@/shared/hooks/use-toast';
 import { supabase } from '@/shared/lib/supabase';
@@ -38,7 +38,7 @@ type SortDirection = 'asc' | 'desc';
 export const UsersManagementPanel: React.FC = () => {
   const [users, setUsers] = useState<UserListItem[]>([]);
   const [selectedUser, setSelectedUser] = useState<UserDetails | null>(null);
-  const [userTransactions, setUserTransactions] = useState<WalletTransaction[]>([]);
+  const [userTransactions, setUserTransactions] = useState<WalletTransactionEnriched[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -76,7 +76,7 @@ export const UsersManagementPanel: React.FC = () => {
     try {
       const [details, transactions] = await Promise.all([
         usersService.getUserDetails(userId),
-        usersService.getUserTransactions(userId, 50)
+        usersService.getUserTransactionsEnriched(userId, 50)
       ]);
       setSelectedUser(details);
       setUserTransactions(transactions);
@@ -601,27 +601,82 @@ export const UsersManagementPanel: React.FC = () => {
                       </div>
                     </div>
                     <div>
-                      <p className="text-sm font-medium mb-2">Transaction History</p>
-                      <div className="space-y-2 max-h-64 overflow-y-auto scrollbar-hide">                        
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <div>
+                          <p className="text-sm font-medium">Transaction History</p>
+                          <p className="text-xs text-muted-foreground">
+                            Purchase/sale details show team, quantity, and price for easier leaderboard tracing
+                          </p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const headers = ['Date', 'Type', 'Amount', 'Team', 'Quantity', 'Price/Share', 'Order ID', 'Ref'];
+                            const rows = userTransactions.map((tx) => [
+                              new Date(tx.created_at).toISOString(),
+                              tx.type,
+                              (tx.amount_cents / 100).toFixed(2),
+                              tx.team_name ?? '',
+                              tx.quantity ?? '',
+                              tx.price_per_share_cents != null ? (tx.price_per_share_cents / 100).toFixed(2) : '',
+                              tx.order_id ?? '',
+                              tx.ref ?? ''
+                            ]);
+                            const csv = [headers.join(','), ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))].join('\n');
+                            const blob = new Blob([csv], { type: 'text/csv' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `transactions-${selectedUser?.username ?? 'user'}-${new Date().toISOString().slice(0, 10)}.csv`;
+                            a.click();
+                            URL.revokeObjectURL(url);
+                          }}
+                          disabled={userTransactions.length === 0}
+                        >
+                          <Download className="h-4 w-4 mr-1.5" />
+                          Export CSV
+                        </Button>
+                      </div>
+                      <div className="space-y-2 max-h-80 overflow-y-auto scrollbar-hide">                        
                         {userTransactions.length === 0 ? (
                           <p className="text-sm text-muted-foreground">No transactions</p>
                         ) : (
                           userTransactions.map((tx) => {
-                            // Types that add money to wallet (positive/green): deposit, sale, refund, credit_loan
                             const isPositive = ['deposit', 'sale', 'refund', 'credit_loan'].includes(tx.type.toLowerCase());
                             const amount = tx.amount_cents / 100;
-                            const displayType = tx.type === 'credit_loan' ? 'Platform Credit' : tx.type;
+                            const displayType = tx.type === 'credit_loan' ? 'Platform Credit' : tx.type === 'credit_loan_reversal' ? 'Credit Reversal' : tx.type;
+                            
+                            let description: string;
+                            if (tx.type === 'purchase' && tx.team_name != null) {
+                              const price = (tx.price_per_share_cents ?? 0) / 100;
+                              description = `${tx.quantity ?? '?'} shares of ${tx.team_name} @ ${formatCurrency(price)}`;
+                            } else if (tx.type === 'sale' && tx.team_name != null) {
+                              const price = (tx.price_per_share_cents ?? 0) / 100;
+                              description = `${tx.quantity ?? '?'} shares of ${tx.team_name} @ ${formatCurrency(price)}`;
+                            } else if (tx.ref) {
+                              description = tx.ref;
+                            } else {
+                              description = new Date(tx.created_at).toLocaleString();
+                            }
                             
                             return (
-                              <div key={tx.id} className="flex items-center justify-between p-2 border rounded text-sm">
+                              <div key={tx.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 p-2.5 border rounded text-sm">
                                 <div className="min-w-0 flex-1">
-                                  <p className="text-sm font-medium capitalize truncate">{displayType}</p>
-                                  <p className="text-xs text-muted-foreground truncate">
-                                    {new Date(tx.created_at).toLocaleString()}                                  </p>
+                                  <p className="text-sm font-medium capitalize">{displayType}</p>
+                                  <p className="text-xs text-muted-foreground break-words" title={description}>
+                                    {description}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground/80 mt-0.5">
+                                    {new Date(tx.created_at).toLocaleString()}
+                                    {tx.order_id != null && (
+                                      <span className="ml-1.5 font-mono">#{tx.order_id}</span>
+                                    )}
+                                  </p>
                                 </div>
                                 <div className="text-right flex-shrink-0">
                                   <p className={`text-sm font-medium font-mono whitespace-nowrap ${
-                                    isPositive ? 'text-green-600' : 'text-red-600'
+                                    isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
                                   }`}>
                                     {isPositive ? '+' : '-'}{formatCurrency(Math.abs(amount))}
                                   </p>

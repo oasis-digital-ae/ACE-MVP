@@ -63,6 +63,14 @@ export interface WalletTransaction {
   created_at: string;
 }
 
+/** Enriched transaction with order/team details for purchase/sale */
+export interface WalletTransactionEnriched extends WalletTransaction {
+  order_id?: number;
+  team_name?: string;
+  quantity?: number;
+  price_per_share_cents?: number;
+}
+
 export const usersService = {
   /**
    * Get list of all users with aggregated metrics
@@ -646,6 +654,72 @@ export const usersService = {
   },
 
   /**
+   * Get wallet transactions enriched with order/team details for purchase/sale.
+   * Enables admin to see exactly what was bought/sold (team name, quantity, price).
+   */
+  async getUserTransactionsEnriched(userId: string, limit = 100): Promise<WalletTransactionEnriched[]> {
+    try {
+      const { data: txs, error } = await supabase
+        .from('wallet_transactions')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (error) throw error;
+      const transactions = (txs || []) as WalletTransaction[];
+
+      const orderIds = transactions
+        .filter((tx) => (tx.type === 'purchase' || tx.type === 'sale') && tx.ref?.startsWith('order_'))
+        .map((tx) => {
+          const match = tx.ref?.match(/order_(\d+)/);
+          return match ? parseInt(match[1], 10) : null;
+        })
+        .filter((id): id is number => id != null);
+
+      const orderMap = new Map<number, { team_name: string; quantity: number; price_per_share_cents: number }>();
+
+      if (orderIds.length > 0) {
+        const { data: orders } = await supabase
+          .from('orders')
+          .select('id, team_id, quantity, price_per_share, teams!inner(name)')
+          .eq('user_id', userId)
+          .in('id', orderIds);
+
+        if (orders) {
+          for (const o of orders) {
+            const team = o.teams as { name?: string };
+            orderMap.set(o.id, {
+              team_name: team?.name ?? 'Unknown',
+              quantity: Number(o.quantity),
+              price_per_share_cents: Number(o.price_per_share)
+            });
+          }
+        }
+      }
+
+      return transactions.map((tx) => {
+        const enriched: WalletTransactionEnriched = { ...tx };
+        if ((tx.type === 'purchase' || tx.type === 'sale') && tx.ref) {
+          const match = tx.ref.match(/order_(\d+)/);
+          const orderId = match ? parseInt(match[1], 10) : null;
+          if (orderId && orderMap.has(orderId)) {
+            const o = orderMap.get(orderId)!;
+            enriched.order_id = orderId;
+            enriched.team_name = o.team_name;
+            enriched.quantity = o.quantity;
+            enriched.price_per_share_cents = o.price_per_share_cents;
+          }
+        }
+        return enriched;
+      });
+    } catch (error) {
+      logger.error('Error fetching enriched transactions:', error);
+      throw error;
+    }
+  },
+
+  /**
    * Credit user wallet (admin action) - records as deposit (e.g. Stripe, manual deposit)
    */
   async creditUserWallet(userId: string, amount: number, ref?: string): Promise<void> {
@@ -671,10 +745,12 @@ export const usersService = {
   async creditUserWalletLoan(userId: string, amount: number, ref?: string): Promise<void> {
     try {
       const amountCents = Math.round(amount * 100);
+      // Always append timestamp to ensure unique ref (wallet_transactions has user_id+ref unique constraint)
+      const uniqueRef = ref ? `${ref}_${Date.now()}` : `credit_loan_${Date.now()}`;
       const { error } = await supabase.rpc('credit_wallet_loan', {
         p_user_id: userId,
         p_amount_cents: amountCents,
-        p_ref: ref || `credit_loan_${Date.now()}`,
+        p_ref: uniqueRef,
         p_currency: 'usd'
       });
 
