@@ -391,7 +391,9 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
-        </AlertDialog>        {/* Net Worth Dialog */}
+        </AlertDialog>        
+        
+        {/* Net Worth Dialog */}
         <AlertDialog open={netWorthDialogOpen} onOpenChange={setNetWorthDialogOpen}>
           <AlertDialogContent className="bg-gray-800 border-gray-700 text-white max-w-lg">
             <AlertDialogHeader>
@@ -433,10 +435,10 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
                   <span className="text-white font-medium text-sm">{formatCurrency(walletBalance)}</span>
                 </div>
                   {/* Credit Balance Row */}
-                <div className="flex justify-between items-center py-2">
+                {/* <div className="flex justify-between items-center py-2">
                   <span className="text-gray-400 text-sm">Credit Balance</span>
                   <span className="text-red-400 font-medium text-sm">-{formatCurrency(creditBalance)}</span>
-                </div>
+                </div> */}
                 
                 {/* Total Value Row */}
                 <div className="flex justify-between items-center py-2 border-t border-gray-700/50 pt-3">
