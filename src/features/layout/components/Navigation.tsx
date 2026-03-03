@@ -457,7 +457,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
                 {/* <div className="flex justify-between items-center py-2">
                   <span className="text-gray-400 text-sm">Actual Cash Deposited</span>
                   <span className="text-white font-medium text-sm">{formatCurrency(totalDeposits)}</span>
-                </div> */}
+                </div> */}+
                 
                 {/* Credit Deposited Row - Only show if credit exists */}
                 {creditBalance > 0 && (
