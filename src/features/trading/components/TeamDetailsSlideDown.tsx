@@ -764,8 +764,8 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
                                 <tr>
                                   <th className="px-3 py-2 text-xs font-semibold" style={{ textAlign: 'left' }}>Match</th>
                                   <th className="px-3 py-2 text-xs font-semibold" style={{ textAlign: 'center' }}>Date</th>
-                                  <th className="px-3 py-2 text-xs font-semibold" style={{ textAlign: 'center' }}>{teamName} Price</th>
-                                  <th className="px-3 py-2 text-xs font-semibold" style={{ textAlign: 'center' }}>{teamName} Market Cap</th>
+                                  <th className="px-3 py-2 text-xs font-semibold" style={{ textAlign: 'center' }}>Team Price</th>
+                                  <th className="px-3 py-2 text-xs font-semibold" style={{ textAlign: 'center' }}>Team Market Cap</th>
                                   <th className="px-3 py-2 text-xs font-semibold" style={{ textAlign: 'center' }}>Opponent Price</th>
                                   <th className="px-3 py-2 text-xs font-semibold" style={{ textAlign: 'center' }}>Opponent Market Cap</th>
                                 </tr>
@@ -798,8 +798,9 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
                                           </div>
                                           <span className="text-xs font-medium truncate">vs {match.opponent}</span>
                                         </div>
-                                      </td><td className="px-3 py-2.5 whitespace-nowrap">
-                                        <div className="flex items-center justify-start gap-2">
+                                      </td>
+                                      <td className="px-3 py-2.5 whitespace-nowrap" style={{ textAlign: 'center' }}>
+                                        <div className="flex items-center justify-center gap-2">
                                           {(match.status === 'live' || match.status === 'closed') && (
                                             <Badge variant="outline" className="ml-1 text-yellow-400 border-yellow-400/50 text-[9px] px-1 py-0 animate-pulse flex-shrink-0">
                                               LIVE
