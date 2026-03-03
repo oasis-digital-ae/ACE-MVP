@@ -785,20 +785,20 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
                                       className={`hover:bg-gray-700/30 transition-colors ${
                                         (match.status === 'live' || match.status === 'closed') ? 'bg-red-500/5 border-2 border-red-500' : ''
                                       }`}
-                                    >
-                                      <td className="px-3 py-2.5 whitespace-nowrap">
-                                        <div className="flex items-center justify-center">
-                                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                                    >                                      <td className="px-3 py-2.5">
+                                        <div className="flex items-center gap-2">
+                                          <div className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
                                             (match.status === 'live' || match.status === 'closed')
-                                              ? 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30'
+                                              ? 'bg-yellow-500/20 text-yellow-500'
                                               : match.isHome 
-                                                ? 'bg-[#10B981]/20 text-[#10B981] border border-[#10B981]/30' 
-                                                : 'bg-[#F59E0B]/20 text-[#F59E0B] border border-[#F59E0B]/30'
+                                                ? 'bg-[#10B981]/20 text-[#10B981]' 
+                                                : 'bg-[#F59E0B]/20 text-[#F59E0B]'
                                           }`}>
                                             {(match.status === 'live' || match.status === 'closed') ? match.matchday : (match.isHome ? 'H' : 'A')}
                                           </div>
+                                          <span className="text-xs font-medium truncate">vs {match.opponent}</span>
                                         </div>
-                                      </td>                                      <td className="px-3 py-2.5 whitespace-nowrap">
+                                      </td><td className="px-3 py-2.5 whitespace-nowrap">
                                         <div className="flex items-center justify-start gap-2">
                                           {(match.status === 'live' || match.status === 'closed') && (
                                             <Badge variant="outline" className="ml-1 text-yellow-400 border-yellow-400/50 text-[9px] px-1 py-0 animate-pulse flex-shrink-0">
@@ -858,8 +858,7 @@ const TeamDetailsSlideDown: React.FC<TeamDetailsSlideDownProps> = ({
                                       ? 'bg-red-500/5 border-2 border-red-500' 
                                       : 'bg-gray-800/40 border border-gray-700/30'
                                   }`}
-                                >
-                                  {/* Header Row: Badge + Opponent + Date */}
+                                >                                  {/* Header Row: Badge + Opponent + Date */}
                                   <div className="flex items-start justify-between gap-2 mb-2">
                                     <div className="flex items-center gap-2 flex-1 min-w-0">
                                       <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${

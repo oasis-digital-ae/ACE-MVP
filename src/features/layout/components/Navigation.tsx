@@ -409,7 +409,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
                 {formatCurrency(netWorth)}
               </div>
               <div className="text-sm text-gray-400">
-                Current total value
+                Net Worth
               </div>
             </div>            
             
