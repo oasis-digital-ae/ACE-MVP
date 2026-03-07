@@ -1033,7 +1033,10 @@ END;
 $function$
 ;
 
-CREATE OR REPLACE FUNCTION public.credit_wallet(p_user_id uuid, p_amount_cents bigint, p_ref text, p_currency text DEFAULT 'usd'::text)
+-- Drop first to avoid "cannot remove parameter defaults" when replacing with different signature
+DROP FUNCTION IF EXISTS public.credit_wallet(uuid, bigint, text, text);
+
+CREATE OR REPLACE FUNCTION public.credit_wallet(p_user_id uuid, p_amount_cents bigint, p_ref text DEFAULT NULL::text, p_currency text DEFAULT 'usd'::text)
  RETURNS void
  LANGUAGE plpgsql
  SECURITY DEFINER

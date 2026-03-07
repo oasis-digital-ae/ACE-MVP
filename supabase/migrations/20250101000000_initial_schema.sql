@@ -478,7 +478,7 @@ $$;
 ALTER FUNCTION "public"."create_team_snapshot"("p_team_id" integer, "p_snapshot_type" "text", "p_trigger_event_id" integer, "p_trigger_event_type" "text", "p_match_result" "text", "p_price_impact" numeric, "p_shares_traded" integer, "p_trade_amount" numeric, "p_effective_at" timestamp with time zone) OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."credit_wallet"("p_user_id" "uuid", "p_amount_cents" bigint, "p_ref" "text", "p_currency" "text" DEFAULT 'usd'::"text") RETURNS "void"
+CREATE OR REPLACE FUNCTION "public"."credit_wallet"("p_user_id" "uuid", "p_amount_cents" bigint, "p_ref" "text" DEFAULT NULL::"text", "p_currency" "text" DEFAULT 'usd'::"text") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
 DECLARE
