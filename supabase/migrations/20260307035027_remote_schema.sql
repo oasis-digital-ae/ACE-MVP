@@ -2573,12 +2573,17 @@ $function$
 ;
 
 
+-- Drop first to avoid "already exists" when storage triggers are pre-created by Supabase
+DROP TRIGGER IF EXISTS enforce_bucket_name_length_trigger ON storage.buckets;
 CREATE TRIGGER enforce_bucket_name_length_trigger BEFORE INSERT OR UPDATE OF name ON storage.buckets FOR EACH ROW EXECUTE FUNCTION storage.enforce_bucket_name_length();
 
+DROP TRIGGER IF EXISTS protect_buckets_delete ON storage.buckets;
 CREATE TRIGGER protect_buckets_delete BEFORE DELETE ON storage.buckets FOR EACH STATEMENT EXECUTE FUNCTION storage.protect_delete();
 
+DROP TRIGGER IF EXISTS protect_objects_delete ON storage.objects;
 CREATE TRIGGER protect_objects_delete BEFORE DELETE ON storage.objects FOR EACH STATEMENT EXECUTE FUNCTION storage.protect_delete();
 
+DROP TRIGGER IF EXISTS update_objects_updated_at ON storage.objects;
 CREATE TRIGGER update_objects_updated_at BEFORE UPDATE ON storage.objects FOR EACH ROW EXECUTE FUNCTION storage.update_updated_at_column();
 
 
