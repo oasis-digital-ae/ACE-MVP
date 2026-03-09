@@ -50,7 +50,7 @@ ON CONFLICT (external_id) DO UPDATE SET
 
 -- 2. Fixtures (Premier League 2025 season, matchdays 1-5 - same as production)
 INSERT INTO public.fixtures (external_id, home_team_id, away_team_id, matchday, status, home_score, away_score, kickoff_at, buy_close_at, result, season)
-SELECT f.ext_id, ht.id, at.id, f.md, f.st, f.hs, f.as, f.ko::timestamptz, f.bc::timestamptz, f.res, f.seas
+SELECT f.ext_id, ht.id, at.id, f.md, f.st, f.hs, f.away_score, f.ko::timestamptz, f.bc::timestamptz, f.res, f.seas
 FROM (VALUES
   (537785, 64, 1044, 1, 'applied', 4, 2, '2025-08-15 19:00:00+00', '2025-08-15 18:45:00+00', 'home_win', 2025),
   (537786, 58, 67, 1, 'applied', 0, 0, '2025-08-16 11:30:00+00', '2025-08-16 11:15:00+00', 'draw', 2025),
@@ -102,7 +102,7 @@ FROM (VALUES
   (537825, 1044, 67, 5, 'applied', 0, 0, '2025-09-21 13:00:00+00', '2025-09-21 12:45:00+00', 'draw', 2025),
   (537826, 71, 58, 5, 'applied', 1, 1, '2025-09-21 13:00:00+00', '2025-09-21 12:45:00+00', 'draw', 2025),
   (537828, 57, 65, 5, 'applied', 1, 1, '2025-09-21 15:30:00+00', '2025-09-21 15:15:00+00', 'draw', 2025)
-) AS f(ext_id, home_ext, away_ext, md, st, hs, as, ko, bc, res, seas)
+) AS f(ext_id, home_ext, away_ext, md, st, hs, away_score, ko, bc, res, seas)
 JOIN teams ht ON ht.external_id = f.home_ext
 JOIN teams at ON at.external_id = f.away_ext
 ON CONFLICT (external_id) DO UPDATE SET
