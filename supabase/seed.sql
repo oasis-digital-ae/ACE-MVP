@@ -138,10 +138,11 @@ BEGIN
     (v_instance_id, v_user_id, 'authenticated', 'authenticated', 'testuser@staging.local', crypt('TestPassword123!', gen_salt('bf')), now(), now(), now(), '{"provider":"email","providers":["email"]}', '{}')
   ON CONFLICT (id) DO NOTHING;
 
+  -- wallet_balance stored as ten-thousandths of dollar: 10000000 = $1,000 (1000 * 10000)
   INSERT INTO public.profiles (id, username, full_name, email, is_admin, wallet_balance, portfolio_value)
   VALUES
-    (v_admin_id, 'admin_staging', 'Staging Admin', 'admin@staging.local', true, 100000, 0),
-    (v_user_id, 'testuser_staging', 'Test User', 'testuser@staging.local', false, 50000, 0)
+    (v_admin_id, 'admin_staging', 'Staging Admin', 'admin@staging.local', true, 10000000, 0),
+    (v_user_id, 'testuser_staging', 'Test User', 'testuser@staging.local', false, 10000000, 0)
   ON CONFLICT (id) DO UPDATE SET
     username = EXCLUDED.username,
     full_name = EXCLUDED.full_name,

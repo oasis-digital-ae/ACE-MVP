@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
-import { formatCurrency } from '@/shared/lib/formatters';
+import { formatCurrency, formatCurrencyPrecise } from '@/shared/lib/formatters';
 import TeamLogo from '@/shared/components/TeamLogo';
 import { AppValidators, validateForm, validateAndSanitize } from '@/shared/lib/validation';
 import { ValidationError } from '@/shared/lib/error-handling';
@@ -123,7 +123,7 @@ export const PurchaseConfirmationModal: React.FC<PurchaseConfirmationModalProps>
   };
 
   const numericShares = parseInt(shares) || 0;
-  const totalValue = numericShares * pricePerShare;
+  const totalValue = numericShares * pricePerShare; // Full precision (e.g. $85.57 for 24 @ $3.5656)
   const hasSufficientBalance = walletBalance >= totalValue;
   const isValid = Object.keys(validationErrors).length === 0 && numericShares > 0 && hasSufficientBalance;
 
@@ -194,7 +194,7 @@ export const PurchaseConfirmationModal: React.FC<PurchaseConfirmationModalProps>
             <div className="bg-gray-700/20 rounded-lg p-2.5 sm:p-3 border border-gray-600/30 space-y-2">
               <div className="flex justify-between items-center text-[10px] sm:text-xs">
                 <span className="text-gray-500">Price</span>
-                <span className="font-medium text-gray-300">{formatCurrency(pricePerShare)}</span>
+                <span className="font-medium text-gray-300">{formatCurrencyPrecise(pricePerShare)}</span>
               </div>
                 <div className="flex justify-between items-center text-[10px] sm:text-xs">
                 <span className="text-gray-500">Qty</span>
@@ -204,7 +204,7 @@ export const PurchaseConfirmationModal: React.FC<PurchaseConfirmationModalProps>
               <div className="border-t border-gray-600/30 pt-2 space-y-1.5">
                 <div className="flex justify-between items-baseline">
                   <span className="text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide">Total</span>
-                  <span className="text-lg sm:text-xl md:text-2xl font-bold text-trading-primary">{formatCurrency(totalValue)}</span>
+                  <span className="text-lg sm:text-xl md:text-2xl font-bold text-trading-primary">{formatCurrencyPrecise(totalValue)}</span>
                 </div>
                 <div className="flex justify-between items-center text-[10px] sm:text-xs">
                   <span className="text-gray-500">Available</span>

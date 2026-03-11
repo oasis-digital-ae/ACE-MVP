@@ -7,6 +7,7 @@ import { logger } from './logger';
 import type { Club, PortfolioItem } from '@/shared/constants/clubs';
 import {
   calculateSharePrice,
+  calculateSharePricePrecise,
   calculateProfitLoss,
   calculatePercentChange,
   calculateAverageCost,
@@ -141,16 +142,18 @@ export const convertTeamToClub = (team: DatabaseTeam): Club => {
   const initialMarketCap = launchPriceDollars * totalShares;
   const percentChange = calculatePercentChange(marketCapDollars, initialMarketCap);
   
+  const currentValuePrecise = calculateSharePricePrecise(marketCapDollars, totalShares, launchPriceDollars);
   return {
     id: team.id.toString(),
     name: team.name,
     externalId: team.external_id?.toString(),
     launchValue: launchPriceDollars,
-    currentValue: currentNAV, // Already rounded to 2 decimals by calculateSharePrice
-    profitLoss: profitLoss, // Already rounded to 2 decimals by calculateProfitLoss
-    percentChange: percentChange, // Already rounded to 2 decimals by calculatePercentChange
+    currentValue: currentNAV, // Rounded to 2 decimals for marketplace display
+    currentValuePrecise, // Full precision for purchase confirmation ($3.5656)
+    profitLoss: profitLoss,
+    percentChange: percentChange,
     marketCap: marketCapDollars,
-    sharesOutstanding: team.available_shares || 1000 // Show available_shares instead
+    sharesOutstanding: team.available_shares || 1000
   };
 };
 

@@ -22,12 +22,12 @@ DECLARE
   v_new_total_invested_cents BIGINT;
   v_total_pnl_cents BIGINT;
 BEGIN
-  -- Convert dollars to cents (round to nearest cent)
-  v_price_per_share_cents := ROUND(p_price_per_share * 100)::BIGINT;
-  v_total_amount_cents := ROUND(p_total_amount * 100)::BIGINT;
+  -- Convert dollars to ten-thousandths (4 decimal precision: $3.5656 → 35656)
+  v_price_per_share_cents := ROUND(p_price_per_share * 10000)::BIGINT;
+  v_total_amount_cents := ROUND(p_total_amount * 10000)::BIGINT;
   
-  -- Validate that p_total_amount matches the correct calculation
-  IF ABS(v_total_amount_cents - (v_price_per_share_cents * p_shares)) > 0 THEN
+  -- Validate that p_total_amount matches the correct calculation (allow 1 unit tolerance for rounding)
+  IF ABS(v_total_amount_cents - (v_price_per_share_cents * p_shares)) > 1 THEN
     RAISE EXCEPTION 'Total amount mismatch: expected % cents (based on price % cents * shares %), got % cents', 
       (v_price_per_share_cents * p_shares), v_price_per_share_cents, p_shares, v_total_amount_cents;
   END IF;
@@ -85,19 +85,18 @@ BEGIN
   
   v_new_wallet_balance_cents := v_wallet_balance_cents - v_total_amount_cents;
   
-  -- Calculate NAV in cents per share (use ROUND to get nearest cent)
-  -- This is the EXACT price calculation used for current price display
+  -- Calculate NAV in ten-thousandths per share (full precision, no rounding)
   v_nav_cents_per_share := CASE 
-    WHEN v_team.total_shares > 0 THEN ROUND(v_team.market_cap::NUMERIC / v_team.total_shares)::BIGINT
-    ELSE 500
+    WHEN v_team.total_shares > 0 THEN (v_team.market_cap / v_team.total_shares)::BIGINT
+    ELSE 50000
   END;
   
   -- CRITICAL FIX: Calculate exact total amount using database-calculated price
   -- This ensures total_invested matches exactly with how current price is calculated
   v_exact_total_amount_cents := v_nav_cents_per_share * p_shares;
   
-  -- Validate price (allow 1 cent difference for rounding from frontend)
-  IF ABS(v_price_per_share_cents - v_nav_cents_per_share) > 1 THEN
+  -- Validate price (allow 10 units ≈ 0.1 cent for rounding from frontend)
+  IF ABS(v_price_per_share_cents - v_nav_cents_per_share) > 10 THEN
     PERFORM set_config('app.allow_wallet_update', '', true);
     RAISE EXCEPTION 'Price mismatch: expected % cents, got % cents', v_nav_cents_per_share, v_price_per_share_cents;
   END IF;
@@ -223,9 +222,9 @@ BEGIN
     'success', true,
     'order_id', v_order_id,
     'position_id', v_position_id,
-    'total_amount', (v_total_amount_cents / 100.0)::NUMERIC(15,2),
-    'wallet_balance', (v_new_wallet_balance_cents / 100.0)::NUMERIC(15,2),
-    'price_per_share', (v_price_per_share_cents / 100.0)::NUMERIC(10,2)
+    'total_amount', (v_total_amount_cents / 10000.0)::NUMERIC(15,4),
+    'wallet_balance', (v_new_wallet_balance_cents / 10000.0)::NUMERIC(15,4),
+    'price_per_share', (v_price_per_share_cents / 10000.0)::NUMERIC(10,4)
   );
   
 EXCEPTION

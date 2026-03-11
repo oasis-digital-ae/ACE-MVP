@@ -251,7 +251,7 @@ const MatchResultsPage: React.FC = () => {
       return;
     }
     
-    const pricePerShare = club.currentValue; // Use actual current value (NAV)
+    const pricePerShare = club.currentValuePrecise ?? club.currentValue; // Full precision for payment screen
     
     setConfirmationData({
       clubId: teamId.toString(),

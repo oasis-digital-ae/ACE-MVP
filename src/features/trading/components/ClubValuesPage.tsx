@@ -323,7 +323,7 @@ export const ClubValuesPage: React.FC = () => {
     const club = clubs.find(c => c.id === clubId);
     if (!club) return;
     
-    const pricePerShare = club.currentValue; // Use actual current value (NAV)
+    const pricePerShare = club.currentValuePrecise ?? club.currentValue; // Full precision for payment screen
     
     setConfirmationData({
       clubId,

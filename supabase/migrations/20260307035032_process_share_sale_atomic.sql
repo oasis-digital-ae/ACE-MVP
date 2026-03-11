@@ -22,10 +22,11 @@ DECLARE
   v_new_position_total_invested_cents BIGINT;
   v_total_pnl_cents BIGINT;
 BEGIN
-  v_price_per_share_cents := ROUND(p_price_per_share * 100)::BIGINT;
-  v_total_amount_cents := ROUND(p_total_amount * 100)::BIGINT;
+  -- Ten-thousandths (4 decimal precision)
+  v_price_per_share_cents := ROUND(p_price_per_share * 10000)::BIGINT;
+  v_total_amount_cents := ROUND(p_total_amount * 10000)::BIGINT;
   
-  IF ABS(v_total_amount_cents - (v_price_per_share_cents * p_shares)) > 0 THEN
+  IF ABS(v_total_amount_cents - (v_price_per_share_cents * p_shares)) > 1 THEN
     RAISE EXCEPTION 'Total amount mismatch: expected % cents (based on price % cents * shares %), got % cents', 
       (v_price_per_share_cents * p_shares), v_price_per_share_cents, p_shares, v_total_amount_cents;
   END IF;
@@ -101,11 +102,11 @@ BEGIN
   v_new_wallet_balance_cents := v_wallet_balance_cents + v_total_amount_cents;
   
   v_nav_cents_per_share := CASE 
-    WHEN v_team.total_shares > 0 THEN ROUND(v_team.market_cap::NUMERIC / v_team.total_shares)::BIGINT
-    ELSE 500
+    WHEN v_team.total_shares > 0 THEN (v_team.market_cap / v_team.total_shares)::BIGINT
+    ELSE 50000
   END;
   
-  IF ABS(v_price_per_share_cents - v_nav_cents_per_share) > 1 THEN
+  IF ABS(v_price_per_share_cents - v_nav_cents_per_share) > 10 THEN
     PERFORM set_config('app.allow_wallet_update', '', true);
     RAISE EXCEPTION 'Price mismatch: expected % cents, got % cents', v_nav_cents_per_share, v_price_per_share_cents;
   END IF;
@@ -192,10 +193,10 @@ BEGIN
   RETURN json_build_object(
     'success', true,
     'order_id', v_order_id,
-    'total_amount', (v_total_amount_cents / 100.0)::NUMERIC(15,2),
-    'wallet_balance', (v_new_wallet_balance_cents / 100.0)::NUMERIC(15,2),
-    'proportional_cost', (v_proportional_cost_cents / 100.0)::NUMERIC(15,2),
-    'price_per_share', (v_price_per_share_cents / 100.0)::NUMERIC(10,2)
+    'total_amount', (v_total_amount_cents / 10000.0)::NUMERIC(15,4),
+    'wallet_balance', (v_new_wallet_balance_cents / 10000.0)::NUMERIC(15,4),
+    'proportional_cost', (v_proportional_cost_cents / 10000.0)::NUMERIC(15,4),
+    'price_per_share', (v_price_per_share_cents / 10000.0)::NUMERIC(10,4)
   );
   
 EXCEPTION

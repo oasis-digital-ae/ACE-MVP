@@ -23,11 +23,11 @@ export const roundToTwoDecimals = (value: number | string | Decimal): number => 
 /**
  * Calculate share price (NAV) from market cap and total shares
  * Fixed Shares Model: Uses total_shares (1000) as denominator
- * 
- * @param marketCap - Current market cap
+ *
+ * @param marketCap - Current market cap (in dollars)
  * @param totalShares - Total shares (fixed at 1000)
  * @param defaultValue - Default value if totalShares is 0 (default: 20.00)
- * @returns Share price rounded to 2 decimal places
+ * @returns Share price rounded to 2 decimal places (for display)
  */
 export const calculateSharePrice = (
   marketCap: number | string | Decimal,
@@ -41,6 +41,23 @@ export const calculateSharePrice = (
   const cap = toDecimal(marketCap);
   const price = cap.dividedBy(shares);
   return roundForDisplay(price);
+};
+
+/**
+ * Calculate share price with full precision (4 decimals)
+ * Use for purchase/sale flows where exact amount is charged
+ */
+export const calculateSharePricePrecise = (
+  marketCap: number | string | Decimal,
+  totalShares: number | string | Decimal,
+  defaultValue: number | string | Decimal = 20.00
+): number => {
+  const shares = toDecimal(totalShares);
+  if (shares.lte(0)) {
+    return toDecimal(defaultValue).toNumber();
+  }
+  const cap = toDecimal(marketCap);
+  return cap.dividedBy(shares).toNumber();
 };
 
 /**
@@ -82,7 +99,7 @@ export const calculateProfitLoss = (
 
 /**
  * Calculate total value (price * quantity)
- * 
+ *
  * @param pricePerUnit - Price per unit
  * @param quantity - Quantity
  * @returns Total value rounded to 2 decimal places
@@ -95,6 +112,18 @@ export const calculateTotalValue = (
   const qty = toDecimal(quantity);
   const total = price.times(qty);
   return roundForDisplay(total);
+};
+
+/**
+ * Calculate total value with full precision (for purchase/sale charge amount)
+ */
+export const calculateTotalValuePrecise = (
+  pricePerUnit: number | string | Decimal,
+  quantity: number | string | Decimal
+): number => {
+  const price = toDecimal(pricePerUnit);
+  const qty = toDecimal(quantity);
+  return price.times(qty).toNumber();
 };
 
 /**
