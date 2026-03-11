@@ -138,7 +138,7 @@ export const LineChart: React.FC<LineChartProps> = ({
 
   // Generate paths for each segment with proper point connections
   const segmentPaths = segments.map(segment => {
-    let pathCommands: string[] = [];
+    const pathCommands: string[] = [];
     
     // Generate path through all points in this segment
     for (let i = segment.startIndex; i <= segment.endIndex; i++) {

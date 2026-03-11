@@ -138,7 +138,7 @@ export const UsersManagementPanel: React.FC = () => {
   };
 
   const filteredAndSortedUsers = useMemo(() => {
-    let filtered = users.filter(user =>
+    const filtered = users.filter(user =>
       user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (user.first_name && user.first_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (user.last_name && user.last_name.toLowerCase().includes(searchTerm.toLowerCase())) ||

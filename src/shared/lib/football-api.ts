@@ -862,8 +862,8 @@ export const footballIntegrationService = {
       // Prepare all fixture data for batch upsert
       const fixtureInsertData = [];
       let skippedCount = 0;
-      let updatedCount = 0;
-      let createdCount = 0;
+      const updatedCount = 0;
+      const createdCount = 0;
 
       for (const match of matches) {
         const homeTeamId = teamMapping.get(match.homeTeam.name);

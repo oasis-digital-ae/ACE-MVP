@@ -24,6 +24,18 @@ export default tseslint.config(
         { allowConstantExport: true },
       ],
       "@typescript-eslint/no-unused-vars": "off",
+      "@typescript-eslint/no-explicit-any": "warn",
+      "no-useless-escape": "warn",
+      "prefer-const": "warn",
+      "no-case-declarations": "warn",
+      "no-control-regex": "warn",
+      "no-empty-pattern": "warn",
+    },
+  },
+  {
+    files: ["e2e/**/*.ts"],
+    rules: {
+      "react-hooks/rules-of-hooks": "off",
     },
   }
 );

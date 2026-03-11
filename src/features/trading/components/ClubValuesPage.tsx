@@ -487,7 +487,7 @@ export const ClubValuesPage: React.FC = () => {
               </thead>              <tbody>
                 {useMemo(() => {
                   // Sort based on selected field
-                  let filtered = [...clubs].sort((a, b) => {
+                  const filtered = [...clubs].sort((a, b) => {
                     switch (sortField) {
                       case 'name':
                         const aName = a.name.toLowerCase();
@@ -692,7 +692,7 @@ export const ClubValuesPage: React.FC = () => {
               <div className="space-y-0">
                 {useMemo(() => {
                   // Sort based on selected field (same logic as desktop)
-                  let filtered = [...clubs].sort((a, b) => {
+                  const filtered = [...clubs].sort((a, b) => {
                     switch (sortField) {
                       case 'name':
                         const aName = a.name.toLowerCase();
