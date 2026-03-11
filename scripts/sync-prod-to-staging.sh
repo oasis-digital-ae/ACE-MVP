@@ -9,7 +9,7 @@ PROD_URL="${PROD_DATABASE_URL:?Set PROD_DATABASE_URL}"
 STAGING_URL="${STAGING_DATABASE_URL:?Set STAGING_DATABASE_URL}"
 
 # Tables to copy from prod (exact replica) - no user/PII data
-# Note: team_market_data is a VIEW over teams; no need to sync separately
+# team_market_data is a VIEW over teams (not a table); excluded from dump/truncate
 SYNC_TABLES="public.teams public.fixtures public.total_ledger public.transfers_ledger"
 
 # Tables to clear and NOT copy (user-linked or PII)
