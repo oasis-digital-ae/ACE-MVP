@@ -44,12 +44,13 @@ TRUNCATE TABLE
 CASCADE;
 SQL
 
-# 3. Restore prod data into staging
+# 3. Restore prod data into staging (triggers disabled - data is already processed in prod)
 echo "==> Restoring prod data to staging..."
 pg_restore \
   --data-only \
   --no-owner \
   --no-acl \
+  --disable-triggers \
   -d "$STAGING_URL" \
   "$DUMP_FILE"
 rm -f "$DUMP_FILE"
