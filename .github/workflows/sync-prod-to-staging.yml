@@ -1,0 +1,30 @@
+# Sync production database to staging (excludes profiles for PII)
+# Runs: on push to main, on schedule (daily), and manually
+name: Sync Prod to Staging
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Daily at 02:00 UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Sync production to staging
+        env:
+          PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        run: |
+          chmod +x scripts/sync-prod-to-staging.sh
+          scripts/sync-prod-to-staging.sh
