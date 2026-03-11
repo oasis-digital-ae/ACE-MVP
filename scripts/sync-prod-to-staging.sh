@@ -21,7 +21,7 @@ echo "==> Syncing prod to staging (excluding profiles for PII)..."
 
 # 1. Dump data from prod (teams, fixtures, market data, ledgers only)
 echo "==> Dumping data from production..."
-DUMP_FILE=$(mktemp -u).dump
+DUMP_FILE=$(mktemp -u).sql
 pg_dump "$PROD_URL" \
   --data-only \
   --no-owner \
@@ -30,7 +30,7 @@ pg_dump "$PROD_URL" \
   -t public.fixtures \
   -t public.total_ledger \
   -t public.transfers_ledger \
-  -Fc \
+  -Fp \
   -f "$DUMP_FILE"
 
 # 2. On staging: truncate tables we're about to overwrite (FK-safe order)
@@ -44,15 +44,14 @@ TRUNCATE TABLE
 CASCADE;
 SQL
 
-# 3. Restore prod data into staging (triggers disabled - data is already processed in prod)
+# 3. Restore prod data into staging (session_replication_role=replica skips triggers;
+#    Supabase does not allow ALTER TABLE DISABLE TRIGGER on system triggers)
 echo "==> Restoring prod data to staging..."
-pg_restore \
-  --data-only \
-  --no-owner \
-  --no-acl \
-  --disable-triggers \
-  -d "$STAGING_URL" \
-  "$DUMP_FILE"
+{
+  echo "SET session_replication_role = replica;"
+  cat "$DUMP_FILE"
+  echo "SET session_replication_role = DEFAULT;"
+} | psql "$STAGING_URL" -v ON_ERROR_STOP=1 -f -
 rm -f "$DUMP_FILE"
 
 # 4. Truncate user tables (staging uses seed for profiles)
