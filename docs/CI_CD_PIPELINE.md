@@ -31,7 +31,7 @@ Staging is kept as an **exact replica of production** for teams, fixtures, marke
    | `PROD_DATABASE_URL` | Direct Postgres URI for **production**. Supabase Dashboard → Production project → Settings → Database → Connection string (URI, **session mode**, not pooler) |
    | `STAGING_DATABASE_URL` | Direct Postgres URI for **staging** branch. Same path in the staging project. |
 
-   Use the **direct** connection string (Session mode, port 5432) from Supabase Dashboard → Settings → Database. Example: `postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres`
+   Use the **Connection pooler** (Session mode) string—**not** the direct `db.[ref].supabase.co` URL. GitHub Actions cannot reach Supabase's direct DB host (IPv6). In Supabase Dashboard → Settings → Database → Connection string, choose **URI** and **Session** mode; use the pooler host (e.g. `aws-0-[region].pooler.supabase.com`, port 5432).
 
 2. **Staging schema** must match production. If using Supabase branching, ensure the staging branch runs migrations from `main` (e.g. branch from `main` or merge `main` into your staging branch before sync).
 
