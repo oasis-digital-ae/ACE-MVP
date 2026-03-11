@@ -9,7 +9,8 @@ PROD_URL="${PROD_DATABASE_URL:?Set PROD_DATABASE_URL}"
 STAGING_URL="${STAGING_DATABASE_URL:?Set STAGING_DATABASE_URL}"
 
 # Tables to copy from prod (exact replica) - no user/PII data
-SYNC_TABLES="public.teams public.fixtures public.team_market_data public.total_ledger public.transfers_ledger"
+# Note: team_market_data is a VIEW over teams; no need to sync separately
+SYNC_TABLES="public.teams public.fixtures public.total_ledger public.transfers_ledger"
 
 # Tables to clear and NOT copy (user-linked or PII)
 # profiles: PII - use seed instead
@@ -27,7 +28,6 @@ pg_dump "$PROD_URL" \
   --no-acl \
   -t public.teams \
   -t public.fixtures \
-  -t public.team_market_data \
   -t public.total_ledger \
   -t public.transfers_ledger \
   -Fc \
@@ -39,7 +39,6 @@ psql "$STAGING_URL" -v ON_ERROR_STOP=1 <<'SQL'
 TRUNCATE TABLE
   public.transfers_ledger,
   public.total_ledger,
-  public.team_market_data,
   public.fixtures,
   public.teams
 CASCADE;
