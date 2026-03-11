@@ -2,10 +2,6 @@
   "name": "football-trading-platform",
   "version": "0.1.0",
   "type": "module",
-  "overrides": {
-    "@rollup/rollup-android-arm-eab1": "rollup@4.52.2",
-    "@rollup/rollup-android-arm-eabi": "rollup@4.52.2"
-  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
