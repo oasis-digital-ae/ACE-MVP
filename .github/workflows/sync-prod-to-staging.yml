@@ -1,13 +1,10 @@
 # Sync production database to staging (excludes profiles for PII)
-# Runs: on push to main, on schedule (daily), and manually
+# Runs: on push to main and manually
 name: Sync Prod to Staging
 
 on:
   push:
     branches: [main]
-  schedule:
-    # Daily at 02:00 UTC
-    - cron: '0 2 * * *'
   workflow_dispatch:
 
 jobs:
