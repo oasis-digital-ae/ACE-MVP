@@ -231,9 +231,9 @@ const AppProviderInner: React.FC<{ children: React.ReactNode }> = ({ children })
         });
         
         const currentPrice = team ? team.currentValue : 0;
-        
-        // Use centralized calculation functions for consistency
-        const totalValue = calculateTotalValue(currentPrice, position.quantity);
+        // Use full precision for totalValue so Cost and Market Value match (both derive from same price precision)
+        const currentPriceForValue = team?.currentValuePrecise ?? currentPrice;
+        const totalValue = calculateTotalValue(currentPriceForValue, position.quantity);
         
         // Use total_pnl from database (includes both realized and unrealized P&L)
         // If total_pnl is not available, fall back to calculating unrealized P&L

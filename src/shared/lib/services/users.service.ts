@@ -2,7 +2,7 @@
 import { supabase } from '../supabase';
 import { logger } from '../logger';
 import { calculateSharePrice, calculateTotalValue, calculateProfitLoss, calculateAverageCost, calculatePercentChange, calculatePriceImpactPercent } from '../utils/calculations';
-import { fromCents, roundForDisplay, Decimal, toDecimal } from '../utils/decimal';
+import { fromCents, toCents, roundForDisplay, Decimal, toDecimal } from '../utils/decimal';
 
 export interface UserListItem {
   id: string;
@@ -646,11 +646,12 @@ export const usersService = {
   },
 
   /**
-   * Credit user wallet (admin action)
+   * Credit user wallet (admin action - deposit type)
+   * Database uses ten-thousandths (10000 = $1)
    */
   async creditUserWallet(userId: string, amount: number, ref?: string): Promise<void> {
     try {
-      const amountCents = Math.round(amount * 100);
+      const amountCents = toCents(amount);
       const { error } = await supabase.rpc('credit_wallet', {
         p_user_id: userId,
         p_amount_cents: amountCents,
@@ -661,6 +662,28 @@ export const usersService = {
       if (error) throw error;
     } catch (error) {
       logger.error('Error crediting user wallet:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Credit user wallet as loan (admin action - credit_loan type)
+   * Uses credit_wallet_loan RPC - tracked separately for reversal
+   * Database uses ten-thousandths (10000 = $1)
+   */
+  async creditUserWalletLoan(userId: string, amount: number, ref?: string): Promise<void> {
+    try {
+      const amountCents = toCents(amount);
+      const { error } = await supabase.rpc('credit_wallet_loan', {
+        p_user_id: userId,
+        p_amount_cents: amountCents,
+        p_ref: ref || `admin_loan_${Date.now()}`,
+        p_currency: 'usd'
+      });
+
+      if (error) throw error;
+    } catch (error) {
+      logger.error('Error crediting user wallet (loan):', error);
       throw error;
     }
   }

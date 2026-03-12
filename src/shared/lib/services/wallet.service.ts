@@ -57,5 +57,26 @@ export const walletService = {
     const total = (data || []).reduce((sum, tx) => sum + fromCents(tx.amount_cents || 0).toNumber(), 0);
     return total;
   },
+
+  /**
+   * Get net credit (loans minus reversals) for a user.
+   * Credit is a liability; positive = user owes this to the platform.
+   */
+  async getTotalCredit(userId: string): Promise<number> {
+    const { data, error } = await supabase
+      .from('wallet_transactions')
+      .select('amount_cents, type')
+      .eq('user_id', userId)
+      .in('type', ['credit_loan', 'credit_loan_reversal']);
+
+    if (error) throw error;
+
+    let totalCents = 0;
+    (data || []).forEach(tx => {
+      const amt = tx.amount_cents || 0;
+      totalCents += tx.type === 'credit_loan' ? amt : -amt;
+    });
+    return fromCents(Math.max(0, totalCents)).toNumber();
+  },
 };
 

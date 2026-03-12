@@ -50,7 +50,7 @@ interface NavigationProps {
 }
 
 const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) => {
-  const { signOut, profile, walletBalance, refreshWalletBalance, isAdmin, user, totalDeposits } = useAuth();
+  const { signOut, profile, walletBalance, refreshWalletBalance, isAdmin, user, totalDeposits, totalCredit } = useAuth();
   const [depositModalOpen, setDepositModalOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
@@ -103,7 +103,10 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
 
   // Calculate Net Worth values
   const portfolioValue = totalMarketValue || 0;
-  const netWorth = walletBalance + portfolioValue;
+  const grossValue = walletBalance + portfolioValue;
+  const netWorth = grossValue - totalCredit; // Credit is a liability
+  const totalDeposited = totalDeposits + totalCredit; // Actual cash + credit
+  // P&L = Total Value minus Actual Cash (credit excluded from P&L base; % uses Total Deposited)
   const pnl = netWorth - totalDeposits;
   const isProfit = pnl > 0;
   const isLoss = pnl < 0;
@@ -398,7 +401,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
                 {formatCurrency(netWorth)}
               </div>
               <div className="text-sm text-gray-400">
-                Current total value
+                Net Worth
               </div>
             </div>            {/* Horizontal Divider */}
             <div className="border-t border-gray-700"></div>            {/* Two Column Layout */}
@@ -432,13 +435,27 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
               <div className="space-y-4 pl-4">
                 <h3 className="text-sm font-semibold text-white mb-4">Performance</h3>
                 
-                {/* Total Deposited Row */}
+                {/* Cash Deposited - user's real deposits only */}
                 <div className="flex justify-between items-center py-2">
-                  <span className="text-gray-400 text-sm">Total Deposited</span>
+                  <span className="text-gray-400 text-sm">Cash Deposited</span>
                   <span className="text-white font-medium text-sm">{formatCurrency(totalDeposits)}</span>
                 </div>
                 
-                {/* Overall P&L Row */}
+                {/* Credit Deposited - platform loan, only show when user has credit */}
+                {totalCredit > 0 && (
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-gray-400 text-sm">Credit Deposited</span>
+                    <span className="text-green-400 font-medium text-sm">+{formatCurrency(totalCredit)}</span>
+                  </div>
+                )}
+                
+                {/* Total Deposited - actual cash + credit */}
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-gray-400 text-sm">Total Deposited</span>
+                  <span className="text-white font-medium text-sm">{formatCurrency(totalDeposited)}</span>
+                </div>
+                
+                {/* Overall P&L - Net Worth minus Actual Cash; % uses Total Deposited as base */}
                 <div className="flex justify-between items-center py-2">
                   <span className="text-gray-400 text-sm">Overall P&L</span>
                   <span className={`font-medium text-sm ${
@@ -447,9 +464,9 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
                     {isProfit ? '+' : ''}
                     {isLoss ? '-' : ''}
                     {formatCurrency(Math.abs(pnl))}
-                    {!isBreakEven && totalDeposits !== 0 && (
+                    {!isBreakEven && totalDeposited > 0 && (
                       <span className="ml-1">
-                        ({isProfit ? '+' : '-'}{Math.abs((pnl / totalDeposits) * 100).toFixed(2)}%)
+                        ({isProfit ? '+' : '-'}{Math.abs((pnl / totalDeposited) * 100).toFixed(2)}%)
                       </span>
                     )}
                   </span>

@@ -28,14 +28,17 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({
     return t.orderType === 'BUY' ? sum + t.units : sum - t.units;
   }, 0);
   
-  // Calculate net invested by summing transaction totals (matches what's shown in the table)
-  // This ensures Net Invested matches the sum of individual transaction totals
-  const totalInvested = transactions.reduce((sum, t) => {
+  // Use cost basis (total_invested / quantity from positions) when provided
+  // Fallback to order-based calculation when averagePrice not available
+  const totalInvestedFromOrders = transactions.reduce((sum, t) => {
     return t.orderType === 'BUY' ? sum + t.totalValue : sum - t.totalValue;
   }, 0);
-  
-  // Average price = net invested / total units
-  const avgPrice = totalUnits > 0 ? totalInvested / totalUnits : 0;
+  const avgPrice = averagePrice !== undefined && totalUnits > 0
+    ? averagePrice
+    : totalUnits > 0 ? totalInvestedFromOrders / totalUnits : 0;
+  const totalInvested = averagePrice !== undefined && totalUnits > 0
+    ? averagePrice * totalUnits
+    : totalInvestedFromOrders;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
