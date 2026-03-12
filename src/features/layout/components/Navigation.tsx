@@ -104,10 +104,10 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) =>
   // Calculate Net Worth values
   const portfolioValue = totalMarketValue || 0;
   const grossValue = walletBalance + portfolioValue;
-  const netWorth = grossValue - totalCredit; // Credit is a liability
+  const netWorth = grossValue; // Total Value includes credit (Portfolio + Wallet)
   const totalDeposited = totalDeposits + totalCredit; // Actual cash + credit
-  // P&L = Total Value minus Actual Cash (credit excluded from P&L base; % uses Total Deposited)
-  const pnl = netWorth - totalDeposits;
+  // P&L = Total Value minus Total Deposited (both include credit)
+  const pnl = netWorth - totalDeposited;
   const isProfit = pnl > 0;
   const isLoss = pnl < 0;
   const isBreakEven = pnl === 0;
