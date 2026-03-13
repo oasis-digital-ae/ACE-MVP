@@ -14,7 +14,7 @@ import { teamStateSnapshotService } from '@/shared/lib/team-state-snapshots';
 import { buyWindowService } from '@/shared/lib/buy-window.service';
 import { realtimeService } from '@/shared/lib/services/realtime.service';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import { calculateSharePrice, calculateTotalValue, calculateProfitLoss, calculateAverageCost } from '@/shared/lib/utils/calculations';
+import { calculateSharePrice, calculateSharePricePrecise, calculateTotalValue, calculateTotalValuePrecise, calculateProfitLoss, calculateAverageCost } from '@/shared/lib/utils/calculations';
 import { toCents, fromCents, Decimal, roundForDisplay } from '@/shared/lib/utils/decimal';
 
 interface AppContextType {
@@ -231,9 +231,9 @@ const AppProviderInner: React.FC<{ children: React.ReactNode }> = ({ children })
         });
         
         const currentPrice = team ? team.currentValue : 0;
-        
-        // Use centralized calculation functions for consistency
-        const totalValue = calculateTotalValue(currentPrice, position.quantity);
+        // Use full precision for totalValue so Cost and Market Value match (both derive from same price precision)
+        const currentPriceForValue = team?.currentValuePrecise ?? currentPrice;
+        const totalValue = calculateTotalValue(currentPriceForValue, position.quantity);
         
         // Use total_pnl from database (includes both realized and unrealized P&L)
         // If total_pnl is not available, fall back to calculating unrealized P&L
@@ -526,12 +526,11 @@ const AppProviderInner: React.FC<{ children: React.ReactNode }> = ({ children })
       }
 
       // Calculate proper NAV using total_shares (fixed at 1000) - Fixed Shares Model
-      // Database stores market_cap as BIGINT (cents), convert to dollars first
+      // Use FULL precision for charge - user pays exact amount ($3.5656 not $3.57)
       const totalShares = team.total_shares || 1000;
       const marketCapDollars = fromCents(team.market_cap).toNumber();
-      const nav = calculateSharePrice(marketCapDollars, totalShares, 20.00);
-      // Calculate total cost using Decimal-based calculation
-      const totalCost = calculateTotalValue(nav, units);
+      const nav = calculateSharePricePrecise(marketCapDollars, totalShares, 20.00);
+      const totalCost = calculateTotalValuePrecise(nav, units);
 
       // Validate purchase amount
       if (totalCost <= 0) {

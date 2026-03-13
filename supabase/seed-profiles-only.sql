@@ -1,5 +1,6 @@
 -- Test users for staging only (password: TestPassword123!)
 -- Used when syncing prod→staging: prod data is copied, then this seeds auth+profiles (no PII from prod).
+-- wallet_balance in ten-thousandths: 10000000 = $1,000 (matches main seed)
 -- DO NOT use in production.
 
 DO $$
@@ -31,10 +32,11 @@ BEGIN
     identity_data = EXCLUDED.identity_data,
     updated_at = now();
 
+  -- wallet_balance in ten-thousandths: 10000000 = $1,000 (matches main seed)
   INSERT INTO public.profiles (id, username, full_name, email, is_admin, wallet_balance, portfolio_value)
   VALUES
-    (v_admin_id, 'admin_staging', 'Staging Admin', 'admin@staging.local', true, 100000, 0),
-    (v_user_id, 'testuser_staging', 'Test User', 'testuser@staging.local', false, 50000, 0)
+    (v_admin_id, 'admin_staging', 'Staging Admin', 'admin@staging.local', true, 10000000, 0),
+    (v_user_id, 'testuser_staging', 'Test User', 'testuser@staging.local', false, 10000000, 0)
   ON CONFLICT (id) DO UPDATE SET
     username = EXCLUDED.username,
     full_name = EXCLUDED.full_name,
@@ -43,4 +45,12 @@ BEGIN
     wallet_balance = EXCLUDED.wallet_balance,
     portfolio_value = EXCLUDED.portfolio_value,
     updated_at = now();
+
+  -- Insert deposit transactions so Total Deposited and P&L display correctly in Net Worth
+  -- Without these, totalDeposits=0 and P&L incorrectly shows entire balance as profit
+  INSERT INTO public.wallet_transactions (user_id, amount_cents, currency, type, ref)
+  VALUES
+    (v_admin_id, 10000000, 'usd', 'deposit', 'seed_initial_admin'),
+    (v_user_id, 10000000, 'usd', 'deposit', 'seed_initial_testuser')
+  ON CONFLICT DO NOTHING;
 END $$;

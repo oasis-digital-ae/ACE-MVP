@@ -3,7 +3,8 @@ export interface Club {
   name: string;
   externalId?: string;
   launchValue: number;
-  currentValue: number;
+  currentValue: number; // Rounded to 2 decimals for marketplace display
+  currentValuePrecise?: number; // Full precision (4 decimals) for purchase/sale confirmation
   profitLoss: number;
   percentChange: number;
   marketCap: number;

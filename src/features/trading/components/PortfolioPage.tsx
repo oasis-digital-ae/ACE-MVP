@@ -230,33 +230,27 @@ const PortfolioPage: React.FC = () => {
   }, [portfolio, matchdayChanges, getTransactionsByClub]);
 
   // Memoized KPI calculations
-  const { totalInvested, totalMarketValue, totalUnrealizedPnl, totalRealizedPnl, totalProfitLoss } = useMemo(() => {
-    // Calculate net invested and P&L breakdown from portfolio items
+  const { totalInvested, totalMarketValue, totalUnrealizedPnl } = useMemo(() => {
+    // Calculate net invested and P&L (unrealized only) from portfolio items
     // Use Decimal for precision to prevent rounding drift
     let invested = toDecimal(0);
     let unrealizedPnl = toDecimal(0);
-    let realizedPnl = toDecimal(0);
     
     portfolio.forEach((item) => {
       // Use totalInvestedCents from portfolio item (from database)
       const itemInvested = fromCents(item.totalInvestedCents || 0);
       invested = invested.plus(itemInvested);
       unrealizedPnl = unrealizedPnl.plus(toDecimal(item.unrealizedPnl ?? 0));
-      realizedPnl = realizedPnl.plus(toDecimal(item.realizedPnl ?? 0));
     });
     
     const marketValue = portfolio.reduce((sum, item) => {
       return sum.plus(toDecimal(item.totalValue));
     }, toDecimal(0));
     
-    const totalPnl = unrealizedPnl.plus(realizedPnl);
-    
     return {
       totalInvested: roundForDisplay(invested),
       totalMarketValue: roundForDisplay(marketValue),
-      totalUnrealizedPnl: roundForDisplay(unrealizedPnl),
-      totalRealizedPnl: roundForDisplay(realizedPnl),
-      totalProfitLoss: roundForDisplay(totalPnl)
+      totalUnrealizedPnl: roundForDisplay(unrealizedPnl)
     };
   }, [portfolio]);
 
@@ -316,85 +310,33 @@ const PortfolioPage: React.FC = () => {
     const totalShares = 1000; // Fixed shares model - declare once for all items
     
     return portfolio.map((item) => {
-      // Calculate average price from orders using exact market price at purchase time
-      // Use market_cap_before / total_shares for each BUY order to get exact purchase price
-      // This ensures avg price matches the exact market share price when shares were bought
-      const transactions = getTransactionsByClub(item.clubId);
+      // Avg Price: use cost basis (total_invested / quantity from positions), not order history
+      const avgPricePrecise = item.units > 0
+        ? fromCents(item.totalInvestedCents || 0).dividedBy(item.units)
+        : toDecimal(0);
+      const avgPrice = roundForDisplay(avgPricePrecise);
       
-      let totalInvestedFromOrders = toDecimal(0);
-      let totalUnitsFromOrders = toDecimal(0);
-    
-    transactions.forEach(t => {
-      if (t.orderType === 'BUY') {
-        // Use exact market price at purchase time (market_cap_before / total_shares)
-        // This is the exact price that existed when the share was bought
-        if (t.marketCapBefore) {
-          const purchasePriceExact = fromCents(t.marketCapBefore).dividedBy(totalShares);
-          totalInvestedFromOrders = totalInvestedFromOrders.plus(purchasePriceExact.times(t.units));
-        } else {
-          // Fallback to pricePerUnit if marketCapBefore not available
-          totalInvestedFromOrders = totalInvestedFromOrders.plus(toDecimal(t.pricePerUnit).times(t.units));
+      // Calculate percentage change from cost-basis avg price to current price
+      let currentPrice = item.currentPrice;
+      let percentChange = 0;
+      if (avgPricePrecise.gt(0)) {
+        const marketCapDecimal = currentMarketCaps.get(item.clubId);
+        if (marketCapDecimal) {
+          const currentPricePrecise = marketCapDecimal.dividedBy(totalShares);
+          currentPrice = roundForDisplay(currentPricePrecise);
+          const changeDecimal = currentPricePrecise.minus(avgPricePrecise).dividedBy(avgPricePrecise).times(100);
+          percentChange = roundForDisplay(changeDecimal);
         }
-        totalUnitsFromOrders = totalUnitsFromOrders.plus(t.units);
-      } else if (t.orderType === 'SELL') {
-        // For SELL orders, subtract using exact market price at sale time
-        if (t.marketCapBefore) {
-          const sellPriceExact = fromCents(t.marketCapBefore).dividedBy(totalShares);
-          totalInvestedFromOrders = totalInvestedFromOrders.minus(sellPriceExact.times(t.units));
-        } else {
-          totalInvestedFromOrders = totalInvestedFromOrders.minus(toDecimal(t.pricePerUnit).times(t.units));
-        }
-        totalUnitsFromOrders = totalUnitsFromOrders.minus(t.units);
       }
-    });
+      
+      const pnl = item.unrealizedPnl ?? 0;
+      const portfolioPercent = calculatePortfolioPercentage(item.totalValue, totalMarketValue);
     
-    // Calculate average price from exact purchase prices
-    const avgPricePrecise = totalUnitsFromOrders.gt(0)
-      ? totalInvestedFromOrders.dividedBy(totalUnitsFromOrders)
-      : toDecimal(0);
-    
-    // Round average price only for display
-    const avgPrice = roundForDisplay(avgPricePrecise);
-    
-    // Also keep totalInvestedCents for P&L calculation
-    const totalInvestedCents = item.totalInvestedCents || 0;
-    
-    // Calculate percentage change from exact purchase price to current price
-    // Both prices use the same calculation: market_cap / total_shares (full precision Decimal)
-    // If no matches have been played, market_cap equals market_cap_before from purchases, so percentage = 0%
-    let currentPrice = item.currentPrice; // Fallback to item.currentPrice if market cap not loaded
-    let percentChange = 0;
-    if (avgPricePrecise.gt(0)) {
-      // Get current price from database market cap (in cents, as Decimal)
-      // Use the exact same calculation method as average price: market_cap / total_shares
-      const marketCapDecimal = currentMarketCaps.get(item.clubId);
-      if (!marketCapDecimal) {
-        // Market cap not loaded yet - cannot calculate percentage accurately
-        percentChange = 0;
-      } else {
-        // Calculate current price using exact same method as purchase price calculation
-        // marketCapDecimal is in dollars (from fromCents), so divide by totalShares to get price per share
-        const currentPricePrecise = marketCapDecimal.dividedBy(totalShares);
-        // Convert to dollars for display (rounded to 2 decimals)
-        currentPrice = roundForDisplay(currentPricePrecise);
-        
-        // Calculate percentage change from exact purchase price to current price
-        // Both use full precision Decimal, round only the final result
-        const changeDecimal = currentPricePrecise.minus(avgPricePrecise).dividedBy(avgPricePrecise).times(100);
-        percentChange = roundForDisplay(changeDecimal);
-      }
-    }
-    
-    const unrealizedPnl = item.unrealizedPnl ?? 0;
-    const realizedPnl = item.realizedPnl ?? 0;
-    const profitLoss = item.profitLoss;
-    const portfolioPercent = calculatePortfolioPercentage(item.totalValue, totalMarketValue);
-    
-    const pnlCell = (val: number) => (
-      <td className={`px-3 text-right font-semibold ${val === 0 ? 'text-gray-400' : val > 0 ? 'price-positive' : 'price-negative'}`}>
-        {val > 0 ? '+' : ''}{formatCurrency(val)}
-      </td>
-    );
+      const pnlCell = (val: number) => (
+        <td className={`px-3 text-right font-semibold ${val === 0 ? 'text-gray-400' : val > 0 ? 'price-positive' : 'price-negative'}`}>
+          {val > 0 ? '+' : ''}{formatCurrency(val)}
+        </td>
+      );
     
     return (
       <tr 
@@ -412,9 +354,8 @@ const PortfolioPage: React.FC = () => {
           {percentChange > 0 ? '+' : ''}{percentChange.toFixed(2)}%
         </td>
         <td className="px-3 text-right font-mono">{formatCurrency(item.totalValue)}</td>
-        <td className="px-3 text-right font-semibold text-trading-primary">{portfolioPercent.toFixed(2)}%</td>        {pnlCell(unrealizedPnl)}
-        {pnlCell(realizedPnl)}
-        {pnlCell(profitLoss)}
+        <td className="px-3 text-right font-semibold text-trading-primary">{portfolioPercent.toFixed(2)}%</td>
+        {pnlCell(pnl)}
         <td className="px-3 text-center" onClick={(e) => e.stopPropagation()}>
           {tradingWindowStatus.get(item.clubId) === false ? (
             <div className="text-[10px] text-gray-500 text-center">
@@ -466,7 +407,7 @@ const PortfolioPage: React.FC = () => {
         </div>
       )}
         {/* Portfolio Overview Cards - Mobile Optimized */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-3 lg:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3 lg:gap-4">
         {/* Cost */}
         <Card className="trading-card group">
           <CardContent className="p-3 sm:p-4 lg:p-6">
@@ -501,14 +442,17 @@ const PortfolioPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Unrealized P&L */}
+        {/* P&L (unrealized only - gain/loss on current holdings) */}
         <Card className="trading-card group">
           <CardContent className="p-3 sm:p-4 lg:p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-400 text-xs sm:text-sm font-medium mb-1 sm:mb-2">Unrealized P&L</p>
+                <p className="text-gray-400 text-xs sm:text-sm font-medium mb-1 sm:mb-2">P&L</p>
                 <p className={`text-lg sm:text-xl lg:text-2xl font-bold ${totalUnrealizedPnl === 0 ? 'text-gray-400' : totalUnrealizedPnl > 0 ? 'price-positive' : 'price-negative'}`}>
                   {formatCurrency(totalUnrealizedPnl)}
+                </p>
+                <p className={`text-xs sm:text-sm font-medium ${totalUnrealizedPnl === 0 ? 'text-gray-400' : totalUnrealizedPnl > 0 ? 'price-positive' : 'price-negative'}`}>
+                  {totalInvested > 0 ? `${calculatePercentChange(totalUnrealizedPnl + totalInvested, totalInvested).toFixed(1)}%` : '0.0%'}
                 </p>
               </div>
               <div className={`w-12 h-12 rounded-full flex items-center justify-center group-hover:animate-bounce-gentle ${
@@ -517,67 +461,6 @@ const PortfolioPage: React.FC = () => {
                 {totalUnrealizedPnl !== 0 ? (
                   <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                  </svg>
-                ) : (
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-                  </svg>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Realized P&L */}
-        <Card className="trading-card group">
-          <CardContent className="p-3 sm:p-4 lg:p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-xs sm:text-sm font-medium mb-1 sm:mb-2">Realized P&L</p>
-                <p className={`text-lg sm:text-xl lg:text-2xl font-bold ${totalRealizedPnl === 0 ? 'text-gray-400' : totalRealizedPnl > 0 ? 'price-positive' : 'price-negative'}`}>
-                  {formatCurrency(totalRealizedPnl)}
-                </p>
-              </div>
-              <div className={`w-12 h-12 rounded-full flex items-center justify-center group-hover:animate-bounce-gentle ${
-                totalRealizedPnl > 0 ? 'bg-gradient-success' : totalRealizedPnl < 0 ? 'bg-gradient-danger' : 'bg-gray-600'
-              }`}>
-                {totalRealizedPnl !== 0 ? (
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 17l9.2-9.2M17 17V7H7" />
-                  </svg>
-                ) : (
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-                  </svg>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Total P&L */}
-        <Card className="trading-card group">
-          <CardContent className="p-3 sm:p-4 lg:p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-xs sm:text-sm font-medium mb-1 sm:mb-2">Total P&L</p>
-                <p className={`text-lg sm:text-xl lg:text-2xl font-bold ${totalProfitLoss === 0 ? 'text-gray-400' : totalProfitLoss > 0 ? 'price-positive' : 'price-negative'}`}>
-                  {formatCurrency(totalProfitLoss)}
-                </p>
-                <p className={`text-xs sm:text-sm font-medium ${totalProfitLoss === 0 ? 'text-gray-400' : totalProfitLoss > 0 ? 'price-positive' : 'price-negative'}`}>
-                  {totalInvested > 0 ? `${calculatePercentChange(totalProfitLoss + totalInvested, totalInvested).toFixed(1)}%` : '0.0%'}
-                </p>
-              </div>
-              <div className={`w-12 h-12 rounded-full flex items-center justify-center group-hover:animate-bounce-gentle ${
-                totalProfitLoss > 0 ? 'bg-gradient-success' : totalProfitLoss < 0 ? 'bg-gradient-danger' : 'bg-gray-600'
-              }`}>
-                {totalProfitLoss > 0 ? (
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 17l9.2-9.2M17 17V7H7" />
-                  </svg>
-                ) : totalProfitLoss < 0 ? (
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 7l-9.2 9.2M7 7v10h10" />
                   </svg>
                 ) : (
                   <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -625,9 +508,7 @@ const PortfolioPage: React.FC = () => {
                       <th className="text-right px-3">% Change</th>
                       <th className="text-right px-3">Total Value</th>
                       <th className="text-right px-3">% Portfolio</th>
-                      <th className="text-right px-3">Unrealized</th>
-                      <th className="text-right px-3">Realized</th>
-                      <th className="text-right px-3">Total P&L</th>
+                      <th className="text-right px-3">P&L</th>
                       <th className="text-center px-3">Action</th>
                     </tr>
                   </thead>
@@ -657,74 +538,22 @@ const PortfolioPage: React.FC = () => {
                     // Find club to get external_id
                     const club = clubs.find(c => c.id === item.clubId);
                     
-                    // Calculate average price from orders using exact market price at purchase time
-                    // Use market_cap_before / total_shares for each BUY order to get exact purchase price
-                    // This ensures avg price matches the exact market share price when shares were bought
-                    const transactions = getTransactionsByClub(item.clubId);
-                    const totalShares = 1000; // Fixed shares model
-                    
-                    let totalInvestedFromOrders = toDecimal(0);
-                    let totalUnitsFromOrders = toDecimal(0);
-                    
-                    transactions.forEach(t => {
-                      if (t.orderType === 'BUY') {
-                        // Use exact market price at purchase time (market_cap_before / total_shares)
-                        if (t.marketCapBefore) {
-                          const purchasePriceExact = fromCents(t.marketCapBefore).dividedBy(totalShares);
-                          totalInvestedFromOrders = totalInvestedFromOrders.plus(purchasePriceExact.times(t.units));
-                        } else {
-                          totalInvestedFromOrders = totalInvestedFromOrders.plus(toDecimal(t.pricePerUnit).times(t.units));
-                        }
-                        totalUnitsFromOrders = totalUnitsFromOrders.plus(t.units);
-                      } else if (t.orderType === 'SELL') {
-                        // For SELL orders, subtract using exact market price at sale time
-                        if (t.marketCapBefore) {
-                          const sellPriceExact = fromCents(t.marketCapBefore).dividedBy(totalShares);
-                          totalInvestedFromOrders = totalInvestedFromOrders.minus(sellPriceExact.times(t.units));
-                        } else {
-                          totalInvestedFromOrders = totalInvestedFromOrders.minus(toDecimal(t.pricePerUnit).times(t.units));
-                        }
-                        totalUnitsFromOrders = totalUnitsFromOrders.minus(t.units);
-                      }
-                    });
-                    
-                    // Calculate average price from exact purchase prices
-                    const avgPricePrecise = totalUnitsFromOrders.gt(0)
-                      ? totalInvestedFromOrders.dividedBy(totalUnitsFromOrders)
+                    // Avg Price: use cost basis (total_invested / quantity from positions), not order history
+                    const avgPricePrecise = item.units > 0
+                      ? fromCents(item.totalInvestedCents || 0).dividedBy(item.units)
                       : toDecimal(0);
                     
-                    // Round average price only for display
-                    const avgPrice = roundForDisplay(avgPricePrecise);
-                    
-                    // Also keep totalInvestedCents for P&L calculation
-                    const totalInvestedCents = item.totalInvestedCents || 0;
-                    
-                    // Calculate percentage change from exact purchase price to current price
-                    // Both prices use the same calculation: market_cap / total_shares (full precision Decimal)
-                    // If no matches have been played, market_cap equals market_cap_before from purchases, so percentage = 0%
+                    // Calculate percentage change from cost-basis avg price to current price
+                    const totalShares = 1000; // Fixed shares model
                     let percentChange = 0;
                     if (avgPricePrecise.gt(0)) {
-                      // Get current price from database market cap (in cents, as Decimal)
-                      // Use the exact same calculation method as average price: market_cap / total_shares
                       const marketCapDecimal = currentMarketCaps.get(item.clubId);
-                      if (!marketCapDecimal) {
-                        // Market cap not loaded yet - cannot calculate percentage accurately
-                        percentChange = 0;
-                      } else {
-                        // Calculate current price using exact same method as purchase price calculation
-                        const totalShares = 1000; // Fixed shares model
+                      if (marketCapDecimal) {
                         const currentPricePrecise = marketCapDecimal.dividedBy(totalShares);
-                        
-                        // Calculate percentage change from exact purchase price to current price
-                        // Both use full precision Decimal, round only the final result
                         const changeDecimal = currentPricePrecise.minus(avgPricePrecise).dividedBy(avgPricePrecise).times(100);
                         percentChange = roundForDisplay(changeDecimal);
                       }
                     }
-                    
-                    // Use profitLoss from portfolio item (which uses total_pnl from database)
-                    // This includes both realized P&L (from sales) and unrealized P&L (current holdings)
-                    const profitLoss = item.profitLoss;
                     
                     return (
                       <div

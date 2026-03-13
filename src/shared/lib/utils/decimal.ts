@@ -91,28 +91,41 @@ export function roundForStorage(value: Decimal | number | string | null | undefi
 }
 
 /**
- * Convert amount to cents (for database storage as BIGINT)
- * CRITICAL: All monetary values in database are stored as BIGINT (cents)
- * Use this function before sending values to the database
- * 
+ * Convert amount to ten-thousandths of a dollar (for database storage as BIGINT)
+ * Enables 4 decimal place precision: $3.5656 → 35656
+ * Use this function before sending monetary values to the database
+ *
  * @param amount - Decimal amount in dollars
- * @returns Number of cents (integer, rounded to nearest cent)
+ * @returns Number of ten-thousandths (integer, rounded to nearest 0.0001)
  */
-export function toCents(amount: Decimal | number | string | null | undefined): number {
+export function toTenThousandths(amount: Decimal | number | string | null | undefined): number {
   const decimal = toDecimal(amount);
-  return decimal.times(100).toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toNumber();
+  return decimal.times(10000).toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toNumber();
 }
 
 /**
- * Convert cents to Decimal amount (from database BIGINT values)
- * CRITICAL: All monetary values from database are BIGINT (cents)
- * Use this function after receiving values from the database
- * 
- * @param cents - Number of cents (BIGINT from database)
+ * Convert ten-thousandths to Decimal amount (from database BIGINT values)
+ * 35656 → $3.5656
+ *
+ * @param tenThousandths - Number of ten-thousandths (BIGINT from database)
  * @returns Decimal amount in dollars
  */
+export function fromTenThousandths(tenThousandths: number | string | null | undefined): Decimal {
+  return toDecimal(tenThousandths).dividedBy(10000);
+}
+
+/**
+ * @deprecated Use toTenThousandths - database now stores ten-thousandths
+ */
+export function toCents(amount: Decimal | number | string | null | undefined): number {
+  return toTenThousandths(amount);
+}
+
+/**
+ * @deprecated Use fromTenThousandths - database now stores ten-thousandths
+ */
 export function fromCents(cents: number | string | null | undefined): Decimal {
-  return toDecimal(cents).dividedBy(100);
+  return fromTenThousandths(cents);
 }
 
 /**

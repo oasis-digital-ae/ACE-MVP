@@ -24,6 +24,7 @@ interface AuthContextType {
   profile: UserProfile | null;
   walletBalance: number;
   totalDeposits: number;
+  totalCredit: number; // Net credit loan (liability)
   loading: boolean;
   isAdmin: boolean;
   signUp: (email: string, password: string, userData: Omit<UserProfile, 'id' | 'email'>) => Promise<void>;
@@ -47,6 +48,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [walletBalance, setWalletBalance] = useState<number>(0);
   const [totalDeposits, setTotalDeposits] = useState<number>(0);
+  const [totalCredit, setTotalCredit] = useState<number>(0);
   const [loading, setLoading] = useState(true);
 
   const ensureProfile = async (authUser: User) => {
@@ -124,7 +126,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setWalletBalance(0);
         });
       } else {
+        setProfile(null);
         setWalletBalance(0);
+        setTotalDeposits(0);
+        setTotalCredit(0);
       }
       
       if (loadingTimeout) {
@@ -173,6 +178,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         setProfile(null);
         setWalletBalance(0);
+        setTotalDeposits(0);
+        setTotalCredit(0);
       }
       
       if (mounted) {
@@ -296,6 +303,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           logger.warn('Error fetching total deposits:', depositsError);
           setTotalDeposits(0);
         }
+
+        try {
+          const credit = await walletService.getTotalCredit(userId);
+          setTotalCredit(credit);
+        } catch (creditError) {
+          logger.warn('Error fetching total credit:', creditError);
+          setTotalCredit(0);
+        }
         
         // Success - exit retry loop
         return;
@@ -328,6 +343,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setTotalDeposits(deposits);
       } catch (error) {
         console.error('Error refreshing total deposits:', error);
+      }
+
+      try {
+        const credit = await walletService.getTotalCredit(user.id);
+        setTotalCredit(credit);
+      } catch (error) {
+        console.error('Error refreshing total credit:', error);
       }
     }
   };
@@ -417,6 +439,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       profile,
       walletBalance,
       totalDeposits,
+      totalCredit,
       loading,
       isAdmin: profile?.is_admin ?? false,
       signUp,
