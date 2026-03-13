@@ -32,7 +32,7 @@ import {
   calculateAverageCost
 } from '@/shared/lib/utils/calculations';
 
-type SortField = 'username' | 'wallet_balance' | 'total_deposits' | 'net_worth' | 'portfolio_value' | 'profit_loss' | 'return_percent' | 'positions_count' | 'reffered_by' | 'last_activity' | 'created_at';
+type SortField = 'username' | 'wallet_balance' | 'total_deposits' | 'total_credit' | 'net_worth' | 'portfolio_value' | 'profit_loss' | 'return_percent' | 'positions_count' | 'reffered_by' | 'last_activity' | 'created_at';
 type SortDirection = 'asc' | 'desc';
 
 export const UsersManagementPanel: React.FC = () => {
@@ -160,6 +160,10 @@ export const UsersManagementPanel: React.FC = () => {
           aValue = a.total_deposits;
           bValue = b.total_deposits;
           break;
+        case 'total_credit':
+          aValue = a.total_credit ?? 0;
+          bValue = b.total_credit ?? 0;
+          break;
         case 'net_worth':
           aValue = a.wallet_balance + a.portfolio_value;
           bValue = b.wallet_balance + b.portfolio_value;
@@ -209,7 +213,8 @@ export const UsersManagementPanel: React.FC = () => {
       'Wallet Balance',
       'Portfolio Value',
       'Net Worth',
-      'Total Deposits',
+      'Deposits',
+      'Credit',
       'Total P&L',
       'Return %',
       'Positions',
@@ -230,6 +235,7 @@ export const UsersManagementPanel: React.FC = () => {
         user.portfolio_value,
         netWorth,
         user.total_deposits,
+        user.total_credit ?? 0,
         totalPnL,        returnPercent.toFixed(2) + '%',
         user.positions_count,
         user.reffered_by || 'N/A',
@@ -367,6 +373,15 @@ export const UsersManagementPanel: React.FC = () => {
                         <SortIcon field="total_deposits" />
                       </button>
                     </th>
+                    <th className="px-4 text-center min-w-[120px]">
+                      <button
+                        onClick={() => handleSort('total_credit')}
+                        className="flex items-center justify-center gap-2 hover:text-foreground transition-colors mx-auto"
+                      >
+                        <span>Credit</span>
+                        <SortIcon field="total_credit" />
+                      </button>
+                    </th>
                     <th className="px-4 text-center min-w-[130px]">
                       <button
                         onClick={() => handleSort('profit_loss')}
@@ -447,6 +462,11 @@ export const UsersManagementPanel: React.FC = () => {
                         </td>
                         <td className="px-4 text-center">
                           <div className="font-medium font-mono text-sm">{formatCurrency(user.total_deposits)}</div>
+                        </td>
+                        <td className="px-4 text-center">
+                          <div className="font-medium font-mono text-sm text-amber-600">
+                            {(user.total_credit ?? 0) > 0 ? `+${formatCurrency(user.total_credit ?? 0)}` : formatCurrency(0)}
+                          </div>
                         </td>
                         <td className="px-4 text-center">
                           <div className="flex items-center justify-center gap-1">

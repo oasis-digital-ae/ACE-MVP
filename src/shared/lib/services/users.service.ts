@@ -12,6 +12,7 @@ export interface UserListItem {
   email?: string;
   wallet_balance: number;
   total_deposits: number; // Total deposits made by user
+  total_credit: number; // Net credit loan (credit_loan minus credit_loan_reversal)
   total_invested: number;
   portfolio_value: number;  
   unrealized_pnl: number;
@@ -125,11 +126,29 @@ export const usersService = {
 
       if (walletError) throw walletError;
 
+      // Get credit loan transactions (credit_loan minus credit_loan_reversal)
+      const { data: creditTransactions, error: creditError } = await supabase
+        .from('wallet_transactions')
+        .select('user_id, amount_cents, type')
+        .in('type', ['credit_loan', 'credit_loan_reversal']);
+
+      if (creditError) {
+        logger.warn('Error fetching credit transactions:', creditError);
+      }
+
       // Calculate total deposits per user
       const totalDepositsMap = new Map<string, number>();
       (walletTransactions || []).forEach(tx => {
         const current = totalDepositsMap.get(tx.user_id) || 0;
         totalDepositsMap.set(tx.user_id, current + fromCents(tx.amount_cents || 0).toNumber());
+      });
+
+      // Calculate net credit per user (credit_loan adds, credit_loan_reversal subtracts)
+      const totalCreditMap = new Map<string, number>();
+      (creditTransactions || []).forEach(tx => {
+        const current = totalCreditMap.get(tx.user_id) || 0;
+        const amt = fromCents(tx.amount_cents || 0).toNumber();
+        totalCreditMap.set(tx.user_id, current + (tx.type === 'credit_loan' ? amt : -amt));
       });
 
       // Group orders by user to find last activity
@@ -243,6 +262,7 @@ export const usersService = {
           email: profile.email,
           wallet_balance: fromCents(profile.wallet_balance || 0).toNumber(),
           total_deposits: totalDepositsMap.get(profile.id) || 0,
+          total_credit: Math.max(0, totalCreditMap.get(profile.id) || 0),
           total_invested: metrics.totalInvested,
           portfolio_value: metrics.portfolioValue,
           unrealized_pnl: metrics.unrealizedPnl,
