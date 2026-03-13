@@ -138,7 +138,7 @@ function testRealTimeSync() {
   // Activity 1: Deposit $200
   let wallet = startWallet + 200;
   let portfolio = startPortfolio;
-  let deposits = 200;
+  const deposits = 200;
   
   // Activity 2: Buy $150 of shares
   wallet -= 150;

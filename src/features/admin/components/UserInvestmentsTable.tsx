@@ -42,7 +42,7 @@ export const UserInvestmentsTable: React.FC = () => {
     if (!investments) return [];
 
     // Filter by search term
-    let filtered = investments.filter(investment =>
+    const filtered = investments.filter(investment =>
       investment.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (investment.fullName && investment.fullName.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (investment.teamName && investment.teamName.toLowerCase().includes(searchTerm.toLowerCase()))

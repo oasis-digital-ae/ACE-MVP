@@ -114,7 +114,7 @@ export const MatchesManagementPanel: React.FC = () => {
   };
 
   const filteredAndSortedFixtures = useMemo(() => {
-    let filtered = fixtures.filter(fixture => {
+    const filtered = fixtures.filter(fixture => {
       const matchesSearch = !searchTerm || 
         fixture.home_team?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         fixture.away_team?.name.toLowerCase().includes(searchTerm.toLowerCase());

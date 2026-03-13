@@ -1,6 +1,6 @@
 -- Test users for staging only (password: TestPassword123!)
 -- Used when syncing prod→staging: prod data is copied, then this seeds auth+profiles (no PII from prod).
--- wallet_balance: 10000000 = $1,000 (matches main seed)
+-- wallet_balance in ten-thousandths: 10000000 = $1,000 (matches main seed)
 -- DO NOT use in production.
 
 DO $$
@@ -39,7 +39,7 @@ BEGIN
     (v_user_id, 'testuser_staging', 'Test User', 'testuser@staging.local', false, 10000000, 0)
   ON CONFLICT (id) DO UPDATE SET
     username = EXCLUDED.username,
-    full_name = EXCLUDED.username,
+    full_name = EXCLUDED.full_name,
     email = EXCLUDED.email,
     is_admin = EXCLUDED.is_admin,
     wallet_balance = EXCLUDED.wallet_balance,
@@ -52,5 +52,5 @@ BEGIN
   VALUES
     (v_admin_id, 10000000, 'usd', 'deposit', 'seed_initial_admin'),
     (v_user_id, 10000000, 'usd', 'deposit', 'seed_initial_testuser')
-  ON CONFLICT (user_id, ref) WHERE ref IS NOT NULL DO NOTHING;
+  ON CONFLICT DO NOTHING;
 END $$;

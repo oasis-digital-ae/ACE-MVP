@@ -172,7 +172,7 @@ export const TeamsManagementPanel: React.FC = () => {
   };
 
   const filteredAndSortedTeams = useMemo(() => {
-    let filtered = teams.filter(team =>
+    const filtered = teams.filter(team =>
       team.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       team.short_name.toLowerCase().includes(searchTerm.toLowerCase())
     );

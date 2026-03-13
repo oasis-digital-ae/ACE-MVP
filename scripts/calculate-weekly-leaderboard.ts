@@ -73,7 +73,7 @@ function getUAEWeekBounds(weeksAgo = 0) {
   const day = nowUAE.getUTCDay();
   const diffToMonday = (day === 0 ? -6 : 1) - day;
 
-  let weekStartUAE = new Date(nowUAE);
+  const weekStartUAE = new Date(nowUAE);
   weekStartUAE.setUTCDate(nowUAE.getUTCDate() + diffToMonday);
   weekStartUAE.setUTCHours(3, 0, 0, 0);
 

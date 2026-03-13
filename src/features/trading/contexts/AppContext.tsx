@@ -316,7 +316,7 @@ const AppProviderInner: React.FC<{ children: React.ReactNode }> = ({ children })
   useEffect(() => {
     if (!user) return;
 
-    let channels: RealtimeChannel[] = [];
+    const channels: RealtimeChannel[] = [];
     let pollingInterval: NodeJS.Timeout | null = null;
     let isRealtimeActive = false;
     let loadDataTimeout: NodeJS.Timeout | null = null;
