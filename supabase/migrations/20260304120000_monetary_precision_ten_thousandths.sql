@@ -18,20 +18,16 @@ UPDATE positions
 SET total_pnl = total_pnl * 100 
 WHERE total_pnl IS NOT NULL;
 
--- orders
+-- orders (update market_cap_before and market_cap_after together to satisfy orders_market_cap_after_check)
 UPDATE orders 
 SET 
   price_per_share = price_per_share * 100,
-  total_amount = total_amount * 100
-WHERE price_per_share IS NOT NULL AND total_amount IS NOT NULL;
-
-UPDATE orders 
-SET market_cap_before = market_cap_before * 100 
-WHERE market_cap_before IS NOT NULL;
-
-UPDATE orders 
-SET market_cap_after = market_cap_after * 100 
-WHERE market_cap_after IS NOT NULL;
+  total_amount = total_amount * 100,
+  market_cap_before = market_cap_before * 100,
+  market_cap_after = market_cap_after * 100
+WHERE (price_per_share IS NOT NULL AND total_amount IS NOT NULL)
+   OR market_cap_before IS NOT NULL
+   OR market_cap_after IS NOT NULL;
 
 -- teams
 UPDATE teams 
