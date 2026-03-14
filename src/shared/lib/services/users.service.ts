@@ -143,12 +143,14 @@ export const usersService = {
         totalDepositsMap.set(tx.user_id, current + fromCents(tx.amount_cents || 0).toNumber());
       });
 
-      // Calculate net credit per user (credit_loan adds, credit_loan_reversal subtracts)
+      // Calculate net credit per user (credit_loan adds, credit_loan_reversal subtracts).
+      // credit_loan stores positive amount_cents; credit_loan_reversal stores negative.
+      // Sum amount_cents directly (reversals are already negative).
       const totalCreditMap = new Map<string, number>();
       (creditTransactions || []).forEach(tx => {
         const current = totalCreditMap.get(tx.user_id) || 0;
         const amt = fromCents(tx.amount_cents || 0).toNumber();
-        totalCreditMap.set(tx.user_id, current + (tx.type === 'credit_loan' ? amt : -amt));
+        totalCreditMap.set(tx.user_id, current + amt);
       });
 
       // Group orders by user to find last activity

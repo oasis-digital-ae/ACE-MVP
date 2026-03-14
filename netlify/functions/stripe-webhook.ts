@@ -105,9 +105,13 @@ export const handler: Handler = async (event) => {
             metadata: pi.metadata,
           });
 
+          // DB stores amounts in ten-thousandths of a dollar; Stripe metadata uses cents.
+          // Convert: $20 = 2000 cents -> 200000 ten-thousandths
+          const amountTenThousandths = depositAmountCents * 100;
+
           const { data: creditResult, error: creditError } = await supabase.rpc('credit_wallet', {
             p_user_id: userId,
-            p_amount_cents: depositAmountCents, // Credit only the deposit amount (not including fee)
+            p_amount_cents: amountTenThousandths, // DB expects ten-thousandths
             p_ref: pi.id,
           });
 

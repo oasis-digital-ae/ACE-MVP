@@ -61,6 +61,8 @@ export const walletService = {
   /**
    * Get net credit (loans minus reversals) for a user.
    * Credit is a liability; positive = user owes this to the platform.
+   * Note: credit_loan stores positive amount_cents; credit_loan_reversal stores negative amount_cents.
+   * We sum amount_cents directly - no sign flip needed for reversals.
    */
   async getTotalCredit(userId: string): Promise<number> {
     const { data, error } = await supabase
@@ -73,8 +75,7 @@ export const walletService = {
 
     let totalCents = 0;
     (data || []).forEach(tx => {
-      const amt = tx.amount_cents || 0;
-      totalCents += tx.type === 'credit_loan' ? amt : -amt;
+      totalCents += tx.amount_cents || 0;
     });
     return fromCents(Math.max(0, totalCents)).toNumber();
   },
