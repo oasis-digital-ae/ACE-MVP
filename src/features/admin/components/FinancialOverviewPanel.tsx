@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { adminService } from '@/shared/lib/services/admin.service';
 import { formatCurrency } from '@/shared/lib/formatters';
+import { fromCents } from '@/shared/lib/utils/decimal';
 import { useToast } from '@/shared/hooks/use-toast';
 
 interface FinancialOverview {
@@ -167,8 +168,8 @@ export const FinancialOverviewPanel: React.FC = () => {
   // Calculate transaction summary
   const deposits = walletTransactions.filter(tx => tx.type === 'deposit');
   const purchases = walletTransactions.filter(tx => tx.type === 'purchase');
-  const totalDepositAmount = deposits.reduce((sum, tx) => sum + (tx.amount_cents / 100), 0);
-  const totalPurchaseAmount = purchases.reduce((sum, tx) => sum + (tx.amount_cents / 100), 0);
+const totalDepositAmount = deposits.reduce((sum, tx) => sum + fromCents(tx.amount_cents || 0).toNumber(), 0);
+    const totalPurchaseAmount = purchases.reduce((sum, tx) => sum + fromCents(tx.amount_cents || 0).toNumber(), 0);
 
   return (
     <div className="space-y-6">
@@ -254,7 +255,7 @@ export const FinancialOverviewPanel: React.FC = () => {
                       <p className={`text-sm font-medium ${
                         tx.type === 'deposit' ? 'text-green-600' : 'text-red-600'
                       }`}>
-                        {tx.type === 'deposit' ? '+' : '-'}{formatCurrency(tx.amount_cents / 100)}
+                        {tx.type === 'deposit' ? '+' : '-'}{formatCurrency(fromCents(tx.amount_cents || 0).toNumber())}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {new Date(tx.created_at).toLocaleDateString()}

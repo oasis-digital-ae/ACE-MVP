@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { usersService, type UserListItem, type UserDetails, type WalletTransaction } from '@/shared/lib/services/users.service';
 import { formatCurrency } from '@/shared/lib/formatters';
+import { fromCents } from '@/shared/lib/utils/decimal';
 import { useToast } from '@/shared/hooks/use-toast';
 import { supabase } from '@/shared/lib/supabase';
 import {
@@ -629,7 +630,7 @@ export const UsersManagementPanel: React.FC = () => {
                           userTransactions.map((tx) => {
                             // Types that add money to wallet (positive/green): deposit, sale, refund
                             const isPositive = ['deposit', 'sale', 'refund'].includes(tx.type.toLowerCase());
-                            const amount = tx.amount_cents / 100;
+                            const amount = fromCents(tx.amount_cents).toNumber();
                             
                             return (
                               <div key={tx.id} className="flex items-center justify-between p-2 border rounded text-sm">
