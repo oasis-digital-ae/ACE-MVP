@@ -7,6 +7,7 @@ import { Skeleton } from '@/shared/components/ui/skeleton';
 import { ArrowUp, ArrowDown, ArrowUpDown, Trophy } from 'lucide-react';
 import { supabase } from '@/shared/lib/supabase';
 import { formatCurrency } from '@/shared/lib/formatters';
+import { fromCents } from '@/shared/lib/utils/decimal';
 import { useToast } from '@/shared/hooks/use-toast';
 
 interface WeekOption {
