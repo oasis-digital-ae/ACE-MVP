@@ -32,3 +32,6 @@
 # This ensures Netlify recognizes the scheduled function for Weekly Leaderboard
 [functions."update-weeklyleaderboard"]
   schedule = "0 23 * * 0" # Every Sunday at 23:00 (11:00 PM) UTC which is 03:00 AM Monday in UAE
+  # Extended timeout: job processes 30+ users with many Supabase queries each.
+  # Netlify free: max 26s. Pro/Team: up to 900s. Using 300s for safety.
+  maxDuration = 300

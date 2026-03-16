@@ -508,8 +508,7 @@ export const usersService = {
       let profitLoss = 0;
 
       // Convert cents to dollars: market_cap, total_invested, price_per_share, total_amount, wallet_balance are now BIGINT (cents)
-      // For Avg Price and % Change, use the SAME order-based calculation as the Portfolio page
-      // (reconstruct cost basis from BUY/SELL orders using market_cap_before when available)
+      // Use positions.total_invested for avg price and % change - matches user Portfolio page (single source of truth)
       const positionsList = (positions || []).map(pos => {
         const team = pos.teams as any;
         const totalShares = team.total_shares || 1000;
@@ -519,7 +518,7 @@ export const usersService = {
         const marketCapDollars = marketCapDecimal.toNumber();
         const sharePricePrecise = marketCapDecimal.dividedBy(totalShares); // Decimal price per share
         const sharePrice = roundForDisplay(sharePricePrecise); // Display price/share
-        const currentValue = calculateTotalValue(sharePrice, pos.quantity);
+        const currentValue = calculateTotalValue(sharePricePrecise.toNumber(), pos.quantity);
 
         // Totals from positions table (for P&L and invested aggregates)
         const totalInvestedDollars = fromCents(pos.total_invested || 0).toNumber();
@@ -527,51 +526,18 @@ export const usersService = {
         const realized = realizedPLByTeam.get(pos.team_id) ?? 0;
         const unrealized = pl - realized;
 
-        // Rebuild average cost from orders using the same logic as PortfolioPage:
-        // - Use market_cap_before / total_shares when available for exact historical price
-        // - Fallback to price_per_share when market_cap_before is missing
-        let totalInvestedFromOrders = new Decimal(0);
-        let totalUnitsFromOrders = new Decimal(0);
+        // Avg Price: positions.total_invested / quantity (matches user Portfolio - single source of truth)
+        const avgCostPrecise = pos.quantity > 0
+          ? fromCents(pos.total_invested || 0).dividedBy(pos.quantity)
+          : new Decimal(0);
+        const avgCost = roundForDisplay(avgCostPrecise);
 
-        const teamOrders = sortedOrders.filter(o => o.team_id === pos.team_id);
-
-        teamOrders.forEach(order => {
-          const quantity = toDecimal(order.quantity || 0); // number of shares (same units as portfolio)
-
-          // Determine exact price for this order
-          let priceExact: Decimal;
-          if (order.market_cap_before) {
-            // market_cap_before is in cents -> dollars, then divide by totalShares
-            priceExact = fromCents(order.market_cap_before).dividedBy(totalShares);
-          } else {
-            // Fallback to price_per_share (in cents)
-            priceExact = fromCents(order.price_per_share || 0);
-          }
-
-          if (order.order_type === 'BUY') {
-            // Add to cost basis
-            totalInvestedFromOrders = totalInvestedFromOrders.plus(priceExact.times(quantity));
-            totalUnitsFromOrders = totalUnitsFromOrders.plus(quantity);
-          } else if (order.order_type === 'SELL') {
-            // Subtract from cost basis
-            totalInvestedFromOrders = totalInvestedFromOrders.minus(priceExact.times(quantity));
-            totalUnitsFromOrders = totalUnitsFromOrders.minus(quantity);
-          }
-        });
-
-        let avgCostPrecise = new Decimal(0);
-        if (totalUnitsFromOrders.gt(0)) {
-          avgCostPrecise = totalInvestedFromOrders.dividedBy(totalUnitsFromOrders);
-        }
-        const avgCost = roundForDisplay(avgCostPrecise); // Display average cost/share (order-based)
-
-        // Percent change from purchase using the same base as Portfolio page
+        // Percent change from purchase (precise values, then round result)
         let percentChangeFromPurchase = 0;
         if (avgCostPrecise.gt(0)) {
           const changeDecimal = sharePricePrecise.minus(avgCostPrecise).dividedBy(avgCostPrecise).times(100);
           percentChangeFromPurchase = roundForDisplay(changeDecimal);
 
-          // Round very small changes to 0.00% for stability (same UX as before)
           if (Math.abs(percentChangeFromPurchase) < 0.01) {
             percentChangeFromPurchase = 0;
           }

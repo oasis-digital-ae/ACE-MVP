@@ -196,8 +196,90 @@ async function calculatePortfolioAtTimestamp(
 }
 
 /**
+ * Process a single user for leaderboard data (extracted for parallelization)
+ */
+async function processUserLeaderboardData(
+  profile: { id: string; full_name: string | null },
+  weekStart: string,
+  weekEnd: string
+): Promise<UserLeaderboardData | null> {
+  const userId = profile.id;
+
+  // 1. Wallet balance at start and end of week
+  const [{ data: startTransactions }, { data: endTransactions }, { data: deposits }] = await Promise.all([
+    supabase
+      .from("wallet_transactions")
+      .select("amount_cents, type")
+      .eq("user_id", userId)
+      .lt("created_at", weekStart)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("wallet_transactions")
+      .select("amount_cents, type")
+      .eq("user_id", userId)
+      .lt("created_at", weekEnd)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("wallet_transactions")
+      .select("amount_cents")
+      .eq("user_id", userId)
+      .eq("type", "deposit")
+      .gte("created_at", weekStart)
+      .lt("created_at", weekEnd),
+  ]);
+
+  let startWalletBalance = 0;
+  for (const tx of startTransactions || []) {
+    const amount = fromCents(tx.amount_cents);
+    if (tx.type === "deposit" || tx.type === "sale") startWalletBalance += amount;
+    else if (tx.type === "purchase") startWalletBalance -= amount;
+  }
+
+  let endWalletBalance = 0;
+  for (const tx of endTransactions || []) {
+    const amount = fromCents(tx.amount_cents);
+    if (tx.type === "deposit" || tx.type === "sale") endWalletBalance += amount;
+    else if (tx.type === "purchase") endWalletBalance -= amount;
+  }
+
+  const depositsWeek = (deposits || []).reduce((sum, tx) => sum + fromCents(tx.amount_cents), 0);
+
+  // 2. Portfolio at start and end (run in parallel)
+  const [startPortfolioValue, endPortfolioValue] = await Promise.all([
+    calculatePortfolioAtTimestamp(userId, weekStart),
+    calculatePortfolioAtTimestamp(userId, weekEnd),
+  ]);
+
+  const startAccountValue = new Decimal(startWalletBalance).plus(startPortfolioValue).toNumber();
+  const endAccountValue = new Decimal(endWalletBalance).plus(endPortfolioValue).toNumber();
+
+  const hasActivity = startAccountValue > 0 || endAccountValue > 0 || depositsWeek > 0;
+  if (!hasActivity) return null;
+
+  const weeklyReturn = calculateWeeklyReturn(startAccountValue, endAccountValue, depositsWeek);
+  if (Math.abs(weeklyReturn) > 5) {
+    console.log(`⚠️ Extreme return: ${profile.full_name || userId} (${(weeklyReturn * 100).toFixed(2)}%)`);
+  }
+
+  return {
+    user_id: userId,
+    full_name: profile.full_name,
+    start_wallet_value: startWalletBalance,
+    start_portfolio_value: startPortfolioValue,
+    start_account_value: startAccountValue,
+    end_wallet_value: endWalletBalance,
+    end_portfolio_value: endPortfolioValue,
+    end_account_value: endAccountValue,
+    deposits_week: depositsWeek,
+  };
+}
+
+/** Batch size for parallel user processing - balances speed vs Supabase connection limits */
+const USER_BATCH_SIZE = 8;
+
+/**
  * Fetch user wallet and portfolio data for leaderboard calculation
- * Uses the same calculation logic as the frontend for consistency
+ * Processes users in parallel batches to avoid 60s timeout
  */
 async function fetchUserLeaderboardData(
   weekStart: string,
@@ -205,7 +287,6 @@ async function fetchUserLeaderboardData(
 ): Promise<UserLeaderboardData[]> {
   console.log("📊 Fetching user data for leaderboard calculation...");
 
-  // Get all users with profiles
   const { data: profiles, error: profilesError } = await supabase
     .from("profiles")
     .select("id, full_name, wallet_balance");
@@ -219,121 +300,19 @@ async function fetchUserLeaderboardData(
     console.log("⚠️ No users found");
     return [];
   }
-  console.log(`  Found ${profiles.length} users`);
-  
-  // Process each user
+  console.log(`  Found ${profiles.length} users (processing in batches of ${USER_BATCH_SIZE})`);
+
   const userData: UserLeaderboardData[] = [];
-
-  for (const profile of profiles) {
-    const userId = profile.id;    // 1. Get wallet balance at start and end of week
-    // Calculate wallet balance by summing all transactions up to that point
-    // Deposits/sales ADD to wallet, purchases SUBTRACT from wallet
-    
-    // Start: Calculate wallet balance from ALL transactions BEFORE week_start
-    const { data: startTransactions } = await supabase
-      .from("wallet_transactions")
-      .select("amount_cents, type")
-      .eq("user_id", userId)
-      .lt("created_at", weekStart)
-      .order("created_at", { ascending: true });
-
-    let startWalletBalance = 0;
-    if (startTransactions && startTransactions.length > 0) {
-      for (const tx of startTransactions) {
-        const amount = fromCents(tx.amount_cents);
-        if (tx.type === "deposit" || tx.type === "sale") {
-          startWalletBalance += amount;
-        } else if (tx.type === "purchase") {
-          startWalletBalance -= amount;
-        }
-      }
-    }
-
-    // End: Calculate wallet balance from ALL transactions BEFORE week_end
-    const { data: endTransactions } = await supabase
-      .from("wallet_transactions")
-      .select("amount_cents, type")
-      .eq("user_id", userId)
-      .lt("created_at", weekEnd)
-      .order("created_at", { ascending: true });
-
-    let endWalletBalance = 0;
-    if (endTransactions && endTransactions.length > 0) {
-      for (const tx of endTransactions) {
-        const amount = fromCents(tx.amount_cents);
-        if (tx.type === "deposit" || tx.type === "sale") {
-          endWalletBalance += amount;
-        } else if (tx.type === "purchase") {
-          endWalletBalance -= amount;
-        }
-      }
-    }
-    
-    const startWalletValue = startWalletBalance;
-    const endWalletValue = endWalletBalance;
-
-    // 2. Reconstruct portfolio at start and end using orders + ledger
-    const startPortfolioValue = await calculatePortfolioAtTimestamp(userId, weekStart);
-    const endPortfolioValue = await calculatePortfolioAtTimestamp(userId, weekEnd);
-
-    // 3. Calculate deposits during the week
-    const { data: deposits } = await supabase
-      .from("wallet_transactions")
-      .select("amount_cents")
-      .eq("user_id", userId)
-      .eq("type", "deposit")
-      .gte("created_at", weekStart)
-      .lt("created_at", weekEnd);
-
-    const depositsWeek = (deposits || []).reduce((sum, tx) => sum + fromCents(tx.amount_cents), 0);
-
-    // 4. Calculate account values using Decimal.js
-    const startAccountValue = new Decimal(startWalletValue).plus(new Decimal(startPortfolioValue)).toNumber();
-    const endAccountValue = new Decimal(endWalletValue).plus(new Decimal(endPortfolioValue)).toNumber();
-
-    // 5. Determine if user should be included in leaderboard
-    // Include if ANY of these conditions are met:
-    // - Has starting account value (existing user)
-    // - Has ending account value (made trades/received deposits)
-    // - Made deposits this week (new user who deposited)
-    const hasActivity = startAccountValue > 0 || endAccountValue > 0 || depositsWeek > 0;
-    
-    // Special handling for mid-week joiners:
-    // If user joined mid-week (start = 0) but has deposits and trades (end > deposits),
-    // they should be included    const isMidWeekJoiner = startAccountValue === 0 && depositsWeek > 0;
-    const hasTradingActivity = endAccountValue > depositsWeek; // Traded, not just deposited
-
-    if (hasActivity) {
-      // Calculate weekly return to check for anomalies
-      const weeklyReturn = calculateWeeklyReturn(startAccountValue, endAccountValue, depositsWeek);
-        // Debug logging for users with extreme returns
-      if (Math.abs(weeklyReturn) > 5) { // More than 500% return
-        console.log(`⚠️ Extreme return detected for user ${profile.full_name || userId}:`);
-        console.log(`  Start Wallet: $${startWalletValue.toFixed(2)}`);
-        console.log(`  Start Portfolio: $${startPortfolioValue.toFixed(2)}`);
-        console.log(`  Start Account: $${startAccountValue.toFixed(2)}`);
-        console.log(`  End Wallet: $${endWalletValue.toFixed(2)}`);
-        console.log(`  End Portfolio: $${endPortfolioValue.toFixed(2)}`);
-        console.log(`  End Account: $${endAccountValue.toFixed(2)}`);
-        console.log(`  Deposits: $${depositsWeek.toFixed(2)}`);
-        console.log(`  Calculated Return: ${(weeklyReturn * 100).toFixed(2)}%`);
-        console.log(`  Week Start: ${weekStart}`);
-        console.log(`  Week End: ${weekEnd}`);
-      }
-      
-      userData.push({
-        user_id: userId,
-        full_name: profile.full_name,
-        start_wallet_value: startWalletValue,
-        start_portfolio_value: startPortfolioValue,
-        start_account_value: startAccountValue,
-        end_wallet_value: endWalletValue,
-        end_portfolio_value: endPortfolioValue,
-        end_account_value: endAccountValue,
-        deposits_week: depositsWeek
-      });
+  for (let i = 0; i < profiles.length; i += USER_BATCH_SIZE) {
+    const batch = profiles.slice(i, i + USER_BATCH_SIZE);
+    const results = await Promise.all(
+      batch.map((p) => processUserLeaderboardData(p, weekStart, weekEnd))
+    );
+    for (const r of results) {
+      if (r) userData.push(r);
     }
   }
+
   console.log(`  Processed ${userData.length} users with account activity`);
   return userData;
 }
