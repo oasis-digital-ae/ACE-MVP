@@ -122,7 +122,7 @@ if (allGood) {
   if (majorVersion < 18) {
     console.log('- Upgrade Node.js to version 20+');
   }
-  console.log('\nSee NETLIFY_ENV_SETUP.md for detailed instructions');
+  console.log('\nSee netlify-env-example.txt and Netlify → Site settings → Environment variables');
 }
 console.log('='.repeat(50));
 

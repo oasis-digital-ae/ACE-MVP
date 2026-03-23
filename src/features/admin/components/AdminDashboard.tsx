@@ -92,8 +92,11 @@ export const AdminDashboard: React.FC = () => {
               </div>
             </div>
           </div>
-        </div>        {/* Main Content */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">          <Tabs defaultValue="dashboard" className="space-y-6">
+        </div>
+
+        {/* Main Content */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <Tabs defaultValue="dashboard" className="space-y-6">
             <div className="overflow-x-auto scrollbar-hide">
               <TabsList className="inline-flex w-auto min-w-full">
                 <TabsTrigger value="dashboard" className="flex items-center gap-2">

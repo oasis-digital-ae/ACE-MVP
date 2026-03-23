@@ -4,13 +4,20 @@
  * Populates weekly_leaderboard for the current week and optionally past weeks.
  * Uses same logic as netlify/functions/update-weeklyleaderboard.ts for consistency.
  *
- * Usage:
- *   npx tsx scripts/calculate-weekly-leaderboard.ts
- *   npx tsx scripts/calculate-weekly-leaderboard.ts --weeks 4
+ * Usage (default = **previous completed UAE week** only, same as Netlify cron):
+ *   npx tsx scripts/calculate-weekly-leaderboard.ts --force
+ *
+ * More weeks:
+ *   npx tsx scripts/calculate-weekly-leaderboard.ts --weeks 4 --force
  *
  * Options:
- *   --weeks N   Backfill last N weeks (default: 1 = current week only)
- *   --force     Delete existing rows for the week(s) and regenerate (fixes inflated values)
+ *   --weeks N     Backfill last N completed UAE weeks (default: 1 = previous week, max 52)
+ *   --previous-week  Same as --weeks 1 (explicit alias)
+ *   --force       Delete existing rows for that week before re-inserting
+ *   --reset-all   Wipe weekly_leaderboard first, then backfill (requires --force; use with --weeks 52 for full rebuild)
+ *
+ * Full rebuild after correcting wallet_transactions:
+ *   npx tsx scripts/calculate-weekly-leaderboard.ts --reset-all --weeks 52 --force
  *
  * Requirements (from .env):
  *   - NEXT_PUBLIC_SUPABASE_URL
@@ -30,6 +37,7 @@ import {
   type UserLeaderboardData
 } from '../src/shared/lib/utils/leaderboard-calculations';
 import { fromCents } from '../src/shared/lib/utils/decimal';
+import { resolvePlGameweekForLeaderboardWindow } from '../src/shared/lib/utils/pl-leaderboard-week-number';
 
 // Load .env if present
 const envPath = join(process.cwd(), '.env');
@@ -63,6 +71,25 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
+/** Delete every row (paged) — service role only */
+async function deleteAllWeeklyLeaderboardRows(): Promise<void> {
+  console.log('   🗑️  Removing all weekly_leaderboard rows (--reset-all)...');
+  let deleted = 0;
+  for (;;) {
+    const { data: batch, error: selErr } = await supabase
+      .from('weekly_leaderboard')
+      .select('id')
+      .limit(500);
+    if (selErr) throw selErr;
+    if (!batch?.length) break;
+    const ids = batch.map((r) => r.id);
+    const { error: delErr } = await supabase.from('weekly_leaderboard').delete().in('id', ids);
+    if (delErr) throw delErr;
+    deleted += ids.length;
+  }
+  console.log(`   ✅ Cleared ${deleted} row(s)`);
+}
+
 /**
  * UAE week boundaries: Monday 03:00 → next Monday 02:59
  * Matches netlify/functions/update-weeklyleaderboard.ts logic.
@@ -95,8 +122,8 @@ function getUAEWeekBounds(weeksAgo = 1) {
 }
 
 /**
- * DB stores ten-thousandths: amount_cents, share_price_after, wallet_balance.
- * Shared fromCents = fromTenThousandths (÷10000). Returns Decimal; use .toNumber() for numeric.
+ * DB stores ten-thousandths: amount_cents, leaderboard BIGINTs, wallet_balance.
+ * `fromCents` in decimal.ts = ÷10000 (legacy name). Returns Decimal; use .toNumber() for sums.
  */
 
 /** Portfolio at timestamp: reconstruct from orders + total_ledger (matches Netlify function) */
@@ -247,9 +274,28 @@ async function fetchUserLeaderboardData(
   return userData;
 }
 
-async function backfillWeeklyLeaderboard(weeksToBackfill: number) {
-  console.log(`🚀 Weekly Leaderboard Backfill (last ${weeksToBackfill} week(s))`);
+async function backfillWeeklyLeaderboard(
+  weeksToBackfill: number,
+  resetAll: boolean
+) {
+  const weeksToProcess: Array<{ week_start: Date; week_end: Date; isLatest: boolean }> =
+    Array.from({ length: weeksToBackfill }, (_, idx) => {
+      const i = idx + 1;
+      const b = getUAEWeekBounds(i);
+      return { week_start: b.week_start, week_end: b.week_end, isLatest: i === 1 };
+    });
+
+  const n = weeksToProcess.length;
+
+  console.log(
+    `🚀 Weekly Leaderboard Backfill (${weeksToBackfill} completed UAE week(s); i=1 is most recent)`
+  );
+  if (resetAll) console.log('   Mode: --reset-all (full table wipe before insert)');
   console.log('');
+
+  if (resetAll) {
+    await deleteAllWeeklyLeaderboardRows();
+  }
 
   // When regenerating, remove any "future" weeks (week_end > now) so Admin shows completed weeks
   if (forceRegenerate) {
@@ -267,12 +313,12 @@ async function backfillWeeklyLeaderboard(weeksToBackfill: number) {
 
   let totalInserted = 0;
 
-  for (let i = 1; i <= weeksToBackfill; i++) {
-    const { week_start, week_end } = getUAEWeekBounds(i);
-    const isLatest = i === 1; // Most recently completed week = latest
+  for (let idx = 0; idx < weeksToProcess.length; idx++) {
+    const i = idx + 1;
+    const { week_start, week_end, isLatest } = weeksToProcess[idx];
 
     console.log(
-      `📅 Week ${i} (${weeksToBackfill - i + 1} of ${weeksToBackfill}): ${week_start.toISOString().slice(0, 10)} → ${week_end.toISOString().slice(0, 10)} ${isLatest ? '(latest completed)' : ''}`
+      `📅 Week ${i} (${n - idx} of ${n}): ${week_start.toISOString().slice(0, 10)} → ${week_end.toISOString().slice(0, 10)} ${isLatest ? '(latest completed)' : ''}`
     );
 
     // Skip if already processed
@@ -321,16 +367,15 @@ async function backfillWeeklyLeaderboard(weeksToBackfill: number) {
 
     console.log(`   ✅ Calculated leaderboard for ${leaderboardEntries.length} users`);
 
-    // Get week_number: for backfill, use max - i so oldest week gets lowest number
-    const { data: maxWeek } = await supabase
-      .from('weekly_leaderboard')
-      .select('week_number')
-      .order('week_number', { ascending: false })
-      .limit(1)
-      .single();
+    const weekStartIso = week_start.toISOString();
+    const weekEndIso = week_end.toISOString();
 
-    const maxNum = maxWeek?.week_number ?? 0;
-    const weekNumber = maxNum + (weeksToBackfill - i + 1); // Most recent completed = highest
+    // week_number = Premier League gameweek (fixtures.matchday) for this window
+    const weekNumber = await resolvePlGameweekForLeaderboardWindow(
+      supabase,
+      weekStartIso,
+      weekEndIso
+    );
 
     // Reset is_latest if this is the current week
     if (isLatest) {
@@ -338,7 +383,9 @@ async function backfillWeeklyLeaderboard(weeksToBackfill: number) {
         .from('weekly_leaderboard')
         .update({ is_latest: false })
         .eq('is_latest', true);
-    }    // Insert (include week_number to match table structure)
+    }
+
+    // Insert (include week_number to match table structure)
     const rows = leaderboardEntries.map((entry) => ({
       ...toLeaderboardDbFormat(entry),
       week_start: week_start.toISOString(),
@@ -364,20 +411,29 @@ async function backfillWeeklyLeaderboard(weeksToBackfill: number) {
   console.log(`✅ Backfill complete. Total rows inserted: ${totalInserted}`);
 }
 
-// Parse args: --weeks N, --force (delete existing week data before re-inserting)
+// Parse args: --weeks N, --previous-week, --force, --reset-all
 const weeksIdx = process.argv.indexOf('--weeks');
-const weeksToBackfill =
+let weeksToBackfill =
   weeksIdx >= 0
     ? parseInt(process.argv[weeksIdx + 1] || process.argv[weeksIdx]?.split('=')[1] || '1', 10)
     : 1;
+if (process.argv.includes('--previous-week')) {
+  weeksToBackfill = 1;
+}
 const forceRegenerate = process.argv.includes('--force');
+const resetAll = process.argv.includes('--reset-all');
+
+if (resetAll && !forceRegenerate) {
+  console.error('❌ --reset-all requires --force (safety)');
+  process.exit(1);
+}
 
 if (weeksToBackfill < 1 || weeksToBackfill > 52) {
   console.error('❌ --weeks must be between 1 and 52');
   process.exit(1);
 }
 
-backfillWeeklyLeaderboard(weeksToBackfill)
+backfillWeeklyLeaderboard(weeksToBackfill, resetAll)
   .then(() => process.exit(0))
   .catch((err) => {
     console.error(err);

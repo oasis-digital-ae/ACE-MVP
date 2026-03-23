@@ -4,17 +4,11 @@
 
 This document explains the centralized calculation system for the weekly leaderboard to ensure **perfect consistency** between frontend display and backend calculation.
 
-## The Problem
+## The Problem (historical)
 
-Previously, the weekly leaderboard had **two separate calculation implementations**:
+The weekly leaderboard previously had **two separate calculation implementations** (SQL RPC vs client-side TypeScript), which caused **rounding and ordering discrepancies**.
 
-1. **Backend (Netlify Function)**: SQL-based calculations in `generate_weekly_leaderboard_exact_v2` RPC function
-2. **Frontend (React App)**: TypeScript calculations using `Decimal.js` library
-
-This caused **discrepancies** because:
-- SQL numeric operations have different rounding behavior than JavaScript
-- Decimal.js provides higher precision than PostgreSQL's `numeric` type by default
-- Different calculation order can compound rounding errors
+**Current state:** Netlify (`update-weeklyleaderboard.ts`), the backfill script (`scripts/calculate-weekly-leaderboard.ts`), and shared utilities (`leaderboard-calculations.ts`) all use the **same TypeScript + Decimal.js** logic. The SQL function `generate_weekly_leaderboard_exact_v2` is **legacy** and **not** used for production generation (client access revoked; see `weekly_leaderboard_prod_cleanup` migration).
 
 ## The Solution
 
@@ -102,7 +96,7 @@ graph TD
     F --> G
     G --> H[Rank Users by Return]
     H --> I[Validate Results]
-    I --> J[Convert to DB Format cents]
+    I --> J[Convert to DB format ten-thousandths]
     J --> K[Insert into weekly_leaderboard]
 ```
 
@@ -110,8 +104,8 @@ graph TD
 
 1. **Wallet Values**
    - Table: `wallet_transactions`
-   - Field: `balance_after` (bigint cents)
-   - Logic: Last transaction before week_start/week_end
+   - Field: `amount_cents` (signed **bigint in ten-thousandths of a dollar**; legacy column name)
+   - Logic: **Sum** all `amount_cents` for rows with `created_at < week_start` (start snapshot) and `created_at < week_end` (end snapshot). Signs: inflows (`deposit`, `sale`, `credit_loan`) positive; outflows (`purchase`, `credit_loan_reversal`) negative.
 
 2. **Portfolio Values**
    - Tables: `positions` + `total_ledger`
@@ -134,7 +128,7 @@ create table public.weekly_leaderboard (
   week_start timestamp with time zone not null,
   week_end timestamp with time zone not null,
   
-  -- All monetary values stored as BIGINT (cents)
+  -- All monetary BIGINTs are ten-thousandths of a dollar (÷10000 = USD); legacy docs may say "cents"
   start_wallet_value bigint not null,
   start_portfolio_value bigint not null,
   start_account_value bigint not null,
@@ -159,9 +153,9 @@ create table public.weekly_leaderboard (
 
 ### Storage Format
 
-- **Monetary values**: Stored as `bigint` (cents), displayed as dollars
-  - Example: $147.26 stored as 14726
-  - Conversion: `cents = dollars * 100` (rounded to nearest cent)
+- **Monetary values**: Stored as `bigint` **ten-thousandths** (same convention as `wallet_transactions.amount_cents` and `profiles.wallet_balance`), displayed as dollars
+  - Example: **$147.26** stored as **1472600**
+  - Conversion: use shared helpers `toCents` / `fromCents` in `decimal.ts` (names are legacy; they operate on ten-thousandths)
   
 - **Weekly return**: Stored as `numeric(10, 6)` (decimal fraction)
   - Example: 5.23% stored as 0.052300
@@ -174,11 +168,11 @@ create table public.weekly_leaderboard (
 ```typescript
 import { fromLeaderboardDbFormat } from '@/shared/lib/utils/leaderboard-calculations';
 
-// Database row (cents)
+// Database row (ten-thousandths)
 const dbEntry = {
   user_id: '...',
-  start_account_value: 14726, // cents
-  end_account_value: 15936,   // cents
+  start_account_value: 1472600, // $147.26
+  end_account_value: 1593600,   // $159.36
   weekly_return: 0.052300,    // decimal fraction
   rank: 1
 };
@@ -273,10 +267,12 @@ These can be kept in the database for backward compatibility or removed.
 
 - `src/shared/lib/utils/leaderboard-calculations.ts` - Core calculations
 - `src/shared/lib/utils/decimal.ts` - Decimal precision utilities  
+- `src/shared/lib/utils/pl-leaderboard-week-number.ts` - PL gameweek → `week_number` (fixtures)
 - `src/shared/lib/utils/calculations.ts` - General financial calculations
 - `netlify/functions/update-weeklyleaderboard.ts` - Weekly cron job
 - `scripts/calculate-weekly-leaderboard.ts` - Manual backfill script
 - `src/features/leaderboard/components/LeaderboardPage.tsx` - Frontend display
+- `netlify-env-example.txt` - Env vars for Netlify functions
 
 ## Support
 

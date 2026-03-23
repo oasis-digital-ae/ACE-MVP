@@ -11,6 +11,7 @@ import {
   validateLeaderboardEntries,
   type UserLeaderboardData
 } from "../../src/shared/lib/utils/leaderboard-calculations";
+import { resolvePlGameweekForLeaderboardWindow } from "../../src/shared/lib/utils/pl-leaderboard-week-number";
 import { fromCents } from "../../src/shared/lib/utils/decimal";
 
 /**
@@ -195,13 +196,13 @@ async function processUserLeaderboardData(
   const [{ data: startTransactions }, { data: endTransactions }, { data: deposits }] = await Promise.all([
     supabase
       .from("wallet_transactions")
-      .select("amount_cents, type")
+      .select("amount_cents")
       .eq("user_id", userId)
       .lt("created_at", weekStart)
       .order("created_at", { ascending: true }),
     supabase
       .from("wallet_transactions")
-      .select("amount_cents, type")
+      .select("amount_cents")
       .eq("user_id", userId)
       .lt("created_at", weekEnd)
       .order("created_at", { ascending: true }),
@@ -214,7 +215,7 @@ async function processUserLeaderboardData(
       .lt("created_at", weekEnd),
   ]);
 
-  // amount_cents is signed: positive for deposit/sale, negative for purchase
+  // amount_cents: signed ten-thousandths; inflows +, purchases -
   let startWalletBalance = 0;
   for (const tx of startTransactions || []) {
     const amount = fromCents(tx.amount_cents).toNumber();
@@ -383,20 +384,17 @@ export const handler = schedule("0 23 * * 0", async (event: HandlerEvent): Promi
 
 
   /**
-   * Step 2: Get next week_number (table has week_number column, RPC does not return it)
+   * Step 2: week_number = Premier League gameweek (matchday) for this window
    */
-  const { data: maxWeek } = await supabase
-    .from("weekly_leaderboard")
-    .select("week_number")
-    .order("week_number", { ascending: false })
-    .limit(1)
-    .single();
-
-  const nextWeekNumber = (maxWeek?.week_number ?? 0) + 1;
-  console.log("  Week number:", nextWeekNumber);
+  const nextWeekNumber = await resolvePlGameweekForLeaderboardWindow(
+    supabase,
+    weekStartStr,
+    weekEndStr
+  );
+  console.log("  PL gameweek (week_number):", nextWeekNumber);
   /**
    * Step 3: Insert new leaderboard rows
-   * Convert to database format (cents for bigint storage)
+   * Convert to database format (ten-thousandths bigint via toCents / toLeaderboardDbFormat)
    */
   const rows = leaderboardEntries.map((entry) => ({
     ...toLeaderboardDbFormat(entry),

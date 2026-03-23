@@ -121,9 +121,18 @@ The application uses Supabase with the following main tables:
 - `orders` - User purchase orders
 - `positions` - User share holdings (with transaction history)
 - `transfers_ledger` - Market cap transfers from match results
+- `wallet_transactions` - Signed cash ledger (ten-thousandths; column `amount_cents`)
+- `weekly_leaderboard` - Frozen weekly ROI snapshots
 - `audit_log` - System audit trail
 
 See `src/config/database/README.md` for detailed setup instructions.
+
+### Operations docs
+
+- **Wallet ledger & repair:** [`docs/WALLET_LEDGER_RUNBOOK.md`](docs/WALLET_LEDGER_RUNBOOK.md)
+- **Weekly leaderboard math:** [`docs/LEADERBOARD_CALCULATION_SYNC.md`](docs/LEADERBOARD_CALCULATION_SYNC.md)
+- **Staging / prod sync & CI:** [`docs/CI_CD_PIPELINE.md`](docs/CI_CD_PIPELINE.md)
+- **Scripts:** `scripts/calculate-weekly-leaderboard.ts` (backfill), `scripts/reconcile-wallet-balances.ts` (RPC repair)
 
 ## Project Structure
 

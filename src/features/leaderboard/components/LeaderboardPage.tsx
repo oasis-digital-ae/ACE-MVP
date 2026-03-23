@@ -23,8 +23,6 @@ const LeaderboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [sortField, setSortField] = useState<'rank' | 'userName' | 'weeklyReturn'>('rank');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-  const [currentWeekNumber, setCurrentWeekNumber] = useState<number | null>(null);
-  const [previousWeekNumber, setPreviousWeekNumber] = useState<number | null>(null);
 
   useEffect(() => {
     loadLeaderboardData();
@@ -34,16 +32,10 @@ const LeaderboardPage: React.FC = () => {
     try {
       setLoading(true);
 
-      // Fetch week numbers and leaderboard data in parallel
-      const [currentWeekRes, previousWeekRes, currentLeaderboardRes, previousWeekDataRes] = await Promise.all([
-        supabase.from('weekly_leaderboard').select('week_number').eq('is_latest', true).order('week_number', { ascending: false }).limit(1).single(),
-        supabase.from('weekly_leaderboard').select('week_number').eq('is_latest', false).order('week_number', { ascending: false }).limit(1).single(),
+      const [currentLeaderboardRes, previousWeekDataRes] = await Promise.all([
         supabase.rpc('get_weekly_leaderboard_current'),
         supabase.from('weekly_leaderboard').select('user_id, weekly_return').eq('is_latest', false).order('week_start', { ascending: false }),
       ]);
-
-      setCurrentWeekNumber(currentWeekRes.data?.week_number ?? null);
-      setPreviousWeekNumber(previousWeekRes.data?.week_number ?? null);
 
       const { data: currentLeaderboard, error: currentError } = currentLeaderboardRes;
       const { data: previousWeekData, error: prevError } = previousWeekDataRes;
@@ -197,7 +189,7 @@ const LeaderboardPage: React.FC = () => {
                   </th>
                   <th className="text-right w-[31%] px-4">
                     <div className="flex items-center justify-end gap-2 ml-auto text-base">
-                      <span>Previous Week{previousWeekNumber != null ? ` (Week ${previousWeekNumber})` : ''}</span>
+                      <span>Previous Week</span>
                     </div>
                   </th>
                   <th className="text-right w-[31%] px-4">
@@ -212,7 +204,7 @@ const LeaderboardPage: React.FC = () => {
                       }}
                       className="flex items-center justify-end gap-2 hover:text-foreground transition-colors ml-auto text-base"
                     >
-                      <span>Current Week{currentWeekNumber != null ? ` (Week ${currentWeekNumber})` : ''}</span>
+                      <span>Current Week</span>
                       {sortField === 'weeklyReturn' ? (
                         sortDirection === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
                       ) : (
@@ -313,7 +305,7 @@ const LeaderboardPage: React.FC = () => {
                   )}
                 </button>
                 <div className="flex items-center justify-end">
-                  <span className="text-right leading-tight">Prev<br />Week{previousWeekNumber != null ? ` (${previousWeekNumber})` : ''}</span>
+                  <span className="text-right leading-tight">Prev<br />Week</span>
                 </div>
                 <button
                   onClick={() => {
@@ -326,7 +318,7 @@ const LeaderboardPage: React.FC = () => {
                   }}
                   className="flex items-center justify-end gap-0.5 hover:text-white transition-colors ml-auto"
                 >
-                  <span className="text-right leading-tight">Current<br />Week{currentWeekNumber != null ? ` (${currentWeekNumber})` : ''}</span>
+                  <span className="text-right leading-tight">Current<br />Week</span>
                   {sortField === 'weeklyReturn' ? (
                     sortDirection === 'asc' ? <ArrowUp className="h-2.5 w-2.5" /> : <ArrowDown className="h-2.5 w-2.5" />
                   ) : (

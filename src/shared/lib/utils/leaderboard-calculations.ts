@@ -9,14 +9,10 @@
  * - Return numbers rounded to appropriate decimal places
  * - Match the database schema expectations
  * 
- * Database schema (bigint stored as cents, but returned as numbers):
- * - start_wallet_value: bigint (cents)
- * - start_portfolio_value: bigint (cents)
- * - start_account_value: bigint (cents)
- * - end_wallet_value: bigint (cents)
- * - end_portfolio_value: bigint (cents)
- * - end_account_value: bigint (cents)
- * - deposits_week: bigint (cents)
+ * Database schema: monetary BIGINTs are **ten-thousandths of a dollar** (same as
+ * `wallet_transactions.amount_cents` / `profiles.wallet_balance`). Code uses
+ * `toCents`/`fromCents` in `decimal.ts` (legacy names). Returned display values are dollars.
+ * - start_wallet_value, portfolio/account fields, deposits_week: bigint (ten-thousandths)
  * - weekly_return: numeric(10, 6) (decimal fraction, NOT percentage)
  */
 
@@ -27,7 +23,7 @@ import { Decimal, toDecimal, roundForDisplay, fromCents, toCents } from './decim
  * Convenience function that returns a number instead of Decimal
  * LOCAL UTILITY - Kept here to avoid touching decimal.ts
  * 
- * @param cents - Number of cents (BIGINT from database)
+ * @param cents - Raw BIGINT from DB (ten-thousandths; param name legacy)
  * @returns Amount in dollars as number (rounded to 2 decimal places)
  */
 function fromCentsToNumber(cents: number | string | null | undefined): number {
@@ -215,9 +211,9 @@ export const toLeaderboardDbFormat = (
 };
 
 /**
- * Convert database format to leaderboard entry (cents to dollars)
- * 
- * @param dbEntry - Entry from database with cents values
+ * Convert database format to leaderboard entry (ten-thousandths → dollars)
+ *
+ * @param dbEntry - Row from database with monetary BIGINTs in ten-thousandths
  * @returns Entry with values converted to dollars
  */
 export const fromLeaderboardDbFormat = (
