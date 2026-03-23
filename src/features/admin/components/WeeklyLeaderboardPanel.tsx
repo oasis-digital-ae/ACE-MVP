@@ -7,7 +7,8 @@ import { Skeleton } from '@/shared/components/ui/skeleton';
 import { ArrowUp, ArrowDown, ArrowUpDown, Trophy } from 'lucide-react';
 import { supabase } from '@/shared/lib/supabase';
 import { formatCurrency } from '@/shared/lib/formatters';
-import { fromCents } from '@/shared/lib/utils/decimal';
+/** weekly_leaderboard stores all monetary values in ten-thousandths (÷10000 = dollars) */
+const toDollars = (tenThousandths: number) => (tenThousandths ?? 0) / 10000;
 import { useToast } from '@/shared/hooks/use-toast';
 
 interface WeekOption {
@@ -135,17 +136,19 @@ export const AdminWeeklyLeaderboardPanel: React.FC = () => {
           ])
         );
 
+        // weekly_leaderboard stores values in ten-thousandths (÷10000 = dollars)
+        const toDollars = (v: number | null | undefined) => (v ?? 0) / 10000;
         const mappedData = leaderboardData.map(row => ({
           rank: row.rank,
           userId: row.user_id,
           username: userMap.get(row.user_id) || 'Unknown User',
-          startWalletValue: row.start_wallet_value,
-          startPortfolioValue: row.start_portfolio_value,
-          startAccountValue: row.start_account_value,
-          endWalletValue: row.end_wallet_value,
-          endPortfolioValue: row.end_portfolio_value,
-          endAccountValue: row.end_account_value,
-          totalDeposits: row.deposits_week,
+          startWalletValue: toDollars(row.start_wallet_value),
+          startPortfolioValue: toDollars(row.start_portfolio_value),
+          startAccountValue: toDollars(row.start_account_value),
+          endWalletValue: toDollars(row.end_wallet_value),
+          endPortfolioValue: toDollars(row.end_portfolio_value),
+          endAccountValue: toDollars(row.end_account_value),
+          totalDeposits: toDollars(row.deposits_week),
           weeklyReturn: Number(row.weekly_return)
         }));
 
@@ -297,13 +300,13 @@ export const AdminWeeklyLeaderboardPanel: React.FC = () => {
                   <TableRow key={row.userId}>
                     <TableCell>{row.rank}</TableCell>
                     <TableCell>{row.username}</TableCell>
-                    <TableCell className="text-center font-mono">{formatCurrency(row.startWalletValue / 100)}</TableCell>
-                    <TableCell className="text-center font-mono">{formatCurrency(row.startPortfolioValue / 100)}</TableCell>
-                    <TableCell className="text-center font-mono">{formatCurrency(row.startAccountValue / 100)}</TableCell>
-                    <TableCell className="text-center font-mono">{formatCurrency(row.endWalletValue / 100)}</TableCell>
-                    <TableCell className="text-center font-mono">{formatCurrency(row.endPortfolioValue / 100)}</TableCell>
-                    <TableCell className="text-center font-mono">{formatCurrency(row.endAccountValue / 100)}</TableCell>
-                    <TableCell className="text-center font-mono">{formatCurrency(row.totalDeposits / 100)}</TableCell>
+                    <TableCell className="text-center font-mono">{formatCurrency(row.startWalletValue ?? 0)}</TableCell>
+                    <TableCell className="text-center font-mono">{formatCurrency(row.startPortfolioValue ?? 0)}</TableCell>
+                    <TableCell className="text-center font-mono">{formatCurrency(row.startAccountValue ?? 0)}</TableCell>
+                    <TableCell className="text-center font-mono">{formatCurrency(row.endWalletValue ?? 0)}</TableCell>
+                    <TableCell className="text-center font-mono">{formatCurrency(row.endPortfolioValue ?? 0)}</TableCell>
+                    <TableCell className="text-center font-mono">{formatCurrency(row.endAccountValue ?? 0)}</TableCell>
+                    <TableCell className="text-center font-mono">{formatCurrency(row.totalDeposits ?? 0)}</TableCell>
                     <TableCell
                       className={`text-center font-mono font-semibold ${
                         row.weeklyReturn >= 0 ? 'text-green-600' : 'text-red-600'

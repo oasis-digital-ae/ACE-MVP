@@ -111,6 +111,10 @@ export const handler: Handler = async (event) => {
       };
     }
 
+    // DB stores amounts in ten-thousandths; Stripe metadata uses cents.
+    // Convert: $200 = 20000 cents -> 2,000,000 ten-thousandths (match stripe-webhook)
+    const amountTenThousandths = depositAmountCents * 100;
+
     // Check if already credited (idempotency)
     const { data: existingTransaction } = await supabase
       .from('wallet_transactions')
@@ -132,7 +136,7 @@ export const handler: Handler = async (event) => {
     // Credit wallet
     const { error: creditError } = await supabase.rpc('credit_wallet', {
       p_user_id: user_id,
-      p_amount_cents: depositAmountCents,
+      p_amount_cents: amountTenThousandths,
       p_ref: payment_intent_id,
     });
 

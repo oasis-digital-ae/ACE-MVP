@@ -11,7 +11,7 @@ import {
   validateLeaderboardEntries,
   type UserLeaderboardData
 } from "../../src/shared/lib/utils/leaderboard-calculations";
-import { toDecimal } from "../../src/shared/lib/utils/decimal";
+import { fromCents } from "../../src/shared/lib/utils/decimal";
 
 /**
  * Helper function to get environment variables with fallbacks
@@ -93,23 +93,9 @@ function getCompletedUAEWeekBounds() {
 }
 
 /**
- * Helper: Convert cents (bigint) to dollars with FULL PRECISION
- * CRITICAL: Do NOT round during intermediate calculations
- * Only round when displaying or storing final results
+ * Use shared fromCents (fromTenThousandths) - DB stores ten-thousandths after monetary precision migration.
+ * Returns Decimal; use .toNumber() for numeric values.
  */
-function fromCents(cents: number | null | undefined): number {
-  if (cents === null || cents === undefined) return 0;
-  // Keep full precision - let Decimal.js handle it
-  return new Decimal(cents).dividedBy(100).toNumber();
-}
-
-/**
- * Helper: Convert Decimal to number with FULL PRECISION
- * Used for intermediate calculations to avoid rounding errors
- */
-function toNumber(value: Decimal): number {
-  return value.toNumber();
-}
 
 async function calculatePortfolioAtTimestamp(
   userId: string,
@@ -176,17 +162,17 @@ async function calculatePortfolioAtTimestamp(
     let price: Decimal;
 
     if (ledger?.share_price_after) {
-      // share_price_after is BIGINT cents
-      price = new Decimal(ledger.share_price_after).dividedBy(100);
+      // share_price_after is ten-thousandths (monetary precision migration)
+      price = fromCents(ledger.share_price_after);
     } else {
-      // fallback to launch price from teams table
+      // fallback to launch price from teams table (ten-thousandths)
       const { data: team } = await supabase
         .from("teams")
         .select("launch_price")
         .eq("id", teamId)
         .single();
 
-      price = new Decimal(team?.launch_price ?? 2000).dividedBy(100);
+      price = fromCents(team?.launch_price ?? 200000); // 200000 = $20 default
     }
 
     portfolioValue = portfolioValue.plus(price.times(quantity));
@@ -228,21 +214,20 @@ async function processUserLeaderboardData(
       .lt("created_at", weekEnd),
   ]);
 
+  // amount_cents is signed: positive for deposit/sale, negative for purchase
   let startWalletBalance = 0;
   for (const tx of startTransactions || []) {
-    const amount = fromCents(tx.amount_cents);
-    if (tx.type === "deposit" || tx.type === "sale") startWalletBalance += amount;
-    else if (tx.type === "purchase") startWalletBalance -= amount;
+    const amount = fromCents(tx.amount_cents).toNumber();
+    startWalletBalance += amount;
   }
 
   let endWalletBalance = 0;
   for (const tx of endTransactions || []) {
-    const amount = fromCents(tx.amount_cents);
-    if (tx.type === "deposit" || tx.type === "sale") endWalletBalance += amount;
-    else if (tx.type === "purchase") endWalletBalance -= amount;
+    const amount = fromCents(tx.amount_cents).toNumber();
+    endWalletBalance += amount;
   }
 
-  const depositsWeek = (deposits || []).reduce((sum, tx) => sum + fromCents(tx.amount_cents), 0);
+  const depositsWeek = (deposits || []).reduce((sum, tx) => sum + fromCents(tx.amount_cents).toNumber(), 0);
 
   // 2. Portfolio at start and end (run in parallel)
   const [startPortfolioValue, endPortfolioValue] = await Promise.all([
